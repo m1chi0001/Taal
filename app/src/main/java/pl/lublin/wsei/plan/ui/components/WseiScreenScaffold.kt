@@ -32,14 +32,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
 
 /**
- * Jednolity nagłówek każdego ekranu aplikacji (ikona w squircle + overline + tytuł),
+ * Jednolity nagłówek każdego ekranu aplikacji (ikona w kształcie cookie + tytuł),
  * opcjonalnie z przyciskiem powrotu.
  */
 @Composable
@@ -47,7 +46,6 @@ fun WseiScreenHeader(
     title: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    overline: String = "UNIWERSYTET WSEI",
     onBack: (() -> Unit)? = null
 ) {
     Row(
@@ -88,18 +86,10 @@ fun WseiScreenHeader(
                 )
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = overline,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium
-            )
-        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineMedium
+        )
     }
 }
 
@@ -112,7 +102,6 @@ fun WseiScreenScaffold(
     title: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    overline: String = "UNIWERSYTET WSEI",
     onBack: (() -> Unit)? = null,
     onRefresh: (() -> Unit)? = null,
     isRefreshing: Boolean = false,
@@ -130,7 +119,6 @@ fun WseiScreenScaffold(
             WseiScreenHeader(
                 title = title,
                 icon = icon,
-                overline = overline,
                 onBack = onBack
             )
             val list: @Composable () -> Unit = {

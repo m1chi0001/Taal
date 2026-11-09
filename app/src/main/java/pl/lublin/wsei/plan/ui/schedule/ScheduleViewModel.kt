@@ -251,7 +251,10 @@ class ScheduleViewModel @Inject constructor(
                         ScheduleUiState(
                             savedEncryptedLoginHint = scheduleRepository.getDecryptedSavedLogin(),
                             nowEpochMillis = System.currentTimeMillis(),
-                            isSessionRestoring = it.isSessionRestoring
+                            isSessionRestoring = it.isSessionRestoring,
+                            themeMode = it.themeMode,
+                            isLiveNotificationEnabled = it.isLiveNotificationEnabled,
+                            isHideSensitiveData = it.isHideSensitiveData
                         )
                     }
                 } else {
@@ -344,7 +347,7 @@ class ScheduleViewModel @Inject constructor(
                         it.copy(
                             isAuthenticating = false,
                             authError = error.message
-                                ?: "Nie udało się połączyć z serwerem Wirtualnego Dziekanatu WSEI (:20830). Sprawdź dane logowania."
+                                ?: "Nie udało się zalogować. Sprawdź dane i połączenie z internetem."
                         )
                     }
                 }
@@ -387,7 +390,12 @@ class ScheduleViewModel @Inject constructor(
             _uiState.update {
                 ScheduleUiState(
                     savedEncryptedLoginHint = null,
-                    nowEpochMillis = System.currentTimeMillis()
+                    nowEpochMillis = System.currentTimeMillis(),
+                    // Domyślnie true — bez tego po wylogowaniu zostawał ekran startowy zamiast logowania.
+                    isSessionRestoring = false,
+                    themeMode = it.themeMode,
+                    isLiveNotificationEnabled = it.isLiveNotificationEnabled,
+                    isHideSensitiveData = it.isHideSensitiveData
                 )
             }
         }
@@ -399,8 +407,8 @@ class ScheduleViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     statusBannerMessage = res.fold(
-                        onSuccess = { "Hasło do Wirtualnego Dziekanatu zostało pomyślnie zmienione i zaszyfrowane w Android Keystore." },
-                        onFailure = { err -> err.message ?: "Błąd podczas zmiany hasła w systemie WD." }
+                        onSuccess = { "Hasło zostało zmienione." },
+                        onFailure = { err -> err.message ?: "Nie udało się zmienić hasła." }
                     )
                 )
             }
@@ -538,13 +546,13 @@ class ScheduleViewModel @Inject constructor(
             res.fold(
                 onSuccess = { url ->
                     _uiState.update {
-                        it.copy(statusBannerMessage = "Wygenerowano link płatności BlueMedia dla: ${charge.title}")
+                        it.copy(statusBannerMessage = "Otwieram płatność: ${charge.title}")
                     }
                     onOpenUrl(url)
                 },
                 onFailure = { err ->
                     _uiState.update {
-                        it.copy(statusBannerMessage = err.message ?: "Błąd inicjalizacji płatności online.")
+                        it.copy(statusBannerMessage = err.message ?: "Nie udało się rozpocząć płatności.")
                     }
                 }
             )
@@ -570,8 +578,8 @@ class ScheduleViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     statusBannerMessage = res.fold(
-                        onSuccess = { att -> "Pobrano załącznik z WD: ${att.fileName}" },
-                        onFailure = { err -> err.message ?: "Błąd pobierania załącznika." }
+                        onSuccess = { att -> "Pobrano załącznik: ${att.fileName}" },
+                        onFailure = { err -> err.message ?: "Nie udało się pobrać załącznika." }
                     )
                 )
             }

@@ -122,11 +122,11 @@ class NotificationHelper @Inject constructor(
 
         val channel = NotificationChannel(
             LIVE_CLASS_CHANNEL_ID,
-            "Tryb Zajęć Taal (Na żywo)",
+            "Zajęcia na żywo",
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
             description =
-                "Widoczne na ekranie blokady powiadomienie Live z pełnoszerokościowym paskiem postępu dnia (zajęcia - przerwa - zajęcia)."
+                "Postęp trwających zajęć na ekranie blokady i w pasku stanu."
             setShowBadge(true)
             setSound(null, null)
             enableVibration(false)
@@ -167,7 +167,7 @@ class NotificationHelper @Inject constructor(
         return Notification.Builder(context, LIVE_CLASS_CHANNEL_ID)
             .setSmallIcon(pl.lublin.wsei.plan.R.drawable.ic_taal_notification)
             .setContentTitle("Taal")
-            .setContentText("Ładowanie planu zajęć…")
+            .setContentText("Wczytuję plan zajęć…")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()

@@ -3,7 +3,7 @@
 [![Android Version](https://img.shields.io/badge/Android-8.0%2B%20(API%2026%2B)-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![Target SDK](https://img.shields.io/badge/Target%20SDK-35%20(Android%2015%2B)-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203%20Expressive-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![Version](https://img.shields.io/badge/Release-v0.1-brightgreen)](https://github.com/m1chi0001/Taal/releases)
+[![Version](https://img.shields.io/badge/Release-v0.2-brightgreen)](https://github.com/m1chi0001/Taal/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > **Taal** to nowoczesna, w pełni natywna aplikacja mobilna na platformę Android dla studentów **Uniwersytetu WSEI w Lublinie** (dawniej Lubelska Akademia WSEI).
@@ -16,6 +16,7 @@
 - 🌋 **Material 3 Expressive Design System:**
   - Dynamic Color (Material You) z dopracowanymi motywami jasnym, ciemnym i systemowym.
   - Oficjalne ekspresyjne figury M3X: `MaterialShapes.Cookie9Sided`, pigułki nawigacyjne, squircle i zaokrąglenia kart `24.dp`.
+  - Czcionka Google Sans Flex dołączona do aplikacji jako plik zmienny (osie `wght`, `wdth`, `opsz`, `ROND`), więc działa offline.
   - Płynna fizyka sprężynowa (`MotionScheme.expressive()`) przy rozwijaniu kart i przełączaniu widoków.
   - Najnowsze komponenty: falujące paski postępu (`LinearWavyProgressIndicator`) oraz wskaźniki `LoadingIndicator`.
 
@@ -46,6 +47,7 @@
 - 🔒 **Bezpieczeństwo i Android Keystore:**
   - Sprzętowo wspierane szyfrowanie poświadczeń studenta algorytmem AES-256 GCM w Android Keystore (`EncryptedCredentialStore`).
   - Natychmiastowy start aplikacji z pamięci podręcznej bez migania ekranem logowania (`WseiSplashScreen`).
+  - Ekran powitalny (`WseiWelcomeScreen`) pokazywany raz, przed pierwszym logowaniem. Po wylogowaniu aplikacja wraca od razu do logowania.
   - Opcjonalny tryb ochrony prywatności (maskowanie numeru albumu i kwot opłat w miejscach publicznych).
 
 ---
@@ -68,7 +70,7 @@ app/
       ├── components/    # WseiScreenScaffold, WseiSplashScreen, WseiScreenHeader
       ├── navigation/    # WseiAppShell, FloatingIconOnlyNavigationPill, Bento Hub
       ├── schedule/      # ScheduleScreen, ExpandableCalendar, ActiveClassHeroCard
-      ├── login/         # LoginScreen
+      ├── login/         # LoginScreen (konto testowe tylko w buildach debug)
       └── theme/         # WseiExpressiveTheme, MotionScheme, ColorSchemes, M3X Shapes
 ```
 
@@ -105,7 +107,7 @@ Gotowy plik APK znajdziesz w:
 ## 📱 Identyfikator aplikacji
 
 - **Application ID:** `com.M1chi0001.Taal`
-- **Wersja:** `0.1` (versionCode: `1`)
+- **Wersja:** `0.2` (versionCode: `2`)
 
 ---
 

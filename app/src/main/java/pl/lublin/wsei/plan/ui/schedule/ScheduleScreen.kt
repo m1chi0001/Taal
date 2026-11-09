@@ -253,7 +253,7 @@ private fun CompactSingleColumnScheduleContent(
                 ) {
                     if (isCurrentlyOngoing) {
                         LiveNowTimelineDivider(
-                            nowFormatted = "TERAZ W PLANIE • ${event.elapsedMinutes(uiState.nowEpochMillis)} MIN Z ${event.totalDurationMinutes} MIN"
+                            nowFormatted = "Teraz • ${event.elapsedMinutes(uiState.nowEpochMillis)} z ${event.totalDurationMinutes} min"
                         )
                     }
                     TimelineClassRow(
@@ -358,7 +358,7 @@ private fun ExpandedTwoPaneScheduleContent(
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (isCurrentlyOngoing) {
                             LiveNowTimelineDivider(
-                                nowFormatted = "TERAZ W PLANIE • ${event.elapsedMinutes(uiState.nowEpochMillis)} MIN Z ${event.totalDurationMinutes} MIN"
+                                nowFormatted = "Teraz • ${event.elapsedMinutes(uiState.nowEpochMillis)} z ${event.totalDurationMinutes} min"
                             )
                         }
                         TimelineClassRow(
@@ -449,7 +449,7 @@ private fun ExpressiveExpandableCalendarCard(
 
                     Column {
                         Text(
-                            text = if (isExpanded) "KALENDARZ • WIDOK MIESIĘCZNY" else "KALENDARZ • ${weekRangeSubtitle.uppercase()}",
+                            text = if (isExpanded) "Widok miesięczny" else weekRangeSubtitle,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
@@ -895,7 +895,7 @@ fun ActiveClassHeroCard(
 
                     Column {
                         Text(
-                            text = "TRWA TERAZ • ${activeClass.classType.polishLabel.uppercase()}",
+                            text = "Trwa teraz • ${activeClass.classType.polishLabel}",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -1016,7 +1016,7 @@ fun ActiveClassHeroCard(
                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 Text(
-                                    text = "NASTĘPNIE PO PRZERWIE",
+                                    text = "Następnie, po przerwie",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -1101,7 +1101,7 @@ fun SegmentedDayProgressBarCompose(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            text = "Postęp całego dnia (Zajęcia • Przerwa • Zajęcia):",
+            text = "Postęp dnia",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold
         )
@@ -1284,14 +1284,14 @@ private fun TimelineClassRow(
                     verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     val statusPrefix = when {
-                        isOngoing -> "TRWA • ${event.classType.polishLabel.uppercase()}"
-                        isNextUp -> "NASTĘPNE • ${event.classType.polishLabel.uppercase()}"
-                        isFinished -> "ZAKOŃCZONE • ${event.classType.polishLabel.uppercase()}"
+                        isOngoing -> "Trwa • ${event.classType.polishLabel}"
+                        isNextUp -> "Następne • ${event.classType.polishLabel}"
+                        isFinished -> "Zakończone • ${event.classType.polishLabel}"
                         else -> event.classType.polishLabel.uppercase()
                     }
 
                     Text(
-                        text = "$statusPrefix • ${event.deliveryMode.polishBadge.uppercase()} • ${event.groupCode}",
+                        text = "$statusPrefix • ${event.deliveryMode.polishBadge} • ${event.groupCode}",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -1386,7 +1386,7 @@ private fun EmptyDayNotice(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "HARMONOGRAM DNIA • WOLNE OD ZAJĘĆ",
+                    text = "Wolne od zajęć",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -1398,7 +1398,7 @@ private fun EmptyDayNotice(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "W Wirtualnym Dziekanacie nie zaplanowano wykładów ani laboratoriów na wybrany dzień. Rozwiń kalendarz powyżej, aby przejść do innych dni lub miesięcy.",
+                    text = "Na ten dzień nie ma zajęć. Wybierz inny dzień w kalendarzu.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

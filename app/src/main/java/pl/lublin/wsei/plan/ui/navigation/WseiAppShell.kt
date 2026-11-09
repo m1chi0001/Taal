@@ -64,6 +64,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,6 +99,7 @@ import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
 import pl.lublin.wsei.plan.domain.model.ScholarshipApplication
 import pl.lublin.wsei.plan.domain.model.formatPolishBankAccount
 import pl.lublin.wsei.plan.ui.components.WseiSplashScreen
+import pl.lublin.wsei.plan.ui.components.WseiWelcomeScreen
 import pl.lublin.wsei.plan.ui.components.WseiScreenScaffold
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.login.LoginScreen
@@ -167,6 +169,8 @@ enum class MoreSubView {
     ABOUT
 }
 
+private enum class AuthPhase { SPLASH, WELCOME, LOGIN, APP }
+
 @Composable
 fun WseiAppShell(
     scheduleUiState: ScheduleUiState,
@@ -210,11 +214,26 @@ fun WseiAppShell(
         }
     }
 
-    // 0 = splash (odtwarzanie sesji), 1 = logowanie, 2 = aplikacja
+    // Ekran powitalny pokazujemy raz, przed pierwszym logowaniem. Po wylogowaniu od razu wracamy do logowania.
+    val context = LocalContext.current
+    val welcomePrefs = remember(context) {
+        context.getSharedPreferences("taal_prefs", android.content.Context.MODE_PRIVATE)
+    }
+    var welcomeSeen by rememberSaveable { mutableStateOf(welcomePrefs.getBoolean("welcome_seen", false)) }
+
+    // Po wylogowaniu następne logowanie zaczyna się od zakładki Start, nie od ekranu, z którego wylogowano.
+    LaunchedEffect(isLoggedIn) {
+        if (!isLoggedIn) {
+            currentDestination = WseiDestination.START
+            moreSubView = MoreSubView.HUB
+        }
+    }
+
     val phase = when {
-        isLoggedIn -> 2
-        scheduleUiState.isSessionRestoring -> 0
-        else -> 1
+        isLoggedIn -> AuthPhase.APP
+        scheduleUiState.isSessionRestoring -> AuthPhase.SPLASH
+        !welcomeSeen -> AuthPhase.WELCOME
+        else -> AuthPhase.LOGIN
     }
 
     AnimatedContent(
@@ -226,12 +245,20 @@ fun WseiAppShell(
         modifier = modifier.fillMaxSize(),
         label = "authToShellTransition"
     ) { currentPhase ->
-        if (currentPhase == 0) {
+        if (currentPhase == AuthPhase.SPLASH) {
             WseiSplashScreen()
-        } else if (currentPhase == 1) {
+        } else if (currentPhase == AuthPhase.WELCOME) {
+            WseiWelcomeScreen(
+                onContinue = {
+                    welcomePrefs.edit().putBoolean("welcome_seen", true).apply()
+                    welcomeSeen = true
+                }
+            )
+        } else if (currentPhase == AuthPhase.LOGIN) {
             LoginScreen(
                 isAuthenticating = scheduleUiState.isAuthenticating,
                 errorMessage = scheduleUiState.authError,
+                savedLoginHint = scheduleUiState.savedEncryptedLoginHint,
                 onLoginSubmit = onLoginSubmit,
                 onQuickDebugLogin = onQuickDebugLogin
             )
@@ -630,7 +657,7 @@ private fun StudentProfileStartTile(
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = "NR ALBUMU: $displayAlbum",
+                            text = "Album $displayAlbum",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -740,7 +767,7 @@ private fun ShortenedScheduleStartTile(
 
                     Column {
                         Text(
-                            text = if (isTodaySchedule) "SKRÓCONY PLAN ZAJĘĆ • DZISIAJ" else "SKRÓCONY PLAN • NAJBLIŻSZY ZJAZD",
+                            text = if (isTodaySchedule) "Dzisiaj" else "Najbliższy zjazd",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -802,7 +829,7 @@ private fun ShortenedScheduleStartTile(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Text(
-                                    text = "TRWA: ${activeClass.subject.name}",
+                                    text = "Trwa: ${activeClass.subject.name}",
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
@@ -917,7 +944,7 @@ private fun ShortenedScheduleStartTile(
 
                 if (upcomingDayEvents.size > 4) {
                     Text(
-                        text = "+ ${upcomingDayEvents.size - 4} kolejne zajęcia tego dnia • Dotknij, aby otworzyć pełny plan",
+                        text = "+ ${upcomingDayEvents.size - 4} więcej • Otwórz plan",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
@@ -992,11 +1019,11 @@ private fun NextPaymentStartTile(
                     Column {
                         Text(
                             text = if (isUrgentThisMonth) {
-                                "TERMIN W TYM MIESIĄCU • DO UREGULOWANIA"
+                                "Termin w tym miesiącu"
                             } else if (nextUnpaid != null) {
-                                "NAJBLIŻSZA OPŁATA • HARMONOGRAM"
+                                "Najbliższa opłata"
                             } else {
-                                "FINANSE STUDENTA • UREGULOWANO"
+                                "Opłaty uregulowane"
                             },
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
@@ -1059,7 +1086,7 @@ private fun NextPaymentStartTile(
                 }
             } else {
                 Text(
-                    text = "Wszystkie zobowiązania czesnego są uregulowane.",
+                    text = "Wszystkie opłaty są uregulowane.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
@@ -1178,7 +1205,7 @@ private fun GradesAndSubjectsScreen(
 
                             Column {
                                 Text(
-                                    text = "SEMESTR ${session?.semesterNumber ?: 1} • WYKAZ PRZEDMIOTÓW I OCEN",
+                                    text = "Semestr ${session?.semesterNumber ?: 1}",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
@@ -1288,7 +1315,7 @@ private fun GradeItemRow(
 
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = "${grade.moduleName.uppercase()} • ${grade.ects} ECTS",
+                            text = "${grade.moduleName} • ${grade.ects} ECTS",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -1419,7 +1446,7 @@ private fun StudentProfileParityScreen(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
-                                    text = "NR ALBUMU: $displayAlbum",
+                                    text = "Album $displayAlbum",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -1447,7 +1474,6 @@ private fun StudentProfileParityScreen(
         item(key = "accordion_course_of_study") {
             val gpaStr = uiState.maskSensitive(String.format(Locale.US, "%.2f", session?.averageGrade ?: 0.0))
             ExpandableAccordionCard(
-                overline = "INFORMACJE AKADEMICKIE • TOK STUDIÓW",
                 title = "Tok studiów i wyniki",
                 badgeText = "Śr. $gpaStr",
                 icon = WseiIcons.School,
@@ -1486,7 +1512,6 @@ private fun StudentProfileParityScreen(
         item(key = "accordion_student_groups") {
             val groups = uiState.studentGroups.firstOrNull()?.groups.orEmpty()
             ExpandableAccordionCard(
-                overline = "PRZYPISANE GRUPY • ${uiState.studentGroups.firstOrNull()?.semesterLabel?.uppercase() ?: "BIEŻĄCY SEMESTR"}",
                 title = "Grupy studenckie",
                 badgeText = "${groups.size} grup",
                 icon = WseiIcons.Groups,
@@ -1543,7 +1568,6 @@ private fun StudentProfileParityScreen(
             val planSubjects = plan?.semesters?.flatMap { it.subjects }.orEmpty()
             val totalPlanEcts = planSubjects.sumOf { it.ects.toDouble() }
             ExpandableAccordionCard(
-                overline = "PROGRAM KSZTAŁCENIA • SIATKA GODZIN",
                 title = "Plany studiów",
                 badgeText = "${totalPlanEcts.toInt()} ECTS",
                 icon = WseiIcons.AutoAwesome,
@@ -1640,13 +1664,7 @@ private fun StudentProfileParityScreen(
                         }
                         Column {
                             Text(
-                                text = "KONTO I BEZPIECZEŃSTWO • DOSTĘP",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Zarządzanie sesją",
+                                text = "Konto",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
@@ -1737,7 +1755,6 @@ private fun StudentProfileParityScreen(
 
 @Composable
 private fun ExpandableAccordionCard(
-    overline: String,
     title: String,
     badgeText: String,
     icon: ImageVector,
@@ -1789,12 +1806,6 @@ private fun ExpandableAccordionCard(
                     }
 
                     Column {
-                        Text(
-                            text = overline,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
                         Text(
                             text = title,
                             style = MaterialTheme.typography.titleLarge,
@@ -1948,12 +1959,6 @@ private fun FinancesScreen(
                             }
 
                             Column {
-                                Text(
-                                    text = "STAN SALDA STUDENTA • FINANSE",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
                                 val balanceText = if (unpaidSum == 0.0) {
                                     "0.00 PLN (Uregulowano)"
                                 } else {
@@ -1978,7 +1983,7 @@ private fun FinancesScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "Indywidualny rachunek bankowy do wpłat (NRB):",
+                                text = "Numer konta do wpłat:",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -2009,7 +2014,7 @@ private fun FinancesScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (copiedAccountNotice) "Skopiowano numer konta!" else "Kopiuj numer konta bankowego",
+                            text = if (copiedAccountNotice) "Skopiowano numer konta" else "Kopiuj numer konta",
                             style = MaterialTheme.typography.labelLarge
                         )
                     }
@@ -2056,7 +2061,7 @@ private fun FinancesScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Brak zarejestrowanych wniosków stypendialnych w bieżącym semestrze.",
+                        text = "Brak wniosków stypendialnych w tym semestrze.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(22.dp)
@@ -2192,9 +2197,9 @@ private fun FinancialInstallmentExpressiveRow(
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             text = when {
-                                isDueThisMonth -> "NAJBLIŻSZA DO ZAPŁATY • TERMIN ${item.dueDateIso}"
-                                !item.isPaid -> "DO ZAPŁATY • TERMIN ${item.dueDateIso}"
-                                else -> "ZAPŁACONE • TERMIN ${item.dueDateIso}"
+                                isDueThisMonth -> "Najbliższa do zapłaty • termin ${item.dueDateIso}"
+                                !item.isPaid -> "Do zapłaty • termin ${item.dueDateIso}"
+                                else -> "Zapłacone • termin ${item.dueDateIso}"
                             },
                             style = MaterialTheme.typography.labelMedium,
                             color = when {
@@ -2337,7 +2342,7 @@ private fun ActiveScholarshipCard(
 
                     Column {
                         Text(
-                            text = "${scholarship.semesterLabel.uppercase()} • ${scholarship.statusString.uppercase()}",
+                            text = "${scholarship.semesterLabel} • ${scholarship.statusString}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -2413,7 +2418,7 @@ private fun ScholarshipApplicationCard(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "${scholarship.semesterLabel.uppercase()} • ${scholarship.statusString.uppercase()}",
+                text = "${scholarship.semesterLabel} • ${scholarship.statusString}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
@@ -2514,9 +2519,8 @@ private fun MoreBentoHubView(
         item(key = "hub_card_announcements") {
             val unread = uiState.announcements.count { !it.isRead }
             BentoHubCard(
-                overline = "KOMUNIKATY DZIEKANATU • AKTUALNOŚCI",
                 title = "Ogłoszenia uczelniane",
-                subtitle = "Wiadomości z dziekanatu, zarządzenia i załączniki do pobrania",
+                subtitle = "Wiadomości z dziekanatu i załączniki",
                 icon = WseiIcons.Campaign,
                 badgeText = if (unread > 0) "$unread nowe" else "${uiState.announcements.size} wiad.",
                 badgeIsUrgent = unread > 0,
@@ -2527,9 +2531,8 @@ private fun MoreBentoHubView(
         // Karta 2: Ustawienia aplikacji
         item(key = "hub_card_settings") {
             BentoHubCard(
-                overline = "PERSONALIZACJA • POWIADOMIENIA I PRYWATNOŚĆ",
                 title = "Ustawienia aplikacji",
-                subtitle = "Motyw wizualny, powiadomienia Live na ekranie blokady i maskowanie danych",
+                subtitle = "Motyw, powiadomienia i prywatność",
                 icon = WseiIcons.Settings,
                 badgeText = uiState.themeMode.polishLabel,
                 badgeIsUrgent = false,
@@ -2540,11 +2543,10 @@ private fun MoreBentoHubView(
         // Karta 3: O aplikacji
         item(key = "hub_card_about") {
             BentoHubCard(
-                overline = "INFORMACJE O SYSTEMIE • UNIWERSYTET WSEI",
                 title = "O aplikacji Taal",
-                subtitle = "Wersja 0.1 Expressive • Architektura i szyfrowanie Android Keystore",
+                subtitle = "Wersja 0.2",
                 icon = WseiIcons.Info,
-                badgeText = "v0.1",
+                badgeText = "v0.2",
                 badgeIsUrgent = false,
                 onClick = onOpenAbout
             )
@@ -2554,7 +2556,6 @@ private fun MoreBentoHubView(
 
 @Composable
 private fun BentoHubCard(
-    overline: String,
     title: String,
     subtitle: String,
     icon: ImageVector,
@@ -2599,12 +2600,6 @@ private fun BentoHubCard(
                     }
 
                     Column {
-                        Text(
-                            text = overline,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
                         Text(
                             text = title,
                             style = MaterialTheme.typography.titleLarge,
@@ -2743,7 +2738,7 @@ private fun AnnouncementRow(
 
                     Column {
                         Text(
-                            text = "${announcement.authorDepartment.uppercase()} • ${announcement.publishedAtIso}",
+                            text = "${announcement.authorDepartment} • ${announcement.publishedAtIso}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -2863,12 +2858,6 @@ private fun SettingsSubScreen(
                         }
                         Column {
                             Text(
-                                text = "WYGLĄD • PALETA KOLORÓW",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
                                 text = "Motyw aplikacji",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
@@ -2952,13 +2941,7 @@ private fun SettingsSubScreen(
 
                             Column {
                                 Text(
-                                    text = "EKRAN BLOKADY • LIVE UPDATES",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Powiadomienia Live",
+                                    text = "Zajęcia na ekranie blokady",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -2977,7 +2960,7 @@ private fun SettingsSubScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Wyświetla pasek postępu trwających zajęć oraz odliczanie do końca na ekranie blokady i pasku stanu.",
+                            text = "Pokazuje postęp trwających zajęć na ekranie blokady i w pasku stanu.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
@@ -3026,13 +3009,7 @@ private fun SettingsSubScreen(
 
                             Column {
                                 Text(
-                                    text = "OCHRONA PRYWATNOŚCI • MASKOWANIE",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Ukryj dane wrażliwe",
+                                    text = "Ukryj dane",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -3051,7 +3028,7 @@ private fun SettingsSubScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Maskuje numer albumu, stan konta i oceny symbolem •••••• podczas korzystania z aplikacji w miejscach publicznych.",
+                            text = "Ukrywa numer albumu, kwoty i oceny, gdy korzystasz z aplikacji wśród ludzi.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
@@ -3082,7 +3059,6 @@ private fun AboutSubScreen(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                tonalElevation = 6.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -3107,38 +3083,27 @@ private fun AboutSubScreen(
                                 )
                             }
                         }
-
                         Column {
                             Text(
-                                text = "TAAL • WERSJA 0.1 EXPRESSIVE",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
+                                text = "Taal",
+                                style = MaterialTheme.typography.titleLarge
                             )
                             Text(
-                                text = "Wirtualny Dziekanat",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
+                                text = "Wersja 0.2",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                             )
                         }
                     }
-
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.08f),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Natywny klient mobilny Taal dla studentów Uniwersytetu WSEI w Lublinie zaprojektowany zgodnie z wytycznymi Material 3 Expressive oraz Android 16 Live Updates.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                        )
-                    }
+                    Text(
+                        text = "Aplikacja dla studentów Uniwersytetu WSEI w Lublinie. Pokazuje plan zajęć, oceny i opłaty z Wirtualnego Dziekanatu.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
         }
 
-        item(key = "about_security_metrics") {
+        item(key = "about_credits") {
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -3147,117 +3112,11 @@ private fun AboutSubScreen(
             ) {
                 Column(
                     modifier = Modifier.padding(22.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Surface(
-                            shape = M3XSquircleShape,
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = WseiIcons.Security,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                        Column {
-                            Text(
-                                text = "BEZPIECZEŃSTWO • KRYPTOGRAFIA",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Ochrona danych",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            BreakdownMetricRow("Szyfrowanie poświadczeń", "AES-256-GCM (Android Keystore)")
-                            BreakdownMetricRow("Izolacja kont", "Czyszczenie Room DB przy wylogowaniu")
-                            BreakdownMetricRow("Komunikacja z WD", "TLS 1.3 + podpis MS-API-KEY")
-                        }
-                    }
-                }
-            }
-        }
-
-        item(key = "about_architecture_metrics") {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(22.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Surface(
-                            shape = M3XSquircleShape,
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = WseiIcons.NotificationsActive,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                        Column {
-                            Text(
-                                text = "SPECYFIKACJA • TECHNOLOGIA",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Architektura aplikacji",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            BreakdownMetricRow("Silnik UI", "Jetpack Compose + Material 3 Expressive")
-                            BreakdownMetricRow("Powiadomienia Live", "Android 16 Notification.ProgressStyle")
-                            BreakdownMetricRow("Backend API", "APR System Sp. z o.o. (REST API)")
-                        }
-                    }
+                    BreakdownMetricRow("Dane", "Wirtualny Dziekanat (APR System)")
+                    BreakdownMetricRow("Czcionka", "Google Sans Flex (OFL)")
+                    BreakdownMetricRow("Licencja", "MIT")
                 }
             }
         }

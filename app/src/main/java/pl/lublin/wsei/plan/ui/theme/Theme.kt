@@ -35,12 +35,15 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.googlefonts.Font
-import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.ui.schedule.AppThemeMode
 import kotlin.math.PI
 import kotlin.math.cos
@@ -49,32 +52,40 @@ import kotlin.math.sin
 /**
  * Material 3 Expressive Design System for Lubelska Akademia WSEI.
  *
- * - Typography: Google Sans Flex (with variable weight/contrast fallback)
+ * - Typography: Google Sans Flex (czcionka zmienna: wght, wdth, opsz, ROND)
  * - Shapes: Material 3 Expressive (M3X) silhouettes (`M3XCookieShape`, `M3XSquircleShape`,
  *   `M3XArchShape`, `M3XFloatingPillShape`, `ActiveHeroCardAsymmetricShape`)
  * - Color: Material You Dynamic Color with vibrant WSEI Emerald & Amber high-contrast fallbacks
  * - Motion: Expressive spring physics (`MotionScheme.expressive()`)
  */
 
-private val fontProvider = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    certificates = emptyList<List<ByteArray>>()
+/**
+ * Google Sans Flex jako czcionka zmienna dołączona do aplikacji (res/font/google_sans_flex.ttf).
+ * Osie: wght (grubość), wdth (szerokość), opsz (rozmiar optyczny), ROND (zaokrąglenie), slnt (pochylenie).
+ * Dołączony plik działa offline i nie zależy od Usług Google Play.
+ */
+@OptIn(ExperimentalTextApi::class)
+private fun flexFont(weight: Int, width: Float, round: Float, opticalSize: Float): Font = Font(
+    resId = R.font.google_sans_flex,
+    weight = FontWeight(weight),
+    style = FontStyle.Normal,
+    variationSettings = FontVariation.Settings(
+        FontVariation.weight(weight),
+        FontVariation.width(width),
+        FontVariation.Setting("ROND", round),
+        FontVariation.Setting("opsz", opticalSize)
+    )
 )
 
-private val googleSansFlexFont = GoogleFont("Google Sans Flex")
-
-val WseiDisplayFontFamily = FontFamily(
-    Font(googleFont = googleSansFlexFont, fontProvider = fontProvider, weight = FontWeight.Bold),
-    Font(googleFont = googleSansFlexFont, fontProvider = fontProvider, weight = FontWeight.SemiBold),
-    Font(googleFont = googleSansFlexFont, fontProvider = fontProvider, weight = FontWeight.Medium)
+private fun flexFamily(width: Float, round: Float, opticalSize: Float): FontFamily = FontFamily(
+    listOf(400, 500, 600, 700).map { flexFont(it, width, round, opticalSize) }
 )
 
-val WseiPlainFontFamily = FontFamily(
-    Font(googleFont = googleSansFlexFont, fontProvider = fontProvider, weight = FontWeight.Normal),
-    Font(googleFont = googleSansFlexFont, fontProvider = fontProvider, weight = FontWeight.Medium),
-    Font(googleFont = googleSansFlexFont, fontProvider = fontProvider, weight = FontWeight.SemiBold)
-)
+/** Nagłówki: szersze litery i wyraźne zaokrąglenie, jak w emfatycznych stylach M3 Expressive. */
+val WseiDisplayFontFamily: FontFamily = flexFamily(width = 112f, round = 70f, opticalSize = 48f)
+
+/** Tekst ciągły i etykiety: węższy, spokojniejszy rysunek dla czytelności małych rozmiarów. */
+val WseiPlainFontFamily: FontFamily = flexFamily(width = 100f, round = 0f, opticalSize = 16f)
 
 private val WseiLightColorScheme: ColorScheme = lightColorScheme(
     primary = Color(0xFF006B58),
@@ -132,7 +143,12 @@ private val WseiDarkColorScheme: ColorScheme = darkColorScheme(
     outlineVariant = Color(0xFF3F4945)
 )
 
+private val BaseTypography = Typography()
+
 val WseiExpressiveTypography = Typography(
+    displayLarge = BaseTypography.displayLarge.copy(fontFamily = WseiDisplayFontFamily, fontWeight = FontWeight.Bold),
+    displayMedium = BaseTypography.displayMedium.copy(fontFamily = WseiDisplayFontFamily, fontWeight = FontWeight.Bold),
+    displaySmall = BaseTypography.displaySmall.copy(fontFamily = WseiDisplayFontFamily, fontWeight = FontWeight.Bold),
     headlineLarge = TextStyle(
         fontFamily = WseiDisplayFontFamily,
         fontWeight = FontWeight.Bold,
@@ -147,6 +163,7 @@ val WseiExpressiveTypography = Typography(
         lineHeight = 32.sp,
         letterSpacing = (-0.25).sp
     ),
+    headlineSmall = BaseTypography.headlineSmall.copy(fontFamily = WseiDisplayFontFamily, fontWeight = FontWeight.SemiBold),
     titleLarge = TextStyle(
         fontFamily = WseiDisplayFontFamily,
         fontWeight = FontWeight.SemiBold,
@@ -160,6 +177,7 @@ val WseiExpressiveTypography = Typography(
         lineHeight = 22.sp,
         letterSpacing = 0.1.sp
     ),
+    titleSmall = BaseTypography.titleSmall.copy(fontFamily = WseiPlainFontFamily, fontWeight = FontWeight.SemiBold),
     bodyLarge = TextStyle(
         fontFamily = WseiPlainFontFamily,
         fontWeight = FontWeight.Normal,
@@ -172,6 +190,7 @@ val WseiExpressiveTypography = Typography(
         fontSize = 14.sp,
         lineHeight = 20.sp
     ),
+    bodySmall = BaseTypography.bodySmall.copy(fontFamily = WseiPlainFontFamily),
     labelLarge = TextStyle(
         fontFamily = WseiPlainFontFamily,
         fontWeight = FontWeight.SemiBold,
@@ -185,7 +204,8 @@ val WseiExpressiveTypography = Typography(
         fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.25.sp
-    )
+    ),
+    labelSmall = BaseTypography.labelSmall.copy(fontFamily = WseiPlainFontFamily, fontWeight = FontWeight.Medium)
 )
 
 val WseiExpressiveShapes = Shapes(

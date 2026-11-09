@@ -89,17 +89,17 @@ class ArpApiDataSource @Inject constructor(
             }.body()
 
         val authResult = authWrapper.result
-            ?: error(authWrapper.error?.message ?: "Błąd autoryzacji w Wirtualnym Dziekanacie WSEI.")
+            ?: error(authWrapper.error?.message ?: "Nie udało się zalogować.")
 
         if (authResult.shouldResetPassword) {
-            error("Konto wymaga zmiany hasła w systemie Wirtualny Dziekanat.")
+            error("Konto wymaga zmiany hasła w Wirtualnym Dziekanacie.")
         }
         if (authResult.requiresTwoFactorVerification && twoFactorToken.isNullOrBlank()) {
-            error("Konto wymaga kodu weryfikacji dwuetapowej (2FA).")
+            error("Konto wymaga kodu weryfikacji dwuetapowej.")
         }
 
         val accessToken = authResult.accessToken
-            ?: error("Brak tokenu dostępowego (AccessToken) z serwera WD.")
+            ?: error("Serwer nie zwrócił danych logowania. Spróbuj ponownie.")
 
         sessionCookieJar.bearerToken = accessToken
         sessionCookieJar.savedLogin = usernameOrAlbum.trim()
@@ -597,7 +597,7 @@ class ArpApiDataSource @Inject constructor(
                 parameter("IdLoggedPersonType", session.studId)
             }.body()
 
-        val dto = wrapper.result ?: error("Nie udało się pobrać załącznika z serwera WD.")
+        val dto = wrapper.result ?: error("Nie udało się pobrać załącznika.")
         AnnouncementAttachment(
             id = dto.id,
             fileName = dto.name.ifBlank { "zalacznik_$attachmentId.pdf" },

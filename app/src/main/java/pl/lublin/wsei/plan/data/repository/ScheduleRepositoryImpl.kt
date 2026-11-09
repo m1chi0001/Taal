@@ -171,7 +171,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         currentPassword: String,
         newPassword: String
     ): Result<Unit> {
-        val session = _currentSession.value ?: return Result.failure(IllegalStateException("Brak aktywnej sesji."))
+        val session = _currentSession.value ?: return Result.failure(IllegalStateException("Nie jesteś zalogowany."))
         if (session.isDebugAccount) {
             return Result.success(Unit)
         }
@@ -255,7 +255,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         forceRefresh: Boolean
     ): Result<SyncReport> = runCatching {
         val session = _currentSession.value
-            ?: error("Brak aktywnej sesji użytkownika.")
+            ?: error("Nie jesteś zalogowany.")
 
         if (session.isDebugAccount) {
             val demoEvents = SampleWseiScheduleFactory.createDemoAcademicCalendarEvents(
@@ -334,7 +334,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         chargeId: Int,
         amountPln: Double
     ): Result<String> {
-        val session = _currentSession.value ?: return Result.failure(IllegalStateException("Brak sesji"))
+        val session = _currentSession.value ?: return Result.failure(IllegalStateException("Nie jesteś zalogowany."))
         if (session.isDebugAccount) {
             return Result.success("https://platnosci.bm.pl/wsei-lublin?chargeId=$chargeId&price=$amountPln")
         }
@@ -360,7 +360,7 @@ class ScheduleRepositoryImpl @Inject constructor(
     override suspend fun downloadAnnouncementAttachment(
         attachmentId: Int
     ): Result<AnnouncementAttachment> {
-        val session = _currentSession.value ?: return Result.failure(IllegalStateException("Brak sesji"))
+        val session = _currentSession.value ?: return Result.failure(IllegalStateException("Nie jesteś zalogowany."))
         if (session.isDebugAccount) {
             return Result.success(
                 AnnouncementAttachment(
