@@ -12,6 +12,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.fadeOut
@@ -72,6 +73,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
@@ -79,6 +81,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -98,6 +101,10 @@ import pl.lublin.wsei.plan.domain.model.GradeItem
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
 import pl.lublin.wsei.plan.domain.model.ScholarshipApplication
 import pl.lublin.wsei.plan.domain.model.formatPolishBankAccount
+import pl.lublin.wsei.plan.ui.components.ClassRowState
+import pl.lublin.wsei.plan.ui.components.WseiCardShape
+import pl.lublin.wsei.plan.ui.components.WseiClassCard
+import pl.lublin.wsei.plan.ui.components.WseiExpandableCard
 import pl.lublin.wsei.plan.ui.components.WseiSplashScreen
 import pl.lublin.wsei.plan.ui.components.WseiWelcomeScreen
 import pl.lublin.wsei.plan.ui.components.WseiScreenScaffold
@@ -108,6 +115,7 @@ import pl.lublin.wsei.plan.ui.schedule.ScheduleScreen
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
 import pl.lublin.wsei.plan.ui.theme.ActiveHeroCardAsymmetricShape
 import pl.lublin.wsei.plan.ui.theme.M3XArchShape
+import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.M3XFloatingPillShape
 import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
 import pl.lublin.wsei.plan.ui.theme.rememberDecodedStudentPhoto
@@ -305,9 +313,8 @@ fun WseiAppShell(
                         AnimatedContent(
                             targetState = currentDestination,
                             transitionSpec = {
-                                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMedium)) +
-                                    scaleIn(initialScale = 0.96f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))) togetherWith
-                                    fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium))
+                                fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 60)) togetherWith
+                                    fadeOut(animationSpec = tween(durationMillis = 90))
                             },
                             modifier = Modifier.fillMaxSize(),
                             label = "destinationTransition"
@@ -426,7 +433,7 @@ private fun FloatingIconOnlyNavigationPill(
             color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.96f),
             contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = 10.dp,
-            shadowElevation = 18.dp,
+            shadowElevation = 8.dp,
             modifier = Modifier
                 .height(66.dp)
                 .border(
@@ -455,16 +462,16 @@ private fun FloatingIconOnlyNavigationPill(
                     val itemWidth by animateDpAsState(
                         targetValue = if (selected) 56.dp else 44.dp,
                         animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
                         ),
                         label = "pillItemWidth"
                     )
                     val indicatorCorner by animateDpAsState(
                         targetValue = if (selected) 24.dp else 16.dp,
                         animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
                         ),
                         label = "pillIndicatorCorner"
                     )
@@ -541,7 +548,7 @@ private fun FloatingIconOnlyNavigationPill(
             shape = RoundedCornerShape(22.dp),
             color = profileContainerColor,
             tonalElevation = 10.dp,
-            shadowElevation = 18.dp,
+            shadowElevation = 8.dp,
             border = BorderStroke(if (isProfileSelected) 2.5.dp else 1.dp, profileBorderColor),
             modifier = Modifier.size(66.dp)
         ) {
@@ -696,9 +703,8 @@ private fun StudentProfileStartTile(
 }
 
 /**
- * Kafelek: Skrócony plan zajęć.
- * Zgodnie z wytycznymi: pozostawiono WYŁĄCZNIE pasek postępu bieżących zajęć.
- * Pasek całego dnia z przerwami usunięto z ekranu startowego.
+ * Kafelek: Skrócony plan zajęć. Te same karty zajęć co w Planie, w wersji kompaktowej:
+ * godziny, przedmiot, forma i sala. Szczegóły są w Planie zajęć.
  */
 @Composable
 private fun ShortenedScheduleStartTile(
@@ -707,247 +713,111 @@ private fun ShortenedScheduleStartTile(
 ) {
     val todayJava = java.time.LocalDate.now()
     val todayIso = todayJava.toString()
-    val todayEvents = uiState.allEvents
-        .filter { it.dateIso == todayIso }
-        .sortedBy { it.timeSlot.startEpochMillis }
-
-    val upcomingDayEvents = if (todayEvents.isNotEmpty()) {
-        todayEvents
-    } else {
-        val nextDateIso = uiState.allEvents
-            .map { it.dateIso }
-            .filter { it >= todayIso }
-            .minOrNull()
-            ?: uiState.selectedDate.toString()
-        uiState.allEvents
-            .filter { it.dateIso == nextDateIso }
+    val dayEvents = remember(uiState.allEvents, todayIso) {
+        val today = uiState.allEvents
+            .filter { it.dateIso == todayIso }
             .sortedBy { it.timeSlot.startEpochMillis }
+        if (today.isNotEmpty()) {
+            today
+        } else {
+            val nextDateIso = uiState.allEvents
+                .map { it.dateIso }
+                .filter { it >= todayIso }
+                .minOrNull()
+            if (nextDateIso == null) emptyList() else uiState.allEvents
+                .filter { it.dateIso == nextDateIso }
+                .sortedBy { it.timeSlot.startEpochMillis }
+        }
     }
 
-    val displayedDateIso = upcomingDayEvents.firstOrNull()?.dateIso ?: todayIso
-    val displayedJavaDate = runCatching { java.time.LocalDate.parse(displayedDateIso) }.getOrDefault(todayJava)
-    val isTodaySchedule = displayedDateIso == todayIso
-    val activeClass = uiState.activeClass
-    val dateFormatter = java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMM", Locale("pl", "PL"))
+    val now = uiState.nowEpochMillis
+    val displayedDateIso = dayEvents.firstOrNull()?.dateIso ?: todayIso
+    val displayedDate = runCatching { java.time.LocalDate.parse(displayedDateIso) }.getOrDefault(todayJava)
+    val isToday = displayedDateIso == todayIso
+    val dateFormatter = remember {
+        java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMM", Locale("pl", "PL"))
+    }
+
+    val remaining = remember(dayEvents, now) { dayEvents.filter { it.timeSlot.endEpochMillis > now } }
+    val visible = (if (remaining.isEmpty()) dayEvents else remaining).take(3)
+    val hiddenCount = (if (remaining.isEmpty()) dayEvents.size else remaining.size) - visible.size
+    val activeId = uiState.activeClass?.id
+    val nextId = remaining.firstOrNull { it.timeSlot.startEpochMillis > now }?.id
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
+        shape = WseiCardShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Surface(
-                        shape = M3XSquircleShape,
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(42.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = WseiIcons.CalendarMonth,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-
-                    Column {
-                        Text(
-                            text = if (isTodaySchedule) "Dzisiaj" else "Najbliższy zjazd",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = displayedJavaDate.format(dateFormatter).replaceFirstChar { it.uppercase() },
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                    }
-                }
-
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        text = "${upcomingDayEvents.size} zaj.",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        text = (if (isToday) "Dzisiaj" else "Najbliższy zjazd") +
+                            if (dayEvents.isNotEmpty()) " • ${dayEvents.size} zaj." else "",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = displayedDate.format(dateFormatter).replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.titleLarge
                     )
                 }
-            }
-
-            // Pasek postępu trwających zajęć (wyłącznie pojedyncze bieżące zajęcia)
-            if (activeClass != null) {
-                val animatedProgress by animateFloatAsState(
-                    targetValue = activeClass.progressFraction(uiState.nowEpochMillis),
-                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                    label = "startActiveClassProgress"
-                )
-                val elapsedMin = activeClass.elapsedMinutes(uiState.nowEpochMillis)
-                val totalMin = activeClass.totalDurationMinutes
-
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.fillMaxWidth()
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    modifier = Modifier.size(36.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = WseiIcons.forSubject(activeClass.subject.name, activeClass.classType),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    text = "Trwa: ${activeClass.subject.name}",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
-                            Text(
-                                text = "$elapsedMin z $totalMin min • do ${activeClass.timeSlot.endFormatted}",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        LinearWavyProgressIndicator(
-                            progress = { animatedProgress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(14.dp),
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            trackColor = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.2f)
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = WseiIcons.ChevronRight,
+                            contentDescription = "Otwórz plan zajęć",
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
             }
 
-            if (upcomingDayEvents.isEmpty()) {
+            if (visible.isEmpty()) {
                 Text(
-                    text = "Brak zaplanowanych zajęć w bieżącym okresie.",
+                    text = "Brak zaplanowanych zajęć.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                 )
             } else {
-                upcomingDayEvents.take(4).forEach { event ->
-                    val isCurrentlyRunning = activeClass?.id == event.id
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = if (isCurrentlyRunning) {
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerLow
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Surface(
-                                shape = M3XSquircleShape,
-                                color = if (isCurrentlyRunning) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.secondaryContainer
-                                },
-                                contentColor = if (isCurrentlyRunning) {
-                                    MaterialTheme.colorScheme.onPrimary
-                                } else {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = WseiIcons.forSubject(event.subject.name, event.classType),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                Text(
-                                    text = event.subject.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                val locationAndModeLabel = when (event.deliveryMode) {
-                                    DeliveryMode.ELEARNING -> "E-learning"
-                                    DeliveryMode.REMOTE -> "Streaming"
-                                    DeliveryMode.ON_SITE -> "Sala ${event.room.number} • Stacjonarnie"
-                                }
-                                Text(
-                                    text = "${event.classType.polishLabel} • $locationAndModeLabel",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHighest
-                            ) {
-                                Text(
-                                    text = "${event.timeSlot.startFormatted}–${event.timeSlot.endFormatted}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
+                visible.forEach { event ->
+                    val state = when {
+                        event.id == activeId -> ClassRowState.ONGOING
+                        event.timeSlot.endEpochMillis <= now -> ClassRowState.FINISHED
+                        event.id == nextId -> ClassRowState.NEXT
+                        else -> ClassRowState.UPCOMING
                     }
+                    WseiClassCard(
+                        event = event,
+                        nowEpochMillis = now,
+                        state = state,
+                        compact = true,
+                        showContainer = false
+                    )
                 }
-
-                if (upcomingDayEvents.size > 4) {
+                if (hiddenCount > 0) {
                     Text(
-                        text = "+ ${upcomingDayEvents.size - 4} więcej • Otwórz plan",
-                        style = MaterialTheme.typography.labelMedium,
+                        text = "+ $hiddenCount więcej",
+                        style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                     )
                 }
             }
@@ -1155,7 +1025,6 @@ private fun GradesAndSubjectsScreen(
 ) {
     val session = uiState.currentSession
     val totalEcts = remember(uiState.grades) { uiState.grades.sumOf { it.ects } }
-    var isSummaryExpanded by rememberSaveable { mutableStateOf(true) }
 
     WseiScreenScaffold(
         title = "Przedmioty",
@@ -1163,98 +1032,40 @@ private fun GradesAndSubjectsScreen(
         onRefresh = onRefresh,
         isRefreshing = uiState.isRefreshing
     ) {
-        item(key = "semester_summary_hero") {
+        item(key = "semester_summary") {
+            val average = uiState.maskSensitive(
+                String.format(Locale.US, "%.2f", session?.averageCurrentSemester ?: 0.0)
+            )
             Surface(
-                shape = RoundedCornerShape(24.dp),
+                shape = WseiCardShape,
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                tonalElevation = 6.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .animateContentSize()
-                    .clickable { isSummaryExpanded = !isSummaryExpanded }
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier.padding(22.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "Semestr ${session?.semesterNumber ?: 1}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = session?.fieldOfStudy ?: "Kierunek",
+                            style = MaterialTheme.typography.titleLarge,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Surface(
-                                shape = M3XSquircleShape,
-                                color = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(42.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = WseiIcons.School,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                            }
-
-                            Column {
-                                Text(
-                                    text = "Semestr ${session?.semesterNumber ?: 1}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Przedmioty i Oceny",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        val avgFormatted = String.format(Locale.US, "%.2f", session?.averageGrade ?: 0.0)
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ) {
-                            Text(
-                                text = "Śr. ${uiState.maskSensitive(avgFormatted)}",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
-                        }
-                    }
-
-                    AnimatedVisibility(visible = isSummaryExpanded) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.08f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = "${session?.fieldOfStudy ?: "Kierunek"} (${session?.courseOfStudyCode ?: "Tok studiów"})",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                val semAvgStr = String.format(Locale.US, "%.2f", session?.averageCurrentSemester ?: 0.0)
-                                Text(
-                                    text = "Punkty: $totalEcts ECTS • Średnia semestru: ${uiState.maskSensitive(semAvgStr)} • Przedmioty: ${uiState.grades.size}",
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                            }
-                        }
+                        SummaryStat("Średnia", average, Modifier.weight(1f))
+                        SummaryStat("ECTS", totalEcts.toString(), Modifier.weight(1f))
+                        SummaryStat("Przedmioty", uiState.grades.size.toString(), Modifier.weight(1f))
                     }
                 }
             }
@@ -1274,102 +1085,136 @@ private fun GradesAndSubjectsScreen(
 }
 
 @Composable
+private fun SummaryStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.headlineMedium,
+                maxLines = 1
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
 private fun GradeItemRow(
     grade: GradeItem,
     maskSensitive: Boolean
 ) {
+    val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
-        shape = RoundedCornerShape(24.dp),
+        shape = WseiCardShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            val gradeText = if (maskSensitive) "••" else grade.gradeValue
+            Surface(
+                shape = M3XCookieShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(60.dp)
             ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = gradeText,
+                        style = if (gradeText.length > 3) {
+                            MaterialTheme.typography.labelLarge
+                        } else {
+                            MaterialTheme.typography.titleLarge
+                        },
+                        maxLines = 1
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = grade.subjectName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    GradeChip("${grade.ects} ECTS")
+                    GradeChip(grade.formLabel)
+                    GradeChip(grade.passingForm)
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Surface(
-                        shape = M3XSquircleShape,
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(42.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = WseiIcons.forSubject(grade.subjectName, ClassType.fromRawCode(grade.formLabel)),
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = "${grade.moduleName} • ${grade.ects} ECTS",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = grade.subjectName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                ) {
-                    Text(
-                        text = if (maskSensitive) "••" else grade.gradeValue,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    Icon(
+                        imageVector = WseiIcons.Person,
+                        contentDescription = null,
+                        tint = mutedColor,
+                        modifier = Modifier.size(16.dp)
                     )
-                }
-            }
-
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
                     Text(
-                        text = "${grade.lecturerName} • ${grade.formLabel} (${grade.hours} godz.)",
+                        text = grade.lecturerName,
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    val partialInfo = if (grade.partialGrades.isNotEmpty()) {
-                        val partialStr = if (maskSensitive) "••••" else grade.partialGrades.joinToString(", ")
-                        "${grade.passingForm} • Oceny cząstkowe: $partialStr • ${grade.dateAwarded}"
-                    } else {
-                        "${grade.passingForm} • Data wpisu: ${grade.dateAwarded}"
-                    }
-                    Text(
-                        text = partialInfo,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = mutedColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+                val details = buildString {
+                    if (grade.partialGrades.isNotEmpty()) {
+                        append("Cząstkowe: ")
+                        append(if (maskSensitive) "••••" else grade.partialGrades.joinToString(", "))
+                        append(" • ")
+                    }
+                    append("wpis ")
+                    append(grade.dateAwarded)
+                }
+                Text(
+                    text = details,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = mutedColor
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun GradeChip(text: String) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
     }
 }
 
@@ -1762,96 +1607,46 @@ private fun ExpandableAccordionCard(
     onToggle: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    Surface(
-        onClick = onToggle,
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            )
-    ) {
-        Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+    WseiExpandableCard(
+        expanded = isExpanded,
+        onToggle = onToggle,
+        header = {
+            Surface(
+                shape = M3XSquircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(42.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Surface(
-                        shape = M3XSquircleShape,
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(42.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-
-                    Column {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    ) {
-                        Text(
-                            text = badgeText,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
-
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (isExpanded) WseiIcons.ExpandLess else WseiIcons.ExpandMore,
-                                contentDescription = if (isExpanded) "Zwiń" else "Rozwiń",
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
-
-            AnimatedVisibility(visible = isExpanded) {
-                content()
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Text(
+                    text = badgeText,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
             }
-        }
-    }
+        },
+        body = { content() }
+    )
 }
 
 // =========================================================================================
@@ -2111,7 +1906,6 @@ private fun FinancialInstallmentExpressiveRow(
     maskSensitive: Boolean,
     onPayOnline: () -> Unit
 ) {
-    // Domyślnie zwinięty; kliknięcie w kafelek rozwija szczegóły
     var expanded by rememberSaveable { mutableStateOf(false) }
     val today = remember { java.time.LocalDate.now() }
     val currentMonthSuffix = remember(today) {
@@ -2121,7 +1915,6 @@ private fun FinancialInstallmentExpressiveRow(
 
     val containerColor = when {
         isDueThisMonth -> MaterialTheme.colorScheme.errorContainer
-        item.isPaid -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f)
         else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val contentColor = when {
@@ -2136,117 +1929,14 @@ private fun FinancialInstallmentExpressiveRow(
     }
     val displayAmount = if (maskSensitive) "••••••" else rawAmount
 
-    Surface(
-        onClick = { expanded = !expanded },
-        shape = RoundedCornerShape(24.dp),
-        color = containerColor,
+    WseiExpandableCard(
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+        containerColor = containerColor,
         contentColor = contentColor,
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            )
-    ) {
-        Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Nagłówek w stylu Ekranu Start: 42.dp Squircle + Overline + Tytuł + Kwota i strzałka rozwinięcia
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 10.dp)
-                ) {
-                    Surface(
-                        shape = M3XSquircleShape,
-                        color = if (isDueThisMonth) {
-                            contentColor.copy(alpha = 0.14f)
-                        } else if (item.isPaid) {
-                            MaterialTheme.colorScheme.secondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.primaryContainer
-                        },
-                        contentColor = if (isDueThisMonth) {
-                            contentColor
-                        } else if (item.isPaid) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        },
-                        modifier = Modifier.size(42.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = WseiIcons.AccountBalanceWallet,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = when {
-                                isDueThisMonth -> "Najbliższa do zapłaty • termin ${item.dueDateIso}"
-                                !item.isPaid -> "Do zapłaty • termin ${item.dueDateIso}"
-                                else -> "Zapłacone • termin ${item.dueDateIso}"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = when {
-                                isDueThisMonth -> contentColor
-                                !item.isPaid -> MaterialTheme.colorScheme.primary
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = item.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = if (isDueThisMonth) {
-                            contentColor.copy(alpha = 0.14f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHighest
-                        }
-                    ) {
-                        Text(
-                            text = displayAmount,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
-
-                    Icon(
-                        imageVector = if (expanded) WseiIcons.ExpandLess else WseiIcons.ExpandMore,
-                        contentDescription = if (expanded) "Zwiń" else "Rozwiń",
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            // Przycisk do zapłaty widoczny od razu na kafelku (dla nieopłaconych zobowiązań)
-            if (item.payOnlineAvailable && !item.isPaid) {
+        modifier = if (item.isPaid) Modifier.alpha(0.8f) else Modifier,
+        pinned = if (item.payOnlineAvailable && !item.isPaid) {
+            {
                 Button(
                     onClick = onPayOnline,
                     shape = RoundedCornerShape(16.dp),
@@ -2264,38 +1954,103 @@ private fun FinancialInstallmentExpressiveRow(
                     )
                 }
             }
+        } else {
+            null
+        },
+        header = {
+            Surface(
+                shape = M3XSquircleShape,
+                color = when {
+                    isDueThisMonth -> contentColor.copy(alpha = 0.14f)
+                    item.isPaid -> MaterialTheme.colorScheme.secondaryContainer
+                    else -> MaterialTheme.colorScheme.primaryContainer
+                },
+                contentColor = when {
+                    isDueThisMonth -> contentColor
+                    item.isPaid -> MaterialTheme.colorScheme.onSecondaryContainer
+                    else -> MaterialTheme.colorScheme.onPrimaryContainer
+                },
+                modifier = Modifier.size(42.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = WseiIcons.AccountBalanceWallet,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
 
-            // Mniej istotne informacje rozwijane po kliknięciu w kafelek
-            AnimatedVisibility(visible = expanded) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (isDueThisMonth) {
-                        contentColor.copy(alpha = 0.1f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerLow
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = when {
+                        isDueThisMonth -> "Najbliższa do zapłaty • termin ${item.dueDateIso}"
+                        !item.isPaid -> "Do zapłaty • termin ${item.dueDateIso}"
+                        else -> "Zapłacone • termin ${item.dueDateIso}"
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    style = MaterialTheme.typography.labelMedium,
+                    color = when {
+                        isDueThisMonth -> contentColor
+                        !item.isPaid -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Surface(
+                shape = CircleShape,
+                color = if (isDueThisMonth) {
+                    contentColor.copy(alpha = 0.14f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHighest
+                }
+            ) {
+                Text(
+                    text = displayAmount,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        },
+        body = {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (isDueThisMonth) {
+                    contentColor.copy(alpha = 0.1f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerLow
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        BreakdownMetricRow("Status płatności", item.statusLabel)
-                        BreakdownMetricRow("Termin płatności", item.dueDateIso)
-                        BreakdownMetricRow("Kwota naliczona", if (maskSensitive) "••••••" else item.amountFormatted)
-                        BreakdownMetricRow("Odsetki naliczone", if (maskSensitive) "••••••" else item.interestFormatted)
-                        BreakdownMetricRow("Odsetki zapłacone", if (maskSensitive) "••••••" else item.accumulatedInterestFormatted)
-                        BreakdownMetricRow("Umorzenie", item.amortizationFormatted)
-                        BreakdownMetricRow("Bonifikata", item.discountFormatted)
-                        BreakdownMetricRow("Przedawnienie", item.expiredFormatted)
-                        if (item.paymentDateIso != null) {
-                            BreakdownMetricRow("Data wpłaty", item.paymentDateIso)
-                        }
+                    BreakdownMetricRow("Status płatności", item.statusLabel)
+                    BreakdownMetricRow("Termin płatności", item.dueDateIso)
+                    BreakdownMetricRow("Kwota naliczona", if (maskSensitive) "••••••" else item.amountFormatted)
+                    BreakdownMetricRow("Odsetki naliczone", if (maskSensitive) "••••••" else item.interestFormatted)
+                    BreakdownMetricRow("Odsetki zapłacone", if (maskSensitive) "••••••" else item.accumulatedInterestFormatted)
+                    BreakdownMetricRow("Umorzenie", item.amortizationFormatted)
+                    BreakdownMetricRow("Bonifikata", item.discountFormatted)
+                    BreakdownMetricRow("Przedawnienie", item.expiredFormatted)
+                    if (item.paymentDateIso != null) {
+                        BreakdownMetricRow("Data wpłaty", item.paymentDateIso)
                     }
                 }
             }
         }
-    }
+    )
 }
 
 @Composable
@@ -2461,9 +2216,8 @@ private fun MoreHubScreen(
     AnimatedContent(
         targetState = currentSubView,
         transitionSpec = {
-            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMedium)) +
-                scaleIn(initialScale = 0.96f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))) togetherWith
-                fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium))
+            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 60)) togetherWith
+                fadeOut(animationSpec = tween(durationMillis = 90))
         },
         modifier = Modifier.fillMaxSize(),
         label = "moreSubViewTransition"
@@ -2544,9 +2298,9 @@ private fun MoreBentoHubView(
         item(key = "hub_card_about") {
             BentoHubCard(
                 title = "O aplikacji Taal",
-                subtitle = "Wersja 0.2",
+                subtitle = "Wersja 0.3",
                 icon = WseiIcons.Info,
-                badgeText = "v0.2",
+                badgeText = "v0.3",
                 badgeIsUrgent = false,
                 onClick = onOpenAbout
             )
@@ -2696,23 +2450,30 @@ private fun AnnouncementRow(
     var expanded by rememberSaveable { mutableStateOf(false) }
 
     Surface(
-        onClick = {
-            expanded = !expanded
-            if (!announcement.isRead) onMarkRead()
-        },
-        shape = RoundedCornerShape(24.dp),
+        shape = WseiCardShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize()
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(22.dp),
+            modifier = Modifier
+                .animateContentSize(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                )
+                .padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(role = Role.Button) {
+                        expanded = !expanded
+                        if (!announcement.isRead) onMarkRead()
+                    },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -3089,7 +2850,7 @@ private fun AboutSubScreen(
                                 style = MaterialTheme.typography.titleLarge
                             )
                             Text(
-                                text = "Wersja 0.2",
+                                text = "Wersja 0.3",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                             )

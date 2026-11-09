@@ -57,10 +57,7 @@ class LiveClassNotificationService : Service() {
 
         fun stop(context: Context) {
             try {
-                val intent = Intent(context, LiveClassNotificationService::class.java).apply {
-                    action = ACTION_STOP_TRACKING
-                }
-                context.startService(intent)
+                context.stopService(Intent(context, LiveClassNotificationService::class.java))
             } catch (t: Throwable) {
                 android.util.Log.w("LiveClassService", "Failed to stop service: ${t.message}")
             }
@@ -200,6 +197,7 @@ class LiveClassNotificationService : Service() {
 
     override fun onDestroy() {
         tickerJob?.cancel()
+        notificationHelper.cancelLiveClassNotification()
         serviceScope.cancel()
         super.onDestroy()
     }

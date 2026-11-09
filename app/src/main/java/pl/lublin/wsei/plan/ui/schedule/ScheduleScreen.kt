@@ -16,6 +16,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -47,7 +49,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -75,6 +76,9 @@ import pl.lublin.wsei.plan.domain.model.DeliveryMode
 import pl.lublin.wsei.plan.domain.model.NextClassPreview
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
+import pl.lublin.wsei.plan.ui.components.ClassRowState
+import pl.lublin.wsei.plan.ui.components.WseiClassCard
+import pl.lublin.wsei.plan.ui.components.WseiRefreshBox
 import pl.lublin.wsei.plan.ui.components.WseiScreenHeader
 import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
 import java.time.YearMonth
@@ -119,7 +123,7 @@ fun ScheduleScreen(
             title = "Plan zaj\u0119\u0107",
             icon = WseiIcons.CalendarMonth
         )
-        PullToRefreshBox(
+        WseiRefreshBox(
             isRefreshing = uiState.isRefreshing,
             onRefresh = onRefreshSchedule,
             modifier = Modifier.fillMaxSize()
@@ -409,7 +413,7 @@ private fun ExpressiveExpandableCalendarCard(
             .fillMaxWidth()
             .animateContentSize(
                 animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    dampingRatio = Spring.DampingRatioNoBouncy,
                     stiffness = Spring.StiffnessMediumLow
                 )
             ),
@@ -529,7 +533,7 @@ private fun ExpressiveExpandableCalendarCard(
                 visible = isExpanded,
                 enter = expandVertically(
                     animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMediumLow
                     )
                 ) + fadeIn(),
@@ -564,7 +568,7 @@ private fun WeekDaysStripRow(
             val cornerRadius by animateDpAsState(
                 targetValue = if (isSelected) 24.dp else 14.dp,
                 animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    dampingRatio = Spring.DampingRatioNoBouncy,
                     stiffness = Spring.StiffnessMediumLow
                 ),
                 label = "dayCornerRadius"
@@ -759,7 +763,7 @@ private fun ScheduleFilterSegmentRow(
             val cornerRadius by animateDpAsState(
                 targetValue = if (selected) 28.dp else 14.dp,
                 animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    dampingRatio = Spring.DampingRatioNoBouncy,
                     stiffness = Spring.StiffnessMediumLow
                 ),
                 label = "filterSegmentCorner"
@@ -845,7 +849,7 @@ fun ActiveClassHeroCard(
             .fillMaxWidth()
             .animateContentSize(
                 animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    dampingRatio = Spring.DampingRatioNoBouncy,
                     stiffness = Spring.StiffnessMediumLow
                 )
             )
@@ -860,6 +864,8 @@ fun ActiveClassHeroCard(
         Column(
             modifier = Modifier
                 .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
                     role = Role.Button,
                     onClickLabel = if (isExpanded) "Zwiń szczegóły zajęć" else "Rozwiń szczegóły zajęć",
                     onClick = onToggleExpand
@@ -992,7 +998,7 @@ fun ActiveClassHeroCard(
                 visible = isExpanded && nextClassPreview != null,
                 enter = expandVertically(
                     animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMediumLow
                     )
                 ) + fadeIn(),
@@ -1222,133 +1228,18 @@ private fun TimelineClassRow(
     isNextUp: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val isFinished = nowEpochMillis >= event.timeSlot.endEpochMillis
-
-    val containerColor = when {
-        isOngoing -> MaterialTheme.colorScheme.primaryContainer
-        isNextUp -> MaterialTheme.colorScheme.surfaceContainerHigh
-        isFinished -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.68f)
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+    val state = when {
+        isOngoing -> ClassRowState.ONGOING
+        nowEpochMillis >= event.timeSlot.endEpochMillis -> ClassRowState.FINISHED
+        isNextUp -> ClassRowState.NEXT
+        else -> ClassRowState.UPCOMING
     }
-
-    val contentColor = when {
-        isOngoing -> MaterialTheme.colorScheme.onPrimaryContainer
-        isFinished -> MaterialTheme.colorScheme.onSurfaceVariant
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = containerColor,
-        contentColor = contentColor
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Left: 42.dp Subject Material Icon in M3X Squircle (matching Home Screen cards)
-                Surface(
-                    shape = M3XSquircleShape,
-                    color = if (isOngoing) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    },
-                    contentColor = if (isOngoing) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSecondaryContainer
-                    },
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = WseiIcons.forSubject(event.subject.name, event.classType),
-                            contentDescription = null,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-
-                // Center: Overline + Subject Title + Room/Lecturer Subtitle (matching Home Screen)
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    val statusPrefix = when {
-                        isOngoing -> "Trwa • ${event.classType.polishLabel}"
-                        isNextUp -> "Następne • ${event.classType.polishLabel}"
-                        isFinished -> "Zakończone • ${event.classType.polishLabel}"
-                        else -> event.classType.polishLabel.uppercase()
-                    }
-
-                    Text(
-                        text = "$statusPrefix • ${event.deliveryMode.polishBadge} • ${event.groupCode}",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Text(
-                        text = event.subject.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Text(
-                        text = "${event.room.displayLabel} • ${event.lecturer.fullDisplayName}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = contentColor.copy(alpha = 0.82f)
-                    )
-                }
-
-                // Right: Time Slot Pill Badge (matching Home Screen)
-                Surface(
-                    shape = CircleShape,
-                    color = if (isOngoing) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerHighest
-                    },
-                    contentColor = if (isOngoing) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
-                ) {
-                    Text(
-                        text = "${event.timeSlot.startFormatted}–${event.timeSlot.endFormatted}",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-            }
-
-            if (isOngoing) {
-                LinearWavyProgressIndicator(
-                    progress = { event.progressFraction(nowEpochMillis) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(14.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
-                )
-            }
-        }
-    }
+    WseiClassCard(
+        event = event,
+        nowEpochMillis = nowEpochMillis,
+        state = state,
+        modifier = modifier
+    )
 }
 
 @Composable

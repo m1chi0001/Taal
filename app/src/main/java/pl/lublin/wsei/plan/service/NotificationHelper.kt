@@ -163,7 +163,6 @@ class NotificationHelper @Inject constructor(
      */
     /** Minimalne powiadomienie wymagane do natychmiastowego `startForeground()` zanim wczytamy dane zajęć. */
     fun buildPlaceholderNotification(): Notification {
-        ensureChannelCreated()
         return Notification.Builder(context, LIVE_CLASS_CHANNEL_ID)
             .setSmallIcon(pl.lublin.wsei.plan.R.drawable.ic_taal_notification)
             .setContentTitle("Taal")
@@ -179,8 +178,6 @@ class NotificationHelper @Inject constructor(
         dayEvents: List<ClassEvent> = listOf(activeClass),
         nowEpochMillis: Long = System.currentTimeMillis()
     ): Notification {
-        ensureChannelCreated()
-
         val allDayEvents = if (dayEvents.isEmpty()) {
             listOf(activeClass)
         } else {

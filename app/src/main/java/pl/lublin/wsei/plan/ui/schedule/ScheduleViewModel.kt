@@ -140,6 +140,23 @@ data class ScheduleUiState(
 
     val activeClass: ClassEvent? by lazy(LazyThreadSafetyMode.NONE) { allEvents.firstOrNull { it.isOngoing(nowEpochMillis) } }
 
+    /**
+     * Zajęcia, dla których powiadomienie na żywo ma działać: trwające teraz albo następne po przerwie
+     * (gdy dziś coś już się odbyło). Dzięki temu powiadomienie nie znika w przerwie między zajęciami.
+     */
+    val liveTrackingEventId: String? by lazy(LazyThreadSafetyMode.NONE) {
+        activeClass?.id ?: run {
+            val todayIso = currentWarsawLocalDate().toString()
+            val today = allEvents.filter { it.dateIso == todayIso }
+            val hasFinishedToday = today.any { it.timeSlot.endEpochMillis <= nowEpochMillis }
+            if (!hasFinishedToday) null
+            else today
+                .filter { it.timeSlot.startEpochMillis > nowEpochMillis }
+                .minByOrNull { it.timeSlot.startEpochMillis }
+                ?.id
+        }
+    }
+
     val activeDayEvents: List<ClassEvent> by lazy(LazyThreadSafetyMode.NONE) {
             val active = activeClass
             val targetDateIso = active?.dateIso ?: selectedDate.toString()
@@ -235,10 +252,13 @@ class ScheduleViewModel @Inject constructor(
             while (isActive) {
                 val now = System.currentTimeMillis()
                 if (_uiState.value.currentSession != null) {
-                    _uiState.update { it.copy(nowEpochMillis = now) }
+                    // Interfejs pokazuje czas z dokładnością do minuty, więc stan zmieniamy raz na minutę.
+                    val minuteStart = now - (now % 60_000L)
+                    _uiState.update { state ->
+                        if (state.nowEpochMillis == minuteStart) state else state.copy(nowEpochMillis = minuteStart)
+                    }
                 }
-                val delayMs = (30_000L - (now % 30_000L)).coerceAtLeast(1_000L)
-                delay(delayMs)
+                delay((60_000L - (now % 60_000L)).coerceAtLeast(1_000L))
             }
         }
     }

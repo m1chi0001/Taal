@@ -1,12 +1,21 @@
 package pl.lublin.wsei.plan
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import pl.lublin.wsei.plan.service.LiveClassNotificationService
@@ -26,22 +35,40 @@ class MainActivity : ComponentActivity() {
         setContent {
             val uiState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
 
+            // Od Androida 13 powiadomienia wymagają zgody użytkownika. Bez niej usługa działa, ale nic nie widać.
+            var notificationsGranted by remember { mutableStateOf(hasNotificationPermission()) }
+            val permissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { granted -> notificationsGranted = granted }
+            LaunchedEffect(uiState.currentSession?.studId, uiState.isLiveNotificationEnabled) {
+                if (uiState.currentSession != null &&
+                    uiState.isLiveNotificationEnabled &&
+                    !notificationsGranted &&
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                ) {
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+
             WseiExpressiveTheme(themeMode = uiState.themeMode) {
-                // Automatyczna synchronizacja usługi Live Class Progress Notification:
-                // uruchamia powiadomienie z osią czasu dnia dla zalogowanego studenta (o ile funkcja jest włączona w ustawieniach)
-                // i zatrzymuje po wylogowaniu lub wyłączeniu w ustawieniach.
+                // Powiadomienie działa dla zalogowanego studenta, gdy funkcja jest włączona i mamy zgodę.
+                // Zatrzymujemy je dopiero, gdy nie ma już zajęć do śledzenia (także po wylogowaniu).
                 LaunchedEffect(
                     uiState.currentSession?.studId,
-                    uiState.activeClass?.id,
-                    uiState.isLiveNotificationEnabled
+                    uiState.liveTrackingEventId,
+                    uiState.isLiveNotificationEnabled,
+                    notificationsGranted
                 ) {
-                    if (uiState.currentSession != null && uiState.isLiveNotificationEnabled) {
-                        uiState.activeClass?.let { ongoing ->
-                            LiveClassNotificationService.startForClass(
-                                context = this@MainActivity,
-                                eventId = ongoing.id
-                            )
-                        }
+                    val eventId = uiState.liveTrackingEventId
+                    if (uiState.currentSession != null &&
+                        uiState.isLiveNotificationEnabled &&
+                        notificationsGranted &&
+                        eventId != null
+                    ) {
+                        LiveClassNotificationService.startForClass(
+                            context = this@MainActivity,
+                            eventId = eventId
+                        )
                     } else {
                         LiveClassNotificationService.stop(this@MainActivity)
                     }
@@ -61,7 +88,7 @@ class MainActivity : ComponentActivity() {
                     onSelectScheduleFilter = scheduleViewModel::selectScheduleFilter,
                     onToggleHeroExpanded = scheduleViewModel::toggleHeroExpanded,
                     onSyncLiveNotification = { activeClass ->
-                        if (uiState.isLiveNotificationEnabled) {
+                        if (uiState.isLiveNotificationEnabled && notificationsGranted) {
                             LiveClassNotificationService.startForClass(
                                 context = this@MainActivity,
                                 eventId = activeClass.id
@@ -80,4 +107,9 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun hasNotificationPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
 }
