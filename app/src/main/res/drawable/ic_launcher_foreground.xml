@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Minimalist Taal Volcano scaled safely inside the 66dp circular mask (center 54,54; max r=23) -->
+    <!-- Steam / volcanic plume minimalist arc above crater -->
+    <path
+        android:fillColor="#FFFF8A50"
+        android:pathData="M54,34 C50.2,34 47.4,36.2 47.4,39.0 C47.4,40.5 48.6,41.6 50.1,41.6 C51.6,41.6 52.5,40.4 54,40.4 C55.5,40.4 56.4,41.6 57.9,41.6 C59.4,41.6 60.6,40.5 60.6,39.0 C60.6,36.2 57.8,34 54,34 Z" />
+    <!-- Main Taal Volcano caldera silhouette -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M45,45.5 L35,64 L73,64 L63,45.5 L57.8,50.0 L54,45.8 L50.2,50.0 Z" />
+    <!-- Crater lake horizon wave -->
+    <path
+        android:fillColor="#FF4FC3F7"
+        android:pathData="M37,67.5 L71,67.5 C72.1,67.5 73,68.4 73,69.5 C73,70.6 72.1,71.5 71,71.5 L37,71.5 C35.9,71.5 35,70.6 35,69.5 C35,68.4 35.9,67.5 37,67.5 Z" />
+</vector>
