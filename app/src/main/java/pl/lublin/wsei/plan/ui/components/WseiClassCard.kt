@@ -186,7 +186,10 @@ fun WseiClassCard(
                             }
                         }
                         ClassDetailLine(WseiIcons.LocationOn, event.room.displayLabel, mutedColor)
-                        ClassDetailLine(WseiIcons.Person, event.lecturer.fullDisplayName, mutedColor)
+                        event.room.addressLabel?.let { address ->
+                            ClassDetailLine(WseiIcons.Home, address, mutedColor)
+                        }
+                        ClassDetailLine(WseiIcons.Person, event.lecturer.displayNameOrPlaceholder, mutedColor)
                     }
                 }
             }

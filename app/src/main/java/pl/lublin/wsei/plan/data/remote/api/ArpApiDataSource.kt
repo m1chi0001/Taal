@@ -625,7 +625,11 @@ class ArpApiDataSource @Inject constructor(
             subject = ScheduleNormalizer.buildSubject(subjectName),
             classType = ClassType.fromRawCode(form),
             lecturer = ScheduleNormalizer.parseLecturer(lecturerText, idLecturer.toString()),
-            room = placement.room,
+            room = if (placement.room.isRemoteTeams || address.isBlank()) {
+                placement.room
+            } else {
+                placement.room.copy(building = address.trim())
+            },
             timeSlot = TimeSlot(
                 startEpochMillis = startMillis,
                 endEpochMillis = endMillis,

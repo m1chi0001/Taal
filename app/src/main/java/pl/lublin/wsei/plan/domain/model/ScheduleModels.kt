@@ -102,6 +102,16 @@ data class Lecturer(
         get() = listOf(academicTitle, firstName, lastName)
             .filter { it.isNotBlank() }
             .joinToString(" ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+    /** Czy dziekanat podał prowadzącego (przy ukrytym lub brakującym polu nazwa jest pusta). */
+    val hasName: Boolean
+        get() = fullDisplayName.isNotBlank()
+
+    /** Nazwa do wyświetlenia w UI — z czytelnym tekstem zastępczym, gdy brak danych. */
+    val displayNameOrPlaceholder: String
+        get() = fullDisplayName.ifBlank { "Brak prowadzącego" }
 }
 
 @Immutable
@@ -112,8 +122,18 @@ data class Room(
     val floorLabel: String? = null,
     val isRemoteTeams: Boolean = false
 ) {
+    /** Tylko sala (bez adresu): „Sala 205K", „Streaming", „E-learning". */
     val displayLabel: String
-        get() = if (isRemoteTeams) "Streaming (Zajęcia zdalne)" else "Sala $number • $building"
+        get() = when {
+            isRemoteTeams && number.equals("E-learning", ignoreCase = true) -> "E-learning"
+            isRemoteTeams -> "Streaming (Zajęcia zdalne)"
+            number.isBlank() -> "Sala do ustalenia"
+            else -> "Sala $number"
+        }
+
+    /** Adres/kampus wyświetlany osobno od sali; null dla zajęć zdalnych i e-learningu. */
+    val addressLabel: String?
+        get() = if (isRemoteTeams) null else building.trim().takeIf { it.isNotBlank() }
 }
 
 @Immutable

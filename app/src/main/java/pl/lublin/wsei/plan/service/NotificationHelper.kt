@@ -225,9 +225,9 @@ class NotificationHelper @Inject constructor(
             else -> "Sala ${focusedEvent.room.number}"
         }
         val subtitleText = if (isBreakState) {
-            "$roomLabel • ${focusedEvent.lecturer.fullDisplayName} • Start o $endFormatted ($elapsedMinutes z $totalMinutes min)"
+            "$roomLabel • ${focusedEvent.lecturer.displayNameOrPlaceholder} • Start o $endFormatted ($elapsedMinutes z $totalMinutes min)"
         } else {
-            "$roomLabel • ${focusedEvent.lecturer.fullDisplayName} • $elapsedMinutes z $totalMinutes min (koniec o $endFormatted)"
+            "$roomLabel • ${focusedEvent.lecturer.displayNameOrPlaceholder} • $elapsedMinutes z $totalMinutes min (koniec o $endFormatted)"
         }
 
         val headerSubText = if (isBreakState) {

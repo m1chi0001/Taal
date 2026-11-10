@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
+import androidx.compose.foundation.shape.CircleShape
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 
@@ -172,7 +173,7 @@ private fun ProfileShortcutButton(shortcut: WseiProfileShortcut) {
     ) {
         Surface(
             onClick = shortcut.onOpen,
-            shape = M3XCookieShape,
+            shape = CircleShape,
             color = MaterialTheme.colorScheme.primary,
             interactionSource = interactionSource,
             modifier = Modifier.size(44.dp)
@@ -180,7 +181,8 @@ private fun ProfileShortcutButton(shortcut: WseiProfileShortcut) {
             StudentAvatar(
                 base64Photo = shortcut.photoBase64,
                 fullName = shortcut.fullName,
-                size = 44.dp
+                size = 44.dp,
+                shape = CircleShape
             )
         }
     }

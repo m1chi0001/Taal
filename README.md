@@ -3,7 +3,7 @@
 [![Android Version](https://img.shields.io/badge/Android-8.0%2B%20(API%2026%2B)-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![Target SDK](https://img.shields.io/badge/Target%20SDK-35%20(Android%2015%2B)-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203%20Expressive-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![Version](https://img.shields.io/badge/Release-v0.5-brightgreen)](https://github.com/m1chi0001/Taal/releases)
+[![Version](https://img.shields.io/badge/Release-v0.5.1-brightgreen)](https://github.com/m1chi0001/Taal/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > **Taal** to nowoczesna, w pełni natywna aplikacja mobilna na platformę Android dla studentów **Uniwersytetu WSEI w Lublinie** (dawniej Lubelska Akademia WSEI).
@@ -116,7 +116,7 @@ Gotowy plik APK znajdziesz w:
 ## 📱 Identyfikator aplikacji
 
 - **Application ID:** `com.M1chi0001.Taal`
-- **Wersja:** `0.5` (versionCode: `5`)
+- **Wersja:** `0.5.1` (versionCode: `6`)
 
 ---
 

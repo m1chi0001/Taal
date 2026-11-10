@@ -86,7 +86,7 @@ object ScheduleNormalizer {
     fun parseLecturer(raw: String, id: String): Lecturer {
         val tokens = raw.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
         if (tokens.isEmpty()) return Lecturer(id = id, academicTitle = "", firstName = "", lastName = "")
-        val titleCount = tokens.takeWhile { it.lowercase() in ACADEMIC_TITLES || it.endsWith(".") }.size
+        val titleCount = tokens.takeWhile { it.lowercase() in ACADEMIC_TITLES || (it.endsWith(".") && it.length > 2) }.size
             .coerceAtMost((tokens.size - 1).coerceAtLeast(0))
         val title = tokens.take(titleCount).joinToString(" ")
         val names = tokens.drop(titleCount)

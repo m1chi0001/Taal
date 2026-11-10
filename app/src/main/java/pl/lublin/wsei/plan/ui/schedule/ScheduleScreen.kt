@@ -762,7 +762,7 @@ fun ActiveClassHeroCard(
                 contentColor = colors.onPrimaryContainer
             )
             WseiPill(
-                text = activeClass.lecturer.fullDisplayName,
+                text = activeClass.lecturer.displayNameOrPlaceholder,
                 icon = WseiIcons.Person,
                 containerColor = colors.onPrimaryContainer.copy(alpha = 0.1f),
                 contentColor = colors.onPrimaryContainer,
