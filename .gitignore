@@ -56,6 +56,9 @@ captures/
 .DS_Store
 Thumbs.db
 
+# Kotlin daemon / incremental compilation
+.kotlin/
+
 # Reverse engineered / temporary APKs
 com.APRSystem.MobilnyStudent.Mobile.apk
 *.apk

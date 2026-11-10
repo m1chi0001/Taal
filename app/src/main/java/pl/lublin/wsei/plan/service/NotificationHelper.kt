@@ -79,14 +79,15 @@ sealed class DayTimelineSegment(
  * modeled 1:1 on the Koleo Travel Mode notification layout:
  *
  * - **Left Icon**: Circular Taal volcano badge (`R.drawable.ic_taal_notification` + blue accent `#0077FF`).
- * - **Header (`SubText`)**: `$elapsed min z $total min • Koniec o HH:mm`
- * - **Title (`ContentTitle`)**: `Przedmiot • Forma nauczania` (e.g. `Architektura systemów komputerowych • Laboratorium`)
- * - **Subtitle (`ContentText`)**: `Sala / Streaming • Prowadzący • x min z y min (do HH:mm)`
- * - **Right Icon (`LargeIcon`)**: Clean white monochrome Material Icon matching the subject on a transparent background.
+ * - **Header (`SubText`)**: `Forma zajęć • do HH:mm` (w przerwie: `Start o HH:mm`)
+ * - **Title (`ContentTitle`)**: nazwa przedmiotu (w przerwie: `Przerwa • x min`)
+ * - **Subtitle (`ContentText`)**: `Sala / Streaming • Prowadzący` (w przerwie: `Następne: przedmiot • sala`)
+ * - **Status bar chip**: ile minut zostało do końca zajęć / przerwy.
+ * - **Right Icon (`LargeIcon`)**: biała ikona przedmiotu na kolorowej kafelce (zielona – zajęcia, szara – przerwa).
  * - **Full-Width Progress Bar (`Notification.ProgressStyle`)**:
  *   - Multi-segment bar (`Zajęcia` = Blue `#0077FF`, `Przerwa` = Grey `#8A9199`, `Trwające zajęcia` = Green `#38A832`)
  *   - Circular white-ringed blue chevron tracker thumb (`setProgressTrackerIcon`) at the current time position.
- * - **Bottom Action Pills**: `"Szczegóły zajęć"` and `"Plan zajęć"`.
+ * - **Bottom Action Pills**: `"Szczegóły"` and `"Plan zajęć"`.
  */
 @Singleton
 class NotificationHelper @Inject constructor(
@@ -211,29 +212,32 @@ class NotificationHelper @Inject constructor(
                 Quadruple(elapsedCls, totalCls, focusedEvent.timeSlot.endFormatted, remCls)
             }
 
-        // 2. Przedmiot + forma nauczania (główny pogrubiony tytuł jak w Koleo)
-        val titleText = if (isBreakState) {
-            "Przerwa • Następne: ${focusedEvent.subject.name} (${focusedEvent.classType.polishLabel})"
-        } else {
-            "${focusedEvent.subject.name} • ${focusedEvent.classType.polishLabel}"
-        }
-
-        // 3. Informacja o sali/streamingu + kto prowadzi zajęcia + czas trwania i godzina końca
+        // 2. Układ powiadomienia (bez powtórzeń tych samych informacji w tytule, treści, nagłówku i przyciskach):
+        //    - tytuł:      przedmiot (w przerwie: „Przerwa • x min”)
+        //    - treść:      sala • prowadzący (w przerwie: następne zajęcia + sala)
+        //    - nagłówek:   forma zajęć • godzina końca (w przerwie: godzina startu następnych)
+        //    - chip na pasku stanu: ile minut zostało
         val roomLabel = when {
             focusedEvent.deliveryMode == DeliveryMode.ELEARNING -> "E-learning"
             focusedEvent.deliveryMode == DeliveryMode.REMOTE || focusedEvent.room.isRemoteTeams -> "Streaming"
             else -> "Sala ${focusedEvent.room.number}"
         }
-        val subtitleText = if (isBreakState) {
-            "$roomLabel • ${focusedEvent.lecturer.displayNameOrPlaceholder} • Start o $endFormatted ($elapsedMinutes z $totalMinutes min)"
-        } else {
-            "$roomLabel • ${focusedEvent.lecturer.displayNameOrPlaceholder} • $elapsedMinutes z $totalMinutes min (koniec o $endFormatted)"
-        }
+        val lecturerLabel = focusedEvent.lecturer.fullDisplayName.takeIf { it.isNotBlank() }
 
-        val headerSubText = if (isBreakState) {
-            "Przerwa $elapsedMinutes z $totalMinutes min • Start o $endFormatted"
+        val titleText = if (isBreakState) {
+            "Przerwa • $remainingMinutes min"
         } else {
-            "$elapsedMinutes z $totalMinutes min • Koniec o $endFormatted"
+            focusedEvent.subject.name
+        }
+        val subtitleText = if (isBreakState) {
+            "Następne: ${focusedEvent.subject.name} • $roomLabel"
+        } else {
+            listOfNotNull(roomLabel, lecturerLabel).joinToString(" • ")
+        }
+        val headerSubText = if (isBreakState) {
+            "Start o $endFormatted"
+        } else {
+            "${focusedEvent.classType.polishLabel} • do $endFormatted"
         }
 
         // 4. Right-side clean white monochrome Material Icon matching the subject (transparent container, Koleo style)
@@ -241,7 +245,8 @@ class NotificationHelper @Inject constructor(
             subjectName = focusedEvent.subject.name,
             classType = focusedEvent.classType,
             sizePx = 128,
-            containerColorArgb = 0x00000000,
+            // Kolorowa „kafelka” zamiast białej ikony na przezroczystym tle, która ginęła na jasnym tle powiadomień.
+            containerColorArgb = if (isBreakState) COLOR_BREAK_GREY else COLOR_ACTIVE_GREEN,
             iconColorArgb = 0xFFFFFFFF.toInt()
         )
         val rightSubjectIcon = Icon.createWithBitmap(rightSubjectIconBitmap)
@@ -274,15 +279,11 @@ class NotificationHelper @Inject constructor(
             putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
             putString(
                 EXTRA_SHORT_CRITICAL_TEXT,
-                if (isBreakState) "Przerwa • ${remainingMinutes}m" else "Do $endFormatted"
+                if (isBreakState) "Przerwa • ${remainingMinutes} min" else "$remainingMinutes min"
             )
         }
 
-        val leftActionTitle = if (isBreakState) {
-            "Start o $endFormatted"
-        } else {
-            "Koniec o $endFormatted ($elapsedMinutes/$totalMinutes min)"
-        }
+        val leftActionTitle = "Szczegóły"
         val rightActionTitle = "Plan zajęć"
 
         val publicVersion = buildPlatformNotification(
