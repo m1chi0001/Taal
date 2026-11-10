@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import pl.lublin.wsei.plan.data.local.AttachmentSaver
 import pl.lublin.wsei.plan.service.LiveClassNotificationService
 import pl.lublin.wsei.plan.ui.navigation.WseiAppShell
 import pl.lublin.wsei.plan.ui.schedule.ScheduleViewModel
@@ -98,7 +99,11 @@ class MainActivity : ComponentActivity() {
                     onRefreshSchedule = scheduleViewModel::refreshSchedule,
                     onInitiateOnlinePayment = scheduleViewModel::initiateOnlinePayment,
                     onMarkAnnouncementRead = scheduleViewModel::markAnnouncementRead,
-                    onDownloadAttachment = scheduleViewModel::downloadAttachment,
+                    onDownloadAttachment = { attachment ->
+                        scheduleViewModel.downloadAttachment(attachment) { downloaded ->
+                            AttachmentSaver.save(applicationContext, downloaded)
+                        }
+                    },
                     onDismissStatusBanner = scheduleViewModel::dismissStatusBanner,
                     onSelectThemeMode = scheduleViewModel::selectThemeMode,
                     onToggleLiveNotification = scheduleViewModel::setLiveNotificationEnabled,

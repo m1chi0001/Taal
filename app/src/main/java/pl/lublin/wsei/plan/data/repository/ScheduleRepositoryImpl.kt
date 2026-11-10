@@ -14,6 +14,7 @@ import kotlinx.serialization.SerializationException
 import pl.lublin.wsei.plan.data.local.AcademicSnapshotStore
 import pl.lublin.wsei.plan.data.local.EncryptedCredentialStore
 import pl.lublin.wsei.plan.data.local.SnapshotKey
+import pl.lublin.wsei.plan.data.remote.ScheduleNormalizer
 import pl.lublin.wsei.plan.data.local.ScheduleDao
 import pl.lublin.wsei.plan.data.local.toEntity
 import pl.lublin.wsei.plan.data.remote.api.ArpApiDataSource
@@ -328,7 +329,14 @@ class ScheduleRepositoryImpl @Inject constructor(
             )
         }
 
-        val (events, origin) = fetchScheduleWithFallback(session, startDate, endDate, scheduleType)
+        val (fetchedEvents, origin) = fetchScheduleWithFallback(session, startDate, endDate, scheduleType)
+        // Braki prowadzących uzupełniamy danymi przedmiotów (ostatni zapisany snapshot ocen).
+        val subjectLecturers = runCatching {
+            snapshotStore.load(session.studId, SnapshotKey.Grades)?.value.orEmpty()
+                .filter { it.lecturerName.isNotBlank() && !it.lecturerName.equals("Wykładowca WSEI", ignoreCase = true) }
+                .associate { ScheduleNormalizer.subjectKey(it.subjectName) to it.lecturerName }
+        }.getOrDefault(emptyMap())
+        val events = ScheduleNormalizer.fillMissingLecturers(fetchedEvents, subjectLecturers)
 
         scheduleDao.replaceEventsInRange(
             ownerStudId = session.studId,

@@ -1,5 +1,7 @@
 package pl.lublin.wsei.plan.data.remote
 
+import pl.lublin.wsei.plan.domain.model.ClassEvent
+import pl.lublin.wsei.plan.domain.model.ClassType
 import pl.lublin.wsei.plan.domain.model.DeliveryMode
 import pl.lublin.wsei.plan.domain.model.Lecturer
 import pl.lublin.wsei.plan.domain.model.Room
@@ -99,6 +101,37 @@ object ScheduleNormalizer {
                 firstName = names.dropLast(1).joinToString(" "),
                 lastName = names.last()
             )
+        }
+    }
+
+    /** Klucz porównawczy nazw przedmiotów: bez wielkości liter, spacji i znaków specjalnych. */
+    fun subjectKey(name: String): String =
+        name.lowercase().filter { it.isLetterOrDigit() }
+
+    /**
+     * Gdy plan nie podaje prowadzącego, bierze go z (w kolejności):
+     * 1. innych zajęć z tego samego przedmiotu i formy w pobranym zakresie,
+     * 2. zajęć tego przedmiotu o dowolnej formie,
+     * 3. [subjectLecturers] — mapy `subjectKey → prowadzący` z danych przedmiotów (oceny).
+     */
+    fun fillMissingLecturers(
+        events: List<ClassEvent>,
+        subjectLecturers: Map<String, String> = emptyMap()
+    ): List<ClassEvent> {
+        val byFormAndSubject = HashMap<Pair<String, ClassType>, Lecturer>()
+        val bySubject = HashMap<String, Lecturer>()
+        events.filter { it.lecturer.hasName }.forEach {
+            val key = subjectKey(it.subject.name)
+            byFormAndSubject.putIfAbsent(key to it.classType, it.lecturer)
+            bySubject.putIfAbsent(key, it.lecturer)
+        }
+        return events.map { event ->
+            if (event.lecturer.hasName) return@map event
+            val key = subjectKey(event.subject.name)
+            val found = byFormAndSubject[key to event.classType]
+                ?: bySubject[key]
+                ?: subjectLecturers[key]?.let { parseLecturer(it, "subject_$key") }
+            if (found != null && found.hasName) event.copy(lecturer = found) else event
         }
     }
 

@@ -10,6 +10,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -19,11 +20,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import pl.lublin.wsei.plan.data.local.SavedAttachment
 import pl.lublin.wsei.plan.data.repository.toPolishFullName
 import pl.lublin.wsei.plan.data.repository.toPolishShortName
 import pl.lublin.wsei.plan.domain.model.AcademicDay
@@ -122,6 +125,18 @@ data class ScheduleUiState(
                         date.dayOfWeek == DayOfWeek.SUNDAY
                 )
             }
+    }
+
+    /**
+     * Liczba zajęć w BIEŻĄCYM tygodniu (pon–ndz wokół dzisiejszej daty) — niezależna od tygodnia
+     * przeglądanego w Planie zajęć ([selectedDate]). Używana przez kafelek na ekranie głównym.
+     */
+    val currentWeekClassCount: Int by lazy(LazyThreadSafetyMode.NONE) {
+        val today = currentWarsawLocalDate()
+        val monday = today.minus(DatePeriod(days = today.dayOfWeek.ordinal))
+        val from = monday.toString()
+        val to = monday.plus(DatePeriod(days = 6)).toString()
+        allEvents.count { it.dateIso in from..to }
     }
 
     val selectedDayIndex: Int
@@ -595,13 +610,25 @@ class ScheduleViewModel @Inject constructor(
         }
     }
 
-    fun downloadAttachment(attachment: AnnouncementAttachment) {
+    /**
+     * Pobiera załącznik z dziekanatu i zapisuje go na urządzeniu za pomocą [saveToDevice]
+     * (logika zapisu wymaga kontekstu Androida, więc dostarcza ją Activity).
+     */
+    fun downloadAttachment(
+        attachment: AnnouncementAttachment,
+        saveToDevice: (AnnouncementAttachment) -> Result<SavedAttachment>
+    ) {
+        _uiState.update { it.copy(statusBannerMessage = "Pobieranie: ${attachment.fileName}…") }
         viewModelScope.launch {
-            val res = scheduleRepository.downloadAnnouncementAttachment(attachment.id)
+            val saved = scheduleRepository.downloadAnnouncementAttachment(attachment.id)
+                .mapCatching { downloaded ->
+                    val named = downloaded.copy(fileName = downloaded.fileName.ifBlank { attachment.fileName })
+                    withContext(Dispatchers.IO) { saveToDevice(named).getOrThrow() }
+                }
             _uiState.update {
                 it.copy(
-                    statusBannerMessage = res.fold(
-                        onSuccess = { att -> "Pobrano załącznik: ${att.fileName}" },
+                    statusBannerMessage = saved.fold(
+                        onSuccess = { file -> "Zapisano „${file.fileName}” w: ${file.location}" },
                         onFailure = { err -> err.message ?: "Nie udało się pobrać załącznika." }
                     )
                 )

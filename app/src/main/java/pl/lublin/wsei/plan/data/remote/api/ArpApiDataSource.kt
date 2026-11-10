@@ -617,7 +617,9 @@ class ArpApiDataSource @Inject constructor(
             form = form,
             extraMeta = "${notesText.joinToString(" ")} $labelText $name"
         )
-        val lecturerText = if (lecturerVisible) lecturer else ""
+        // `lecturerVisible` bywa false/null mimo wypełnionego pola `lecturer` (v0.5 przez to gubiła prowadzących);
+        // jak w v0.4 zawsze bierzemy tekst, a braki uzupełnia ScheduleNormalizer.fillMissingLecturers.
+        val lecturerText = lecturer
 
         return ClassEvent(
             id = if (id != 0) "wd_${id}_${dateIso}_$startHhMm" else "wd_${dateIso}_${startHhMm}_$fallbackIndex",

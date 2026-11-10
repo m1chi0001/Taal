@@ -1,5 +1,7 @@
 package pl.lublin.wsei.plan.ui.more
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -78,6 +80,20 @@ private fun rememberAppVersion(): String {
     }
 }
 
+private const val LINK_VIRTUAL_DEAN = "https://dziekanat.wsei.lublin.pl/"
+private const val LINK_ELEARNING = "https://dl.wsei.pl/"
+
+/** Strzałka oznaczająca, że pozycja otwiera zewnętrzną stronę w przeglądarce. */
+@Composable
+private fun WseiExternalLinkMark() {
+    Icon(
+        imageVector = WseiIcons.ArrowForward,
+        contentDescription = "Otwiera w przeglądarce",
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(20.dp)
+    )
+}
+
 /** Zakładka „Więcej”: hub oraz podstrony Ogłoszenia, Ustawienia i O aplikacji. */
 @Composable
 fun MoreScreen(
@@ -128,6 +144,12 @@ fun MoreScreen(
 private fun MoreHub(uiState: ScheduleUiState, onOpen: (MoreSubView) -> Unit) {
     val unread = uiState.unreadAnnouncementsCount
     val appVersion = rememberAppVersion()
+    val context = LocalContext.current
+    val openLink: (String) -> Unit = { url ->
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
     WseiScreenScaffold(title = "Więcej") {
         item(key = "hub_list") {
             WseiListGroup(
@@ -172,6 +194,33 @@ private fun MoreHub(uiState: ScheduleUiState, onOpen: (MoreSubView) -> Unit) {
                             shape = shape,
                             onClick = { onOpen(MoreSubView.ABOUT) },
                             trailing = { WseiChevron() }
+                        )
+                    }
+                )
+            )
+        }
+        item(key = "section_links") { WseiSectionTitle("Przydatne linki") }
+        item(key = "links_list") {
+            WseiListGroup(
+                entries = listOf(
+                    WseiListEntry("link_dean") { shape ->
+                        WseiListItem(
+                            title = "Wirtualny dziekanat",
+                            supporting = "dziekanat.wsei.lublin.pl",
+                            icon = WseiIcons.Badge,
+                            shape = shape,
+                            onClick = { openLink(LINK_VIRTUAL_DEAN) },
+                            trailing = { WseiExternalLinkMark() }
+                        )
+                    },
+                    WseiListEntry("link_elearning") { shape ->
+                        WseiListItem(
+                            title = "Platforma e-learningowa",
+                            supporting = "dl.wsei.pl",
+                            icon = WseiIcons.School,
+                            shape = shape,
+                            onClick = { openLink(LINK_ELEARNING) },
+                            trailing = { WseiExternalLinkMark() }
                         )
                     }
                 )

@@ -269,7 +269,7 @@ private fun QuickShortcutsGrid(
     val session = uiState.currentSession
     val unread = uiState.unreadAnnouncementsCount
     val unpaidCount = uiState.financials.count { !it.isPaid }
-    val weekClasses = uiState.days.sumOf { it.events.size }
+    val weekClasses = uiState.currentWeekClassCount
 
     val shortcuts = listOf(
         Shortcut(
