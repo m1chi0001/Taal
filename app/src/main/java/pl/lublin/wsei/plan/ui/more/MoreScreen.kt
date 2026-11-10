@@ -13,11 +13,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -36,6 +40,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pl.lublin.wsei.plan.data.update.UpdatePhase
+import pl.lublin.wsei.plan.data.update.UpdateViewModel
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
 import pl.lublin.wsei.plan.ui.components.WseiCard
@@ -402,6 +410,112 @@ private val AppThemeMode.icon
 // O aplikacji
 // -----------------------------------------------------------------------------------------
 
+/** Karta „Aktualizacje”: sprawdza wydania w GitHubie, pobiera APK i uruchamia instalator. */
+@Composable
+private fun UpdateCard(viewModel: UpdateViewModel = hiltViewModel()) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val colors = MaterialTheme.colorScheme
+    val release = state.release
+
+    val statusText = when (state.phase) {
+        UpdatePhase.IDLE -> "Zainstalowana wersja: ${viewModel.currentVersion}"
+        UpdatePhase.CHECKING -> "Sprawdzam najnowsze wydanie na GitHubie…"
+        UpdatePhase.UP_TO_DATE -> "Masz najnowszą wersję (${viewModel.currentVersion})."
+        UpdatePhase.AVAILABLE -> "Dostępna wersja ${release?.version} (masz ${viewModel.currentVersion})."
+        UpdatePhase.DOWNLOADING -> "Pobieranie wersji ${release?.version}… ${(state.progress * 100).toInt()}%"
+        UpdatePhase.READY -> "Wersja ${release?.version} jest pobrana i gotowa do instalacji."
+        UpdatePhase.ERROR -> state.message ?: "Nie udało się sprawdzić aktualizacji."
+    }
+
+    WseiCard(
+        containerColor = colors.surfaceContainer,
+        verticalSpacing = WseiSpacing.m
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
+        ) {
+            WseiIconBadge(
+                icon = WseiIcons.Download,
+                shape = CircleShape,
+                containerColor = if (state.phase == UpdatePhase.AVAILABLE || state.phase == UpdatePhase.READY) {
+                    colors.primary
+                } else {
+                    colors.secondaryContainer
+                },
+                contentColor = if (state.phase == UpdatePhase.AVAILABLE || state.phase == UpdatePhase.READY) {
+                    colors.onPrimary
+                } else {
+                    colors.onSecondaryContainer
+                },
+                size = 44.dp,
+                iconSize = 22.dp
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Aktualizacje",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (state.phase == UpdatePhase.ERROR) colors.error else colors.onSurfaceVariant
+                )
+            }
+        }
+
+        if (state.phase == UpdatePhase.DOWNLOADING) {
+            LinearProgressIndicator(
+                progress = { state.progress },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        val notes = release?.notes?.takeIf { it.isNotBlank() }
+        if (notes != null && (state.phase == UpdatePhase.AVAILABLE || state.phase == UpdatePhase.READY)) {
+            Text(
+                text = "Co nowego",
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.primary
+            )
+            Text(
+                text = notes.replace(Regex("[#*`]+"), "").trim(),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+                maxLines = 8,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
+            when (state.phase) {
+                UpdatePhase.AVAILABLE -> Button(onClick = viewModel::download) { Text("Pobierz") }
+                UpdatePhase.DOWNLOADING -> OutlinedButton(onClick = viewModel::cancelDownload) { Text("Anuluj") }
+                UpdatePhase.READY -> Button(onClick = {
+                    viewModel.installIntent()?.let { runCatching { context.startActivity(it) } }
+                }) {
+                    Text(if (viewModel.needsInstallPermission()) "Zezwól i zainstaluj" else "Zainstaluj")
+                }
+                UpdatePhase.CHECKING -> Unit
+                else -> FilledTonalButton(onClick = viewModel::checkForUpdate) { Text("Sprawdź aktualizacje") }
+            }
+            if (state.phase == UpdatePhase.AVAILABLE || state.phase == UpdatePhase.READY) {
+                OutlinedButton(onClick = viewModel::checkForUpdate) { Text("Sprawdź ponownie") }
+            }
+        }
+
+        if (state.phase == UpdatePhase.READY && viewModel.needsInstallPermission()) {
+            Text(
+                text = "Android poprosi o zgodę na instalowanie aplikacji z Taala. Po jej nadaniu wróć i dotknij „Zainstaluj”.",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.onSurfaceVariant
+            )
+        }
+    }
+}
+
 @Composable
 private fun AboutScreen(onBack: () -> Unit) {
     val appVersion = rememberAppVersion()
@@ -440,6 +554,7 @@ private fun AboutScreen(onBack: () -> Unit) {
                 )
             }
         }
+        item(key = "about_update") { UpdateCard() }
         item(key = "about_credits") {
             WseiInset(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
                 WseiInfoRow("Dane", "Wirtualny Dziekanat (APR System)")
