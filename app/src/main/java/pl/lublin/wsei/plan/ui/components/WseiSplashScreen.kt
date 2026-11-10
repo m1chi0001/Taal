@@ -4,9 +4,9 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -25,16 +25,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 
 /**
- * Ekran startowy wyświetlany podczas odtwarzania zaszyfrowanej sesji —
- * dzięki niemu przy zalogowanym użytkowniku nie mignie ekran logowania.
+ * Ekran startowy podczas odtwarzania zaszyfrowanej sesji — zalogowany użytkownik nie zobaczy
+ * mignięcia ekranu logowania.
+ *
+ * Animacje (skala i obrót) czytane są w `graphicsLayer {}`, czyli w fazie rysowania —
+ * bez rekompozycji w każdej klatce.
  */
 @Composable
 fun WseiSplashScreen(modifier: Modifier = Modifier) {
@@ -63,14 +64,17 @@ fun WseiSplashScreen(modifier: Modifier = Modifier) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            modifier = Modifier.scale(scale.value)
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+            modifier = Modifier.graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+            }
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Box(
                     modifier = Modifier
-                        .size(132.dp)
-                        .rotate(rotation)
+                        .size(140.dp)
+                        .graphicsLayer { rotationZ = rotation }
                         .clip(M3XCookieShape)
                         .background(MaterialTheme.colorScheme.primaryContainer)
                 )
@@ -78,13 +82,12 @@ fun WseiSplashScreen(modifier: Modifier = Modifier) {
                     imageVector = WseiIcons.TaalVolcano,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(64.dp)
+                    modifier = Modifier.size(68.dp)
                 )
             }
             Text(
                 text = "Taal",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.displayMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
         }

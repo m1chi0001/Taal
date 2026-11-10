@@ -97,6 +97,9 @@ data class ScheduleUiState(
      * Zwraca zamaskowaną wartość (••••••), jeśli użytkownik włączył tryb ochrony danych wrażliwych.
      */
     fun maskSensitive(value: String): String = if (isHideSensitiveData) "••••••" else value
+
+    /** Liczba nieprzeczytanych ogłoszeń — liczona raz na stan, nie przy każdej rekompozycji. */
+    val unreadAnnouncementsCount: Int by lazy(LazyThreadSafetyMode.NONE) { announcements.count { !it.isRead } }
     /**
      * Dynamically builds the 7-day Monday..Sunday week containing [selectedDate].
      */

@@ -1,41 +1,40 @@
 package pl.lublin.wsei.plan.ui.theme
 
+import android.app.Activity
 import android.graphics.BitmapFactory
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.util.Base64
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
-import android.app.Activity
-import android.graphics.drawable.ColorDrawable
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -43,6 +42,7 @@ import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.ui.schedule.AppThemeMode
 import kotlin.math.PI
@@ -50,20 +50,14 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Material 3 Expressive Design System for Lubelska Akademia WSEI.
+ * System projektowy Taal oparty o Material 3 Expressive.
  *
- * - Typography: Google Sans Flex (czcionka zmienna: wght, wdth, opsz, ROND)
- * - Shapes: Material 3 Expressive (M3X) silhouettes (`M3XCookieShape`, `M3XSquircleShape`,
- *   `M3XArchShape`, `M3XFloatingPillShape`, `ActiveHeroCardAsymmetricShape`)
- * - Color: Material You Dynamic Color with vibrant WSEI Emerald & Amber high-contrast fallbacks
- * - Motion: Expressive spring physics (`MotionScheme.expressive()`)
+ * - Typografia: Google Sans Flex (osie wght, wdth, opsz, ROND) — emfatyczne nagłówki, spokojny tekst.
+ * - Kształty: skala zaokrągleń M3 Expressive + falowane sylwetki (cookie, clover, sunny).
+ * - Kolor: Dynamic Color (Material You) z zielono-bursztynowym schematem zapasowym.
+ * - Ruch: sprężyny `MotionScheme.expressive()` oraz [WseiMotion] dla własnych animacji.
  */
 
-/**
- * Google Sans Flex jako czcionka zmienna dołączona do aplikacji (res/font/google_sans_flex.ttf).
- * Osie: wght (grubość), wdth (szerokość), opsz (rozmiar optyczny), ROND (zaokrąglenie), slnt (pochylenie).
- * Dołączony plik działa offline i nie zależy od Usług Google Play.
- */
 @OptIn(ExperimentalTextApi::class)
 private fun flexFont(weight: Int, width: Float, round: Float, opticalSize: Float): Font = Font(
     resId = R.font.google_sans_flex,
@@ -78,13 +72,13 @@ private fun flexFont(weight: Int, width: Float, round: Float, opticalSize: Float
 )
 
 private fun flexFamily(width: Float, round: Float, opticalSize: Float): FontFamily = FontFamily(
-    listOf(400, 500, 600, 700).map { flexFont(it, width, round, opticalSize) }
+    listOf(400, 500, 600, 700, 800).map { flexFont(it, width, round, opticalSize) }
 )
 
-/** Nagłówki: szersze litery i wyraźne zaokrąglenie, jak w emfatycznych stylach M3 Expressive. */
-val WseiDisplayFontFamily: FontFamily = flexFamily(width = 112f, round = 70f, opticalSize = 48f)
+/** Nagłówki: szersze, mocno zaokrąglone litery — emfatyczny styl M3 Expressive. */
+val WseiDisplayFontFamily: FontFamily = flexFamily(width = 112f, round = 100f, opticalSize = 48f)
 
-/** Tekst ciągły i etykiety: węższy, spokojniejszy rysunek dla czytelności małych rozmiarów. */
+/** Tekst ciągły i etykiety: węższy, spokojny rysunek dla czytelności w małych rozmiarach. */
 val WseiPlainFontFamily: FontFamily = flexFamily(width = 100f, round = 0f, opticalSize = 16f)
 
 private val WseiLightColorScheme: ColorScheme = lightColorScheme(
@@ -152,18 +146,24 @@ val WseiExpressiveTypography = Typography(
     headlineLarge = TextStyle(
         fontFamily = WseiDisplayFontFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 32.sp,
-        lineHeight = 38.sp,
+        fontSize = 34.sp,
+        lineHeight = 40.sp,
         letterSpacing = (-0.5).sp
     ),
     headlineMedium = TextStyle(
         fontFamily = WseiDisplayFontFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 26.sp,
-        lineHeight = 32.sp,
-        letterSpacing = (-0.25).sp
+        fontSize = 30.sp,
+        lineHeight = 36.sp,
+        letterSpacing = (-0.4).sp
     ),
-    headlineSmall = BaseTypography.headlineSmall.copy(fontFamily = WseiDisplayFontFamily, fontWeight = FontWeight.SemiBold),
+    headlineSmall = TextStyle(
+        fontFamily = WseiDisplayFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 24.sp,
+        lineHeight = 30.sp,
+        letterSpacing = (-0.2).sp
+    ),
     titleLarge = TextStyle(
         fontFamily = WseiDisplayFontFamily,
         fontWeight = FontWeight.SemiBold,
@@ -208,37 +208,30 @@ val WseiExpressiveTypography = Typography(
     labelSmall = BaseTypography.labelSmall.copy(fontFamily = WseiPlainFontFamily, fontWeight = FontWeight.Medium)
 )
 
+/** Skala zaokrągleń M3 Expressive (extraLarge = „large increased”). */
 val WseiExpressiveShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(18.dp),
+    medium = RoundedCornerShape(20.dp),
     large = RoundedCornerShape(28.dp),
-    extraLarge = RoundedCornerShape(32.dp)
+    extraLarge = RoundedCornerShape(36.dp)
 )
 
-/**
- * Asymmetric expressive shape reserved for Hero Cards and primary dashboard tiles.
- */
+/** Asymetryczny kształt kart „hero” (bieżące zajęcia, podsumowania). */
 val ActiveHeroCardAsymmetricShape = RoundedCornerShape(
-    topStart = 32.dp,
-    topEnd = 28.dp,
-    bottomEnd = 32.dp,
-    bottomStart = 18.dp
+    topStart = 36.dp,
+    topEnd = 36.dp,
+    bottomEnd = 36.dp,
+    bottomStart = 12.dp
 )
 
-/**
- * Material 3 Expressive Floating Pill Shape for the bottom icon-only navigation capsule.
- */
+/** Pigułka — pływający pasek nawigacji, chipy, przyciski. */
 val M3XFloatingPillShape: Shape = CircleShape
 
-/**
- * Material 3 Expressive Squircle / Superellipse container for subject icons and avatars.
- */
+/** Squircle — kontenery ikon i miniatur. */
 val M3XSquircleShape: Shape = RoundedCornerShape(percent = 36)
 
-/**
- * Material 3 Expressive Arch silhouette (rounded top arch, softly grounded corners at base).
- */
+/** Łuk — zaokrąglona góra, łagodna podstawa. */
 val M3XArchShape: Shape = RoundedCornerShape(
     topStart = 36.dp,
     topEnd = 36.dp,
@@ -247,29 +240,42 @@ val M3XArchShape: Shape = RoundedCornerShape(
 )
 
 /**
- * Material 3 Expressive 8-Lobed Soft Cookie (`Cookie8Sided` / `Sunny`) shape for
- * profile avatars and highlighted status badges.
+ * Falowana sylwetka w stylu `MaterialShapes` (cookie / clover / sunny):
+ * okrąg, którego promień zmienia się sinusoidalnie [lobes] razy.
  */
-val M3XCookieShape: Shape = GenericShape { size, _ ->
-    val cx = size.width / 2f
-    val cy = size.height / 2f
-    val baseRadius = minOf(cx, cy) * 0.91f
-    val waveAmplitude = minOf(cx, cy) * 0.08f
-    val lobes = 8
-    val steps = 120
-    for (i in 0..steps) {
-        val theta = (2.0 * PI * i) / steps
-        val r = baseRadius + waveAmplitude * cos(lobes * theta).toFloat()
-        val x = cx + r * cos(theta).toFloat()
-        val y = cy + r * sin(theta).toFloat()
-        if (i == 0) moveTo(x, y) else lineTo(x, y)
+private fun waveShape(lobes: Int, amplitude: Float, baseFraction: Float = 1f - amplitude): Shape =
+    GenericShape { size, _ ->
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val radius = minOf(cx, cy)
+        val base = radius * baseFraction
+        val wave = radius * amplitude
+        val steps = lobes * 24
+        for (i in 0..steps) {
+            val theta = (2.0 * PI * i) / steps - PI / 2.0
+            val r = base + wave * cos(lobes * (theta + PI / 2.0)).toFloat()
+            val x = cx + r * cos(theta).toFloat()
+            val y = cy + r * sin(theta).toFloat()
+            if (i == 0) moveTo(x, y) else lineTo(x, y)
+        }
+        close()
     }
-    close()
-}
+
+/** Cookie 8 — awatary, nagłówki ekranów, wyróżnione oceny. */
+val M3XCookieShape: Shape = waveShape(lobes = 8, amplitude = 0.08f)
+
+/** Cookie 12 — subtelniejsze falowanie dla dużych awatarów. */
+val M3XCookie12Shape: Shape = waveShape(lobes = 12, amplitude = 0.05f)
+
+/** Clover 4 — kafelki szybkich akcji. */
+val M3XCloverShape: Shape = waveShape(lobes = 4, amplitude = 0.14f)
+
+/** Sunny — znaczki i odznaki statusu. */
+val M3XSunnyShape: Shape = waveShape(lobes = 10, amplitude = 0.09f)
 
 /**
- * Decodes a Base64-encoded student photo from Wirtualny Dziekanat (`MsPictureDto` / `personPicture`)
- * into a Compose [ImageBitmap], stripping any optional `data:image/...;base64,` URI header.
+ * Dekoduje zdjęcie studenta (Base64 z Wirtualnego Dziekanatu) do [ImageBitmap],
+ * usuwając opcjonalny nagłówek `data:image/...;base64,`.
  */
 @Composable
 fun rememberDecodedStudentPhoto(base64Photo: String?): ImageBitmap? {
@@ -278,7 +284,7 @@ fun rememberDecodedStudentPhoto(base64Photo: String?): ImageBitmap? {
         runCatching {
             val cleanBase64 = base64Photo
                 .substringAfter("base64,", base64Photo)
-                .replace("\\s".toRegex(), "")
+                .filterNot { it.isWhitespace() }
             val bytes = Base64.decode(cleanBase64, Base64.DEFAULT)
             if (bytes.isEmpty()) return@runCatching null
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
@@ -295,23 +301,16 @@ fun WseiExpressiveTheme(
     val context = LocalContext.current
     val systemInDark = isSystemInDarkTheme()
     val isDark = when (themeMode) {
-        AppThemeMode.SYSTEM -> systemInDark
         AppThemeMode.LIGHT -> false
         AppThemeMode.DARK -> true
-        AppThemeMode.DYNAMIC -> systemInDark
+        AppThemeMode.SYSTEM, AppThemeMode.DYNAMIC -> systemInDark
     }
-    val isDynamic = when (themeMode) {
-        AppThemeMode.SYSTEM -> true
-        AppThemeMode.LIGHT -> false
-        AppThemeMode.DARK -> false
-        AppThemeMode.DYNAMIC -> true
-    }
+    val isDynamic = (themeMode == AppThemeMode.SYSTEM || themeMode == AppThemeMode.DYNAMIC) &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     val colorScheme = when {
-        isDynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isDark ->
-            dynamicDarkColorScheme(context)
-        isDynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            dynamicLightColorScheme(context)
+        isDynamic && isDark -> dynamicDarkColorScheme(context)
+        isDynamic -> dynamicLightColorScheme(context)
         isDark -> WseiDarkColorScheme
         else -> WseiLightColorScheme
     }

@@ -15,10 +15,13 @@
 
 - 🌋 **Material 3 Expressive Design System:**
   - Dynamic Color (Material You) z dopracowanymi motywami jasnym, ciemnym i systemowym.
-  - Oficjalne ekspresyjne figury M3X: `MaterialShapes.Cookie9Sided`, pigułki nawigacyjne, squircle i zaokrąglenia kart `24.dp`.
-  - Czcionka Google Sans Flex dołączona do aplikacji jako plik zmienny (osie `wght`, `wdth`, `opsz`, `ROND`), więc działa offline.
-  - Płynna fizyka sprężynowa (`MotionScheme.expressive()`) przy rozwijaniu kart i przełączaniu widoków.
-  - Najnowsze komponenty: falujące paski postępu (`LinearWavyProgressIndicator`) oraz wskaźniki `LoadingIndicator`.
+  - Falowane sylwetki w stylu `MaterialShapes` (cookie, clover, sunny), skala zaokrągleń do `36.dp` i połączone listy (segmented lists) w ustawieniach i profilu.
+  - Pływający pasek nawigacji: aktywna zakładka rozszerza się w pigułkę z podpisem; profil otwiera się z awatara w prawym górnym rogu.
+  - Duże, zwijające się nagłówki ekranów (`LargeTopAppBar`) i ekspresyjna reakcja na dotyk (sprężynowe „wciśnięcie” kart i przycisków).
+  - Ekran Start: powitanie, plan na dziś, siatka skrótów 2×2 i najbliższa opłata.
+  - Czcionka Google Sans Flex dołączona jako plik zmienny (osie `wght`, `wdth`, `opsz`, `ROND`), więc działa offline.
+  - Sprężyny `MotionScheme.expressive()` i wspólne tokeny ruchu (`WseiMotion`), odstępów (`WseiSpacing`) i zaokrągleń (`WseiCorners`).
+  - Falujące paski postępu (`LinearWavyProgressIndicator`) oraz wskaźniki `LoadingIndicator`.
 
 - ⏱️ **Android Live Notifications (Ekran Blokady & Pasek Stanu):**
   - Trwałe powiadomienie ongoing w czasie rzeczywistym (`ForegroundService` z typem `specialUse`).
@@ -67,11 +70,16 @@ app/
  │    └── repository/    # Kontrakty repozytoriów
  ├── service/            # LiveClassNotificationService, ClassAlarmScheduler, NotificationHelper
  └── ui/
-      ├── components/    # WseiScreenScaffold, WseiSplashScreen, WseiScreenHeader
-      ├── navigation/    # WseiAppShell, FloatingIconOnlyNavigationPill, Bento Hub
-      ├── schedule/      # ScheduleScreen, ExpandableCalendar, ActiveClassHeroCard
+      ├── components/    # WseiScreenScaffold/Frame, WseiCard, WseiListGroup, WseiClassCard, Splash, Welcome
+      ├── navigation/    # WseiAppShell (fazy logowania, routing), WseiFloatingNavigationBar
+      ├── home/          # HomeScreen — powitanie, plan na dziś, skróty, najbliższa opłata
+      ├── subjects/      # SubjectsScreen — podsumowanie semestru i oceny
+      ├── finances/      # FinancesScreen, FinanceFormatting (sortowanie i formatowanie kwot)
+      ├── profile/       # ProfileScreen — karta studenta, tok studiów, grupy, konto
+      ├── more/          # MoreScreen — hub, Ogłoszenia, Ustawienia, O aplikacji
+      ├── schedule/      # ScheduleScreen, kalendarz tydzień/miesiąc, ActiveClassHeroCard
       ├── login/         # LoginScreen (konto testowe tylko w buildach debug)
-      └── theme/         # WseiExpressiveTheme, MotionScheme, ColorSchemes, M3X Shapes
+      └── theme/         # WseiExpressiveTheme, ColorSchemes, M3X Shapes, Tokens (spacing, corners, motion)
 ```
 
 - **Język:** Kotlin 2.1
@@ -107,7 +115,7 @@ Gotowy plik APK znajdziesz w:
 ## 📱 Identyfikator aplikacji
 
 - **Application ID:** `com.M1chi0001.Taal`
-- **Wersja:** `0.3` (versionCode: `3`)
+- **Wersja:** `0.4` (versionCode: `4`)
 
 ---
 

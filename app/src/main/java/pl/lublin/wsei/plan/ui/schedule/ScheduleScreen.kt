@@ -1,22 +1,21 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package pl.lublin.wsei.plan.ui.schedule
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.runtime.remember
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,37 +24,31 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +56,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -75,26 +70,31 @@ import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DeliveryMode
 import pl.lublin.wsei.plan.domain.model.NextClassPreview
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
-import pl.lublin.wsei.plan.ui.icons.WseiIcons
-import pl.lublin.wsei.plan.ui.components.ClassRowState
+import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiClassCard
-import pl.lublin.wsei.plan.ui.components.WseiRefreshBox
-import pl.lublin.wsei.plan.ui.components.WseiScreenHeader
+import pl.lublin.wsei.plan.ui.components.WseiEmptyState
+import pl.lublin.wsei.plan.ui.components.WseiIconBadge
+import pl.lublin.wsei.plan.ui.components.WseiPill
+import pl.lublin.wsei.plan.ui.components.WseiScreenFrame
+import pl.lublin.wsei.plan.ui.components.classRowStateOf
+import pl.lublin.wsei.plan.ui.components.wseiPressScale
+import pl.lublin.wsei.plan.ui.icons.WseiIcons
+import pl.lublin.wsei.plan.ui.theme.ActiveHeroCardAsymmetricShape
+import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
+import pl.lublin.wsei.plan.ui.theme.WseiCardShape
+import pl.lublin.wsei.plan.ui.theme.WseiMotion
+import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import java.time.YearMonth
 
 /**
- * Main Schedule Screen ("Plan zajęć") implementing Material 3 Expressive guidelines:
- *
- * - Unified Expandable Calendar (`ExpressiveExpandableCalendarCard`):
- *   - Starts collapsed showing ONLY the active 7-day week (`Pon`..`Ndz`) with week `<`/`>` navigation
- *   - Includes an explicit button (`Rozwiń kalendarz` / `Zwiń do tygodnia`) to expand into the full
- *     interactive month grid with month `<`/`>` navigation and day selection across any month/year
- * - Personal Plan (`MsScheduleType.Student = 5`) & Group Plan (`MsScheduleType.GroupsForStudent = 100`)
- * - Live [ActiveClassHeroCard] with segmented day progress (`Zajęcia – Przerwa – Zajęcia`)
- * - Subject-matched Material Icons (`WseiIcons.forSubject`) inside M3X squircle badges.
+ * Plan zajęć (Material 3 Expressive):
+ * - przełącznik „Mój plan / Plan grupy” jako połączona grupa przycisków,
+ * - kalendarz tygodniowy rozwijany do pełnego miesiąca,
+ * - karta trwających zajęć z falującym postępem i osią dnia,
+ * - lista zajęć wybranego dnia.
+ * Na szerokich ekranach (≥ 840 dp) układ dwukolumnowy.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleScreen(
     uiState: ScheduleUiState,
@@ -107,285 +107,240 @@ fun ScheduleScreen(
     onToggleHeroExpanded: () -> Unit,
     onSyncLiveNotification: (ClassEvent) -> Unit,
     onRefreshSchedule: () -> Unit,
-    onLogout: () -> Unit = {},
+    modifier: Modifier = Modifier,
+    @Suppress("UNUSED_PARAMETER") onLogout: () -> Unit = {}
+) {
+    WseiScreenFrame(
+        title = "Plan zajęć",
+        modifier = modifier.fillMaxSize(),
+        onRefresh = onRefreshSchedule,
+        isRefreshing = uiState.isRefreshing
+    ) { scrollModifier ->
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val controls: @Composable (Modifier) -> Unit = { controlsModifier ->
+                ScheduleControls(
+                    uiState = uiState,
+                    onSelectDay = onSelectDay,
+                    onSelectDate = onSelectDate,
+                    onToggleCalendarExpanded = onToggleCalendarExpanded,
+                    onPreviousCalendarPeriod = onPreviousCalendarPeriod,
+                    onNextCalendarPeriod = onNextCalendarPeriod,
+                    onSelectScheduleFilter = onSelectScheduleFilter,
+                    onToggleHeroExpanded = onToggleHeroExpanded,
+                    onSyncLiveNotification = onSyncLiveNotification,
+                    modifier = controlsModifier
+                )
+            }
+
+            if (maxWidth >= 840.dp) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = WseiSpacing.xxl),
+                    horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xxl)
+                ) {
+                    controls(
+                        Modifier
+                            .weight(0.46f)
+                            .widthIn(max = 520.dp)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState())
+                            .padding(bottom = WseiSpacing.bottomBarClearance)
+                    )
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(0.54f)
+                            .fillMaxHeight()
+                            .then(scrollModifier),
+                        contentPadding = PaddingValues(top = WseiSpacing.xs, bottom = WseiSpacing.bottomBarClearance),
+                        verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+                    ) {
+                        dayTimeline(uiState)
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(scrollModifier),
+                    contentPadding = WseiSpacing.screenContent,
+                    verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+                ) {
+                    item(key = "schedule_controls") { controls(Modifier) }
+                    dayTimeline(uiState)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScheduleControls(
+    uiState: ScheduleUiState,
+    onSelectDay: (Int) -> Unit,
+    onSelectDate: (LocalDate) -> Unit,
+    onToggleCalendarExpanded: () -> Unit,
+    onPreviousCalendarPeriod: () -> Unit,
+    onNextCalendarPeriod: () -> Unit,
+    onSelectScheduleFilter: (ScheduleFilterType) -> Unit,
+    onToggleHeroExpanded: () -> Unit,
+    onSyncLiveNotification: (ClassEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets.statusBars
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-        WseiScreenHeader(
-            title = "Plan zaj\u0119\u0107",
-            icon = WseiIcons.CalendarMonth
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+    ) {
+        ScheduleFilterButtonGroup(
+            selectedFilter = uiState.scheduleFilterType,
+            onSelectFilter = onSelectScheduleFilter
         )
-        WseiRefreshBox(
-            isRefreshing = uiState.isRefreshing,
-            onRefresh = onRefreshSchedule,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxSize()
-            ) {
-            val isExpandedWindow = maxWidth >= 840.dp
-
-            if (isExpandedWindow) {
-                ExpandedTwoPaneScheduleContent(
-                    uiState = uiState,
-                    onSelectDay = onSelectDay,
-                    onSelectDate = onSelectDate,
-                    onToggleCalendarExpanded = onToggleCalendarExpanded,
-                    onPreviousCalendarPeriod = onPreviousCalendarPeriod,
-                    onNextCalendarPeriod = onNextCalendarPeriod,
-                    onSelectScheduleFilter = onSelectScheduleFilter,
-                    onToggleHeroExpanded = onToggleHeroExpanded,
-                    onSyncLiveNotification = onSyncLiveNotification
-                )
-            } else {
-                CompactSingleColumnScheduleContent(
-                    uiState = uiState,
-                    onSelectDay = onSelectDay,
-                    onSelectDate = onSelectDate,
-                    onToggleCalendarExpanded = onToggleCalendarExpanded,
-                    onPreviousCalendarPeriod = onPreviousCalendarPeriod,
-                    onNextCalendarPeriod = onNextCalendarPeriod,
-                    onSelectScheduleFilter = onSelectScheduleFilter,
-                    onToggleHeroExpanded = onToggleHeroExpanded,
-                    onSyncLiveNotification = onSyncLiveNotification
-                )
-            }
-        }
-    }
-    }
-}
-}
-
-@Composable
-private fun CompactSingleColumnScheduleContent(
-    uiState: ScheduleUiState,
-    onSelectDay: (Int) -> Unit,
-    onSelectDate: (LocalDate) -> Unit,
-    onToggleCalendarExpanded: () -> Unit,
-    onPreviousCalendarPeriod: () -> Unit,
-    onNextCalendarPeriod: () -> Unit,
-    onSelectScheduleFilter: (ScheduleFilterType) -> Unit,
-    onToggleHeroExpanded: () -> Unit,
-    onSyncLiveNotification: (ClassEvent) -> Unit
-) {
-    val selectedDay = uiState.selectedDay
-    val activeClass = uiState.activeClass
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 112.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item(key = "schedule_filter_segment") {
-            ScheduleFilterSegmentRow(
-                selectedFilter = uiState.scheduleFilterType,
-                onSelectFilter = onSelectScheduleFilter,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-            )
-        }
-
-        item(key = "expandable_calendar_card") {
-            ExpressiveExpandableCalendarCard(
-                daysOfCurrentWeek = uiState.days,
-                selectedDate = uiState.selectedDate,
-                displayedYear = uiState.displayedYear,
-                displayedMonth = uiState.displayedMonth,
-                scheduledMonthDays = uiState.scheduledMonthDays,
-                isExpanded = uiState.isCalendarExpanded,
-                onToggleExpanded = onToggleCalendarExpanded,
-                onPreviousPeriod = onPreviousCalendarPeriod,
-                onNextPeriod = onNextCalendarPeriod,
-                onSelectDayInWeek = onSelectDay,
-                onSelectDate = onSelectDate,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-
+        ExpandableCalendarCard(
+            daysOfCurrentWeek = uiState.days,
+            selectedDate = uiState.selectedDate,
+            displayedYear = uiState.displayedYear,
+            displayedMonth = uiState.displayedMonth,
+            scheduledMonthDays = uiState.scheduledMonthDays,
+            isExpanded = uiState.isCalendarExpanded,
+            onToggleExpanded = onToggleCalendarExpanded,
+            onPreviousPeriod = onPreviousCalendarPeriod,
+            onNextPeriod = onNextCalendarPeriod,
+            onSelectDayInWeek = onSelectDay,
+            onSelectDate = onSelectDate
+        )
+        val activeClass = uiState.activeClass
         if (activeClass != null) {
-            item(key = "active_hero_${activeClass.id}") {
-                ActiveClassHeroCard(
-                    activeClass = activeClass,
-                    dayEvents = uiState.activeDayEvents,
-                    nextClassPreview = uiState.nextClassPreview,
-                    nowEpochMillis = uiState.nowEpochMillis,
-                    isExpanded = uiState.isHeroExpanded,
-                    onToggleExpand = onToggleHeroExpanded,
-                    onTriggerLiveNotification = { onSyncLiveNotification(activeClass) },
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-        }
-
-        item(key = "day_header") {
-            DaySectionHeader(
-                selectedDay = selectedDay,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            ActiveClassHeroCard(
+                activeClass = activeClass,
+                dayEvents = uiState.activeDayEvents,
+                nextClassPreview = uiState.nextClassPreview,
+                nowEpochMillis = uiState.nowEpochMillis,
+                isExpanded = uiState.isHeroExpanded,
+                onToggleExpand = onToggleHeroExpanded,
+                onTriggerLiveNotification = { onSyncLiveNotification(activeClass) }
             )
-        }
-
-        val dayEvents = selectedDay?.events.orEmpty()
-        if (dayEvents.isEmpty()) {
-            item(key = "empty_day") {
-                EmptyDayNotice(
-                    dayLabel = selectedDay?.dayOfWeekLabel ?: "Wybrany dzień",
-                    dateLabel = selectedDay?.date?.toString().orEmpty(),
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-        } else {
-            items(
-                items = dayEvents,
-                key = { it.id },
-                contentType = { "timeline_class_row" }
-            ) { event ->
-                val isCurrentlyOngoing = event.isOngoing(uiState.nowEpochMillis)
-                val isNextUp = uiState.nextClassPreview?.nextEvent?.id == event.id
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (isCurrentlyOngoing) {
-                        LiveNowTimelineDivider(
-                            nowFormatted = "Teraz • ${event.elapsedMinutes(uiState.nowEpochMillis)} z ${event.totalDurationMinutes} min"
-                        )
-                    }
-                    TimelineClassRow(
-                        event = event,
-                        nowEpochMillis = uiState.nowEpochMillis,
-                        isOngoing = isCurrentlyOngoing,
-                        isNextUp = isNextUp
-                    )
-                }
-            }
         }
     }
 }
 
-@Composable
-private fun ExpandedTwoPaneScheduleContent(
-    uiState: ScheduleUiState,
-    onSelectDay: (Int) -> Unit,
-    onSelectDate: (LocalDate) -> Unit,
-    onToggleCalendarExpanded: () -> Unit,
-    onPreviousCalendarPeriod: () -> Unit,
-    onNextCalendarPeriod: () -> Unit,
-    onSelectScheduleFilter: (ScheduleFilterType) -> Unit,
-    onToggleHeroExpanded: () -> Unit,
-    onSyncLiveNotification: (ClassEvent) -> Unit
-) {
+/** Nagłówek dnia i karty zajęć — wspólne dla układu jedno- i dwukolumnowego. */
+private fun LazyListScope.dayTimeline(uiState: ScheduleUiState) {
     val selectedDay = uiState.selectedDay
-
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .weight(0.46f)
-                .widthIn(max = 520.dp)
-                .fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            ScheduleFilterSegmentRow(
-                selectedFilter = uiState.scheduleFilterType,
-                onSelectFilter = onSelectScheduleFilter
+    item(key = "day_header") {
+        DaySectionHeader(selectedDay = selectedDay)
+    }
+    val dayEvents = selectedDay?.events.orEmpty()
+    if (dayEvents.isEmpty()) {
+        item(key = "empty_day") {
+            WseiEmptyState(
+                icon = WseiIcons.CalendarMonth,
+                title = "Wolne od zajęć",
+                message = "Na ten dzień nie ma zajęć. Wybierz inny dzień w kalendarzu."
             )
-
-            ExpressiveExpandableCalendarCard(
-                daysOfCurrentWeek = uiState.days,
-                selectedDate = uiState.selectedDate,
-                displayedYear = uiState.displayedYear,
-                displayedMonth = uiState.displayedMonth,
-                scheduledMonthDays = uiState.scheduledMonthDays,
-                isExpanded = uiState.isCalendarExpanded,
-                onToggleExpanded = onToggleCalendarExpanded,
-                onPreviousPeriod = onPreviousCalendarPeriod,
-                onNextPeriod = onNextCalendarPeriod,
-                onSelectDayInWeek = onSelectDay,
-                onSelectDate = onSelectDate
-            )
-
-            val activeClass = uiState.activeClass
-            if (activeClass != null) {
-                ActiveClassHeroCard(
-                    activeClass = activeClass,
-                    dayEvents = uiState.activeDayEvents,
-                    nextClassPreview = uiState.nextClassPreview,
-                    nowEpochMillis = uiState.nowEpochMillis,
-                    isExpanded = uiState.isHeroExpanded,
-                    onToggleExpand = onToggleHeroExpanded,
-                    onTriggerLiveNotification = { onSyncLiveNotification(activeClass) }
-                )
-            }
         }
+    } else {
+        val now = uiState.nowEpochMillis
+        val activeId = uiState.activeClass?.id
+        val nextId = uiState.nextClassPreview?.nextEvent?.id
+        items(
+            items = dayEvents,
+            key = { it.id },
+            contentType = { "timeline_class_row" }
+        ) { event ->
+            WseiClassCard(
+                event = event,
+                nowEpochMillis = now,
+                state = classRowStateOf(event, now, activeId, nextId)
+            )
+        }
+    }
+}
 
-        LazyColumn(
-            modifier = Modifier
-                .weight(0.54f)
-                .fillMaxHeight(),
-            contentPadding = PaddingValues(top = 12.dp, bottom = 112.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item(key = "expanded_day_header") {
-                DaySectionHeader(selectedDay = selectedDay)
-            }
+// -----------------------------------------------------------------------------------------
+// Przełącznik planu — połączona grupa przycisków (M3 Expressive „connected button group”)
+// -----------------------------------------------------------------------------------------
 
-            val dayEvents = selectedDay?.events.orEmpty()
-            if (dayEvents.isEmpty()) {
-                item(key = "expanded_empty_day") {
-                    EmptyDayNotice(
-                        dayLabel = selectedDay?.dayOfWeekLabel ?: "Wybrany dzień",
-                        dateLabel = selectedDay?.date?.toString().orEmpty()
-                    )
-                }
-            } else {
-                items(
-                    items = dayEvents,
-                    key = { it.id },
-                    contentType = { "timeline_class_row" }
-                ) { event ->
-                    val isCurrentlyOngoing = event.isOngoing(uiState.nowEpochMillis)
-                    val isNextUp = uiState.nextClassPreview?.nextEvent?.id == event.id
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (isCurrentlyOngoing) {
-                            LiveNowTimelineDivider(
-                                nowFormatted = "Teraz • ${event.elapsedMinutes(uiState.nowEpochMillis)} z ${event.totalDurationMinutes} min"
-                            )
-                        }
-                        TimelineClassRow(
-                            event = event,
-                            nowEpochMillis = uiState.nowEpochMillis,
-                            isOngoing = isCurrentlyOngoing,
-                            isNextUp = isNextUp
-                        )
+@Composable
+private fun ScheduleFilterButtonGroup(
+    selectedFilter: ScheduleFilterType,
+    onSelectFilter: (ScheduleFilterType) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val filters = ScheduleFilterType.entries
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
+    ) {
+        filters.forEachIndexed { index, filter ->
+            val selected = filter == selectedFilter
+            val isFirst = index == 0
+            val isLast = index == filters.lastIndex
+            // Wybrany segment zaokrągla się w pełną pigułkę; pozostałe mają małe rogi wewnętrzne.
+            val innerCorner by animateDpAsState(
+                targetValue = if (selected) 26.dp else 8.dp,
+                animationSpec = WseiMotion.fastSpatial(),
+                label = "filterInnerCorner"
+            )
+            val containerColor by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                animationSpec = WseiMotion.effects(),
+                label = "filterContainer"
+            )
+            val contentColor by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = WseiMotion.effects(),
+                label = "filterContent"
+            )
+            val interactionSource = remember { MutableInteractionSource() }
+            Surface(
+                onClick = { onSelectFilter(filter) },
+                shape = RoundedCornerShape(
+                    topStart = if (isFirst) 26.dp else innerCorner,
+                    bottomStart = if (isFirst) 26.dp else innerCorner,
+                    topEnd = if (isLast) 26.dp else innerCorner,
+                    bottomEnd = if (isLast) 26.dp else innerCorner
+                ),
+                color = containerColor,
+                contentColor = contentColor,
+                interactionSource = interactionSource,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+                    .wseiPressScale(interactionSource, pressedScale = 0.96f)
+                    .semantics {
+                        role = Role.RadioButton
+                        this.selected = selected
                     }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = WseiSpacing.l),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (filter == ScheduleFilterType.MY_PLAN) WseiIcons.Person else WseiIcons.Groups,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.size(WseiSpacing.s))
+                    Text(
+                        text = filter.polishLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1
+                    )
                 }
             }
         }
     }
 }
 
-/**
- * Unified Calendar Component:
- * - On start (`isExpanded = false`): shows ONLY the 7-day week strip (`Pon`..`Ndz`) with `<`/`>` week buttons.
- * - Has an explicit expand/collapse button (`Pełny miesiąc` / `Tylko tydzień`) to reveal the full month grid
- *   and navigate freely across any day, week, or month.
- */
+// -----------------------------------------------------------------------------------------
+// Kalendarz: tydzień ⇄ miesiąc
+// -----------------------------------------------------------------------------------------
+
 @Composable
-private fun ExpressiveExpandableCalendarCard(
+private fun ExpandableCalendarCard(
     daysOfCurrentWeek: List<AcademicDay>,
     selectedDate: LocalDate,
     displayedYear: Int,
@@ -399,228 +354,187 @@ private fun ExpressiveExpandableCalendarCard(
     onSelectDate: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val monthTitle = "${polishMonthName(displayedMonth)} $displayedYear"
+    val todayIso = remember { java.time.LocalDate.now().toString() }
     val weekStart = daysOfCurrentWeek.firstOrNull()?.date
     val weekEnd = daysOfCurrentWeek.lastOrNull()?.date
-    val weekRangeSubtitle = if (weekStart != null && weekEnd != null) {
-        "Tydzień: ${weekStart.dayOfMonth.toString().padStart(2, '0')}.${weekStart.monthNumber.toString().padStart(2, '0')} – ${weekEnd.dayOfMonth.toString().padStart(2, '0')}.${weekEnd.monthNumber.toString().padStart(2, '0')}.${weekEnd.year}"
-    } else {
-        ""
+    val subtitle = when {
+        isExpanded -> "Widok miesiąca"
+        weekStart != null && weekEnd != null -> "${weekStart.dayOfMonth}.${weekStart.monthNumber.twoDigits()} – " +
+            "${weekEnd.dayOfMonth}.${weekEnd.monthNumber.twoDigits()}"
+        else -> ""
     }
 
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .animateContentSize(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            ),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface
+    WseiCard(
+        modifier = modifier.animateContentSize(animationSpec = WseiMotion.size()),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        contentPadding = PaddingValues(WseiSpacing.l),
+        verticalSpacing = WseiSpacing.m
     ) {
-        Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
         ) {
-            // Unified Home-style card header: 42.dp Squircle Icon + Overline + Title + Expand Pill
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = WseiSpacing.xs)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Surface(
-                        shape = M3XSquircleShape,
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(42.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = WseiIcons.CalendarMonth,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-
-                    Column {
-                        Text(
-                            text = if (isExpanded) "Widok miesięczny" else weekRangeSubtitle,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = monthTitle,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                AnimatedContent(
+                    targetState = "${polishMonthName(displayedMonth)} $displayedYear",
+                    transitionSpec = {
+                        (fadeIn(WseiMotion.effects()) + slideInHorizontally(WseiMotion.spatial()) { it / 6 }) togetherWith
+                            fadeOut(WseiMotion.effects())
+                    },
+                    label = "calendarMonthTitle"
+                ) { title ->
+                    Text(text = title, style = MaterialTheme.typography.titleLarge, maxLines = 1)
                 }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    FilledTonalIconButton(
-                        onClick = onPreviousPeriod,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = WseiIcons.ChevronLeft,
-                            contentDescription = if (isExpanded) "Poprzedni miesiąc" else "Poprzedni tydzień",
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = onNextPeriod,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = WseiIcons.ChevronRight,
-                            contentDescription = if (isExpanded) "Następny miesiąc" else "Następny tydzień",
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    FilledTonalButton(
-                        onClick = onToggleExpanded,
-                        shape = CircleShape,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = if (isExpanded) "Zwiń" else "Miesiąc",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Icon(
-                            imageVector = if (isExpanded) WseiIcons.ExpandLess else WseiIcons.ExpandMore,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-
-            // Default collapsed view: 7-day week strip
-            AnimatedVisibility(
-                visible = !isExpanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                WeekDaysStripRow(
-                    days = daysOfCurrentWeek,
-                    selectedDate = selectedDate,
-                    onSelectDay = onSelectDayInWeek
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-
-            // Expanded view: Full interactive month grid
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = expandVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                ) + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                InteractiveMonthCalendarGrid(
-                    displayedYear = displayedYear,
-                    displayedMonth = displayedMonth,
-                    selectedDate = selectedDate,
-                    scheduledMonthDays = scheduledMonthDays,
-                    onDayClicked = { dayOfMonth ->
-                        onSelectDate(LocalDate(displayedYear, displayedMonth, dayOfMonth))
-                    }
+            FilledTonalIconButton(onClick = onPreviousPeriod, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    imageVector = WseiIcons.ChevronLeft,
+                    contentDescription = if (isExpanded) "Poprzedni miesiąc" else "Poprzedni tydzień",
+                    modifier = Modifier.size(20.dp)
                 )
             }
+            FilledTonalIconButton(onClick = onNextPeriod, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    imageVector = WseiIcons.ChevronRight,
+                    contentDescription = if (isExpanded) "Następny miesiąc" else "Następny tydzień",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            FilledTonalButton(
+                onClick = onToggleExpanded,
+                shape = CircleShape,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.height(40.dp)
+            ) {
+                Text(
+                    text = if (isExpanded) "Tydzień" else "Miesiąc",
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Icon(
+                    imageVector = if (isExpanded) WseiIcons.ExpandLess else WseiIcons.ExpandMore,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .padding(start = 2.dp)
+                        .size(18.dp)
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = !isExpanded,
+            enter = expandVertically(WseiMotion.size()) + fadeIn(),
+            exit = shrinkVertically(WseiMotion.size()) + fadeOut()
+        ) {
+            WeekDaysStrip(
+                days = daysOfCurrentWeek,
+                selectedDate = selectedDate,
+                todayIso = todayIso,
+                onSelectDay = onSelectDayInWeek
+            )
+        }
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(WseiMotion.size()) + fadeIn(),
+            exit = shrinkVertically(WseiMotion.size()) + fadeOut()
+        ) {
+            MonthGrid(
+                displayedYear = displayedYear,
+                displayedMonth = displayedMonth,
+                selectedDate = selectedDate,
+                todayIso = todayIso,
+                scheduledMonthDays = scheduledMonthDays,
+                onDayClicked = { day -> onSelectDate(LocalDate(displayedYear, displayedMonth, day)) }
+            )
         }
     }
 }
 
+private fun Int.twoDigits(): String = toString().padStart(2, '0')
+
 @Composable
-private fun WeekDaysStripRow(
+private fun WeekDaysStrip(
     days: List<AcademicDay>,
     selectedDate: LocalDate,
+    todayIso: String,
     onSelectDay: (Int) -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
     ) {
         days.forEachIndexed { index, day ->
             val isSelected = day.date == selectedDate
-            val cornerRadius by animateDpAsState(
-                targetValue = if (isSelected) 24.dp else 14.dp,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                ),
-                label = "dayCornerRadius"
+            val isToday = day.date.toString() == todayIso
+            val hasClasses = day.events.isNotEmpty()
+            val corner by animateDpAsState(
+                targetValue = if (isSelected) 28.dp else 14.dp,
+                animationSpec = WseiMotion.fastSpatial(),
+                label = "dayCorner"
             )
             val containerColor by animateColorAsState(
                 targetValue = when {
                     isSelected -> MaterialTheme.colorScheme.primary
-                    day.events.isNotEmpty() -> MaterialTheme.colorScheme.secondaryContainer
-                    else -> MaterialTheme.colorScheme.surfaceContainerHigh
+                    hasClasses -> MaterialTheme.colorScheme.secondaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
                 },
-                label = "dayContainerColor"
+                animationSpec = WseiMotion.effects(),
+                label = "dayContainer"
             )
             val contentColor = when {
                 isSelected -> MaterialTheme.colorScheme.onPrimary
-                day.events.isNotEmpty() -> MaterialTheme.colorScheme.onSecondaryContainer
-                else -> MaterialTheme.colorScheme.onSurface
+                hasClasses -> MaterialTheme.colorScheme.onSecondaryContainer
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
-
+            val interactionSource = remember { MutableInteractionSource() }
             Surface(
                 onClick = { onSelectDay(index) },
-                shape = RoundedCornerShape(cornerRadius),
+                shape = RoundedCornerShape(corner),
                 color = containerColor,
                 contentColor = contentColor,
+                border = if (isToday && !isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                interactionSource = interactionSource,
                 modifier = Modifier
                     .weight(1f)
-                    .height(68.dp)
+                    .height(72.dp)
+                    .wseiPressScale(interactionSource, pressedScale = 0.9f)
                     .semantics {
-                        stateDescription = if (isSelected) "Wybrany dzień" else "Dzień tygodnia"
+                        this.selected = isSelected
+                        stateDescription = buildString {
+                            if (isToday) append("Dzisiaj. ")
+                            append(if (hasClasses) "${day.events.size} zajęć" else "Bez zajęć")
+                        }
                     }
             ) {
                 Column(
-                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 2.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
+                    Text(text = day.shortDayLabel, style = MaterialTheme.typography.labelMedium)
                     Text(
-                        text = day.shortDayLabel,
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                    Text(
-                        text = day.dayOfMonthNumber,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = if (isSelected || day.events.isNotEmpty()) FontWeight.Bold else FontWeight.Medium
+                        text = day.date.dayOfMonth.toString(),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = if (isSelected || hasClasses) FontWeight.Bold else FontWeight.Medium
                     )
                     Box(
                         modifier = Modifier
-                            .size(5.dp)
+                            .size(width = if (hasClasses) 14.dp else 4.dp, height = 4.dp)
                             .clip(CircleShape)
                             .background(
-                                if (day.events.isNotEmpty()) {
-                                    if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.primary
+                                if (hasClasses) {
+                                    if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
                                 } else {
                                     containerColor
                                 }
@@ -632,29 +546,32 @@ private fun WeekDaysStripRow(
     }
 }
 
+private val PolishWeekdayHeaders = listOf("Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd")
+
 @Composable
-private fun InteractiveMonthCalendarGrid(
+private fun MonthGrid(
     displayedYear: Int,
     displayedMonth: Int,
     selectedDate: LocalDate,
+    todayIso: String,
     scheduledMonthDays: Set<Int>,
     onDayClicked: (Int) -> Unit
 ) {
-    val yearMonth = YearMonth.of(displayedYear, displayedMonth)
-    val daysInMonth = yearMonth.lengthOfMonth()
-    // Monday = 1 .. Sunday = 7 -> 0..6 offset
-    val firstDayOffset = yearMonth.atDay(1).dayOfWeek.value - 1
-
-    val dayHeaders = listOf("Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Ndz")
-    val cells = buildList<Int?> {
-        repeat(firstDayOffset) { add(null) }
-        for (d in 1..daysInMonth) add(d)
-        while (size % 7 != 0) add(null)
+    val cells = remember(displayedYear, displayedMonth) {
+        val yearMonth = YearMonth.of(displayedYear, displayedMonth)
+        val firstDayOffset = yearMonth.atDay(1).dayOfWeek.value - 1
+        buildList<Int?> {
+            repeat(firstDayOffset) { add(null) }
+            for (d in 1..yearMonth.lengthOfMonth()) add(d)
+            while (size % 7 != 0) add(null)
+        }.chunked(7)
     }
+    val todayPrefix = "%04d-%02d-".format(displayedYear, displayedMonth)
+    val todayDay = if (todayIso.startsWith(todayPrefix)) todayIso.takeLast(2).toIntOrNull() else null
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(modifier = Modifier.fillMaxWidth()) {
-            dayHeaders.forEach { label ->
+            PolishWeekdayHeaders.forEach { label ->
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
@@ -664,65 +581,45 @@ private fun InteractiveMonthCalendarGrid(
                 )
             }
         }
-
-        cells.chunked(7).forEach { week ->
+        cells.forEach { week ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
             ) {
                 week.forEach { dayNum ->
                     if (dayNum == null) {
-                        Spacer(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp)
-                        )
+                        Spacer(modifier = Modifier.weight(1f).height(44.dp))
                     } else {
                         val isSelected = selectedDate.year == displayedYear &&
                             selectedDate.monthNumber == displayedMonth &&
                             selectedDate.dayOfMonth == dayNum
                         val hasClasses = dayNum in scheduledMonthDays
-
-                        Box(
+                        val isToday = dayNum == todayDay
+                        Surface(
+                            onClick = { onDayClicked(dayNum) },
+                            shape = if (isSelected) M3XCookieShape else if (hasClasses) M3XSquircleShape else CircleShape,
+                            color = when {
+                                isSelected -> MaterialTheme.colorScheme.primary
+                                hasClasses -> MaterialTheme.colorScheme.secondaryContainer
+                                else -> MaterialTheme.colorScheme.surfaceContainer
+                            },
+                            contentColor = when {
+                                isSelected -> MaterialTheme.colorScheme.onPrimary
+                                hasClasses -> MaterialTheme.colorScheme.onSecondaryContainer
+                                else -> MaterialTheme.colorScheme.onSurface
+                            },
+                            border = if (isToday && !isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(40.dp)
-                                .clip(if (isSelected) M3XSquircleShape else CircleShape)
-                                .background(
-                                    when {
-                                        isSelected -> MaterialTheme.colorScheme.primary
-                                        hasClasses -> MaterialTheme.colorScheme.secondaryContainer
-                                        else -> MaterialTheme.colorScheme.surfaceContainerLow
-                                    }
-                                )
-                                .clickable { onDayClicked(dayNum) },
-                            contentAlignment = Alignment.Center
+                                .height(44.dp)
+                                .semantics { this.selected = isSelected }
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
+                            Box(contentAlignment = Alignment.Center) {
                                 Text(
                                     text = dayNum.toString(),
                                     style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = if (isSelected || hasClasses) FontWeight.Bold else FontWeight.Normal,
-                                    color = when {
-                                        isSelected -> MaterialTheme.colorScheme.onPrimary
-                                        hasClasses -> MaterialTheme.colorScheme.onSecondaryContainer
-                                        else -> MaterialTheme.colorScheme.onSurface
-                                    }
+                                    fontWeight = if (isSelected || hasClasses) FontWeight.Bold else FontWeight.Normal
                                 )
-                                if (hasClasses) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(4.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                                else MaterialTheme.colorScheme.primary
-                                            )
-                                    )
-                                }
                             }
                         }
                     }
@@ -748,76 +645,9 @@ private fun polishMonthName(monthNumber: Int): String = when (monthNumber) {
     else -> "Miesiąc"
 }
 
-@Composable
-private fun ScheduleFilterSegmentRow(
-    selectedFilter: ScheduleFilterType,
-    onSelectFilter: (ScheduleFilterType) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        ScheduleFilterType.entries.forEach { filter ->
-            val selected = filter == selectedFilter
-            val cornerRadius by animateDpAsState(
-                targetValue = if (selected) 28.dp else 14.dp,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                ),
-                label = "filterSegmentCorner"
-            )
-            val containerColor by animateColorAsState(
-                targetValue = if (selected) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerLow
-                },
-                label = "filterSegmentColor"
-            )
-            val contentColor = if (selected) {
-                MaterialTheme.colorScheme.onSecondaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            }
-
-            Surface(
-                onClick = { onSelectFilter(filter) },
-                shape = RoundedCornerShape(cornerRadius),
-                color = containerColor,
-                contentColor = contentColor,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (filter == ScheduleFilterType.MY_PLAN) {
-                            WseiIcons.Person
-                        } else {
-                            WseiIcons.Groups
-                        },
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = filter.polishLabel,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                    )
-                }
-            }
-        }
-    }
-}
+// -----------------------------------------------------------------------------------------
+// Trwające zajęcia
+// -----------------------------------------------------------------------------------------
 
 @Composable
 fun ActiveClassHeroCard(
@@ -827,219 +657,149 @@ fun ActiveClassHeroCard(
     nowEpochMillis: Long,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
-    onTriggerLiveNotification: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    @Suppress("UNUSED_PARAMETER") onTriggerLiveNotification: () -> Unit = {}
 ) {
     val elapsedMin = activeClass.elapsedMinutes(nowEpochMillis)
     val totalMin = activeClass.totalDurationMinutes
     val remainingMin = activeClass.remainingMinutes(nowEpochMillis)
-    val rawProgress = activeClass.progressFraction(nowEpochMillis)
-
     val animatedProgress by animateFloatAsState(
-        targetValue = rawProgress,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
+        targetValue = activeClass.progressFraction(nowEpochMillis),
+        animationSpec = WseiMotion.size(),
         label = "liveClassProgress"
     )
+    val colors = MaterialTheme.colorScheme
+    val location = if (activeClass.deliveryMode == DeliveryMode.ON_SITE) {
+        activeClass.room.displayLabel
+    } else {
+        activeClass.deliveryMode.polishBadge
+    }
 
-    Surface(
+    WseiCard(
+        onClick = onToggleExpand,
+        shape = ActiveHeroCardAsymmetricShape,
+        containerColor = colors.primaryContainer,
+        contentColor = colors.onPrimaryContainer,
+        verticalSpacing = WseiSpacing.l,
         modifier = modifier
-            .fillMaxWidth()
-            .animateContentSize(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            )
+            .animateContentSize(WseiMotion.size())
             .semantics {
-                stateDescription =
-                    "Trwają zajęcia: ${activeClass.subject.name}, pozostało $remainingMin minut"
-            },
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                stateDescription = "Trwają zajęcia: ${activeClass.subject.name}, pozostało $remainingMin minut"
+            }
     ) {
-        Column(
-            modifier = Modifier
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    role = Role.Button,
-                    onClickLabel = if (isExpanded) "Zwiń szczegóły zajęć" else "Rozwiń szczegóły zajęć",
-                    onClick = onToggleExpand
-                )
-                .padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
         ) {
-            // Unified Home-style Header Row: 42.dp Squircle Icon + Overline + Title + Pill Badge
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Surface(
-                        shape = M3XSquircleShape,
-                        color = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(42.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = WseiIcons.forSubject(activeClass.subject.name, activeClass.classType),
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-
-                    Column {
-                        Text(
-                            text = "Trwa teraz • ${activeClass.classType.polishLabel}",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = activeClass.subject.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.semantics { heading() }
-                        )
-                    }
-                }
-
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Icon(
-                            imageVector = WseiIcons.Schedule,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = "−$remainingMin min",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            val activeLocationLabel = if (activeClass.deliveryMode == DeliveryMode.ON_SITE) {
-                "${activeClass.room.displayLabel} • Stacjonarnie"
-            } else {
-                activeClass.deliveryMode.polishBadge
-            }
-
-            // Inner 16.dp progress box matching StartDashboardScreen style
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.08f),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "$activeLocationLabel • ${activeClass.lecturer.fullDisplayName}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = "$elapsedMin z $totalMin min • do ${activeClass.timeSlot.endFormatted}",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    LinearWavyProgressIndicator(
-                        progress = { animatedProgress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(14.dp)
-                            .semantics {
-                                contentDescription = "Postęp zajęć: $elapsedMin z $totalMin minut"
-                            },
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.18f)
-                    )
-                }
-            }
-
-            // Segmented Day Progress Bar (`Zajęcia – Przerwa – Zajęcia`)
-            SegmentedDayProgressBarCompose(
-                dayEvents = dayEvents.ifEmpty { listOf(activeClass) },
-                nowEpochMillis = nowEpochMillis
+            WseiIconBadge(
+                icon = WseiIcons.forSubject(activeClass.subject.name, activeClass.classType),
+                shape = M3XCookieShape,
+                containerColor = colors.primary,
+                contentColor = colors.onPrimary,
+                size = 52.dp,
+                iconSize = 26.dp
             )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Trwa teraz • ${activeClass.classType.polishLabel}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.primary
+                )
+                Text(
+                    text = activeClass.subject.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() }
+                )
+            }
+        }
 
-            AnimatedVisibility(
-                visible = isExpanded && nextClassPreview != null,
-                enter = expandVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                ) + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                if (nextClassPreview != null) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.08f),
-                        modifier = Modifier.fillMaxWidth()
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "$remainingMin min",
+                    style = MaterialTheme.typography.displaySmall,
+                    maxLines = 1
+                )
+                Text(
+                    text = "do końca • $elapsedMin z $totalMin min",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.onPrimaryContainer.copy(alpha = 0.75f)
+                )
+            }
+            WseiPill(
+                text = "do ${activeClass.timeSlot.endFormatted}",
+                icon = WseiIcons.Schedule,
+                containerColor = colors.primary,
+                contentColor = colors.onPrimary,
+                emphasized = true
+            )
+        }
+
+        LinearWavyProgressIndicator(
+            progress = { animatedProgress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(16.dp)
+                .semantics { contentDescription = "Postęp zajęć: $elapsedMin z $totalMin minut" },
+            color = colors.primary,
+            trackColor = colors.onPrimaryContainer.copy(alpha = 0.16f)
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+        ) {
+            WseiPill(
+                text = location,
+                icon = WseiIcons.LocationOn,
+                containerColor = colors.onPrimaryContainer.copy(alpha = 0.1f),
+                contentColor = colors.onPrimaryContainer
+            )
+            WseiPill(
+                text = activeClass.lecturer.fullDisplayName,
+                icon = WseiIcons.Person,
+                containerColor = colors.onPrimaryContainer.copy(alpha = 0.1f),
+                contentColor = colors.onPrimaryContainer,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+        }
+
+        SegmentedDayProgressBarCompose(
+            dayEvents = dayEvents.ifEmpty { listOf(activeClass) },
+            nowEpochMillis = nowEpochMillis
+        )
+
+        AnimatedVisibility(
+            visible = isExpanded && nextClassPreview != null,
+            enter = expandVertically(WseiMotion.size()) + fadeIn(),
+            exit = shrinkVertically(WseiMotion.size()) + fadeOut()
+        ) {
+            if (nextClassPreview != null) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = colors.onPrimaryContainer.copy(alpha = 0.08f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = WseiSpacing.l, vertical = WseiSpacing.m),
+                        verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                Text(
-                                    text = "Następnie, po przerwie",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = nextClassPreview.summaryText,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                            Icon(
-                                imageVector = WseiIcons.ExpandLess,
-                                contentDescription = "Zwiń",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                            )
-                        }
+                        Text(
+                            text = "Następnie",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.tertiary
+                        )
+                        Text(
+                            text = nextClassPreview.summaryText,
+                            style = MaterialTheme.typography.titleMedium
+                        )
                     }
                 }
             }
@@ -1048,7 +808,8 @@ fun ActiveClassHeroCard(
 }
 
 /**
- * Full-width segmented day progress bar in Compose (`Zajęcia – Przerwa – Zajęcia – Przerwa – Zajęcia`).
+ * Oś dnia: zajęcia i przerwy jako segmenty proporcjonalne do czasu trwania,
+ * każdy z własnym postępem.
  */
 @Composable
 fun SegmentedDayProgressBarCompose(
@@ -1056,90 +817,43 @@ fun SegmentedDayProgressBarCompose(
     nowEpochMillis: Long,
     modifier: Modifier = Modifier
 ) {
-    val sorted = dayEvents.sortedBy { it.timeSlot.startEpochMillis }
-    if (sorted.isEmpty()) return
-
-    data class UiSegment(
-        val label: String,
-        val isBreak: Boolean,
-        val startMs: Long,
-        val endMs: Long,
-        val weight: Float
-    ) {
-        val progress: Float
-            get() {
-                val total = (endMs - startMs).coerceAtLeast(1L)
-                val elapsed = (nowEpochMillis - startMs).coerceIn(0L, total)
-                return (elapsed.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-            }
-        val isOngoing: Boolean
-            get() = nowEpochMillis in startMs until endMs
-    }
-
-    val segments = buildList {
-        sorted.forEachIndexed { index, ev ->
-            add(
-                UiSegment(
-                    label = "Zaj. ${index + 1}",
-                    isBreak = false,
-                    startMs = ev.timeSlot.startEpochMillis,
-                    endMs = ev.timeSlot.endEpochMillis,
-                    weight = 1.6f
-                )
-            )
-            val next = sorted.getOrNull(index + 1)
-            if (next != null && next.timeSlot.startEpochMillis > ev.timeSlot.endEpochMillis) {
-                add(
-                    UiSegment(
-                        label = "Przerwa",
-                        isBreak = true,
-                        startMs = ev.timeSlot.endEpochMillis,
-                        endMs = next.timeSlot.startEpochMillis,
-                        weight = 0.8f
-                    )
-                )
-            }
-        }
-    }
+    val segments = remember(dayEvents) { buildDaySegments(dayEvents) }
+    if (segments.isEmpty()) return
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text(
-            text = "Postęp dnia",
+            text = "Twój dzień",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
         ) {
-            segments.forEach { seg ->
+            segments.forEach { segment ->
+                val ongoing = nowEpochMillis in segment.startMs until segment.endMs
                 Column(
-                    modifier = Modifier.weight(seg.weight),
+                    modifier = Modifier.weight(segment.weight),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
                 ) {
                     LinearProgressIndicator(
-                        progress = { seg.progress },
+                        progress = { segment.progressAt(nowEpochMillis) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(8.dp)
+                            .height(if (ongoing) 10.dp else 6.dp)
                             .clip(CircleShape),
-                        color = if (seg.isBreak) {
-                            MaterialTheme.colorScheme.tertiary
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        },
+                        color = if (segment.isBreak) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
                         strokeCap = StrokeCap.Round
                     )
                     Text(
-                        text = seg.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (seg.isOngoing) FontWeight.Bold else FontWeight.Normal,
+                        text = segment.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (ongoing) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1,
                         overflow = TextOverflow.Clip
                     )
@@ -1149,151 +863,99 @@ fun SegmentedDayProgressBarCompose(
     }
 }
 
-@Composable
-private fun DaySectionHeader(
-    selectedDay: AcademicDay?,
-    modifier: Modifier = Modifier
+private class DaySegment(
+    val label: String,
+    val isBreak: Boolean,
+    val startMs: Long,
+    val endMs: Long,
+    val weight: Float
 ) {
+    fun progressAt(now: Long): Float {
+        val total = (endMs - startMs).coerceAtLeast(1L)
+        val elapsed = (now - startMs).coerceIn(0L, total)
+        return elapsed.toFloat() / total.toFloat()
+    }
+}
+
+private fun buildDaySegments(dayEvents: List<ClassEvent>): List<DaySegment> {
+    val sorted = dayEvents.sortedBy { it.timeSlot.startEpochMillis }
+    return buildList {
+        sorted.forEachIndexed { index, event ->
+            add(
+                DaySegment(
+                    label = "Zaj. ${index + 1}",
+                    isBreak = false,
+                    startMs = event.timeSlot.startEpochMillis,
+                    endMs = event.timeSlot.endEpochMillis,
+                    weight = 1.6f
+                )
+            )
+            val next = sorted.getOrNull(index + 1)
+            if (next != null && next.timeSlot.startEpochMillis > event.timeSlot.endEpochMillis) {
+                add(
+                    DaySegment(
+                        label = "Przerwa",
+                        isBreak = true,
+                        startMs = event.timeSlot.endEpochMillis,
+                        endMs = next.timeSlot.startEpochMillis,
+                        weight = 0.8f
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DaySectionHeader(selectedDay: AcademicDay?, modifier: Modifier = Modifier) {
     if (selectedDay == null) return
-    AnimatedContent(
-        targetState = selectedDay,
-        transitionSpec = {
-            fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMedium)) togetherWith
-                fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium))
-        },
-        modifier = modifier.fillMaxWidth(),
-        label = "daySectionHeaderTransition"
-    ) { day ->
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+    val count = selectedDay.events.size
+    val countText = when {
+        count == 0 -> "Brak zajęć"
+        count == 1 -> "1 blok"
+        count in 2..4 -> "$count bloki"
+        else -> "$count bloków"
+    }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = WseiSpacing.xs, end = WseiSpacing.xs, top = WseiSpacing.s),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "${day.dayOfWeekLabel}, ${day.date}",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                text = selectedDay.dayOfWeekLabel,
+                style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.semantics { heading() }
             )
-            val countText = when (val count = day.events.size) {
-                0 -> "Brak zajęć"
-                1 -> "1 blok zajęć"
-                in 2..4 -> "$count bloki zajęć"
-                else -> "$count bloków zajęć"
-            }
             Text(
-                text = if (day.isWeekendExtramuralSession) "Zjazd • $countText" else countText,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.tertiary
+                text = "${selectedDay.date.dayOfMonth} ${polishMonthGenitive(selectedDay.date.monthNumber)} ${selectedDay.date.year}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-    }
-}
-
-@Composable
-private fun LiveNowTimelineDivider(
-    nowFormatted: String,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.tertiary)
-        )
-        Text(
-            text = nowFormatted,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.tertiary,
-            fontWeight = FontWeight.Bold
-        )
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            thickness = 2.dp,
-            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.45f)
+        WseiPill(
+            text = if (selectedDay.isWeekendExtramuralSession && count > 0) "Zjazd • $countText" else countText,
+            containerColor = if (count > 0) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = if (count > 0) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            emphasized = true
         )
     }
 }
 
-@Composable
-private fun TimelineClassRow(
-    event: ClassEvent,
-    nowEpochMillis: Long,
-    isOngoing: Boolean,
-    isNextUp: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val state = when {
-        isOngoing -> ClassRowState.ONGOING
-        nowEpochMillis >= event.timeSlot.endEpochMillis -> ClassRowState.FINISHED
-        isNextUp -> ClassRowState.NEXT
-        else -> ClassRowState.UPCOMING
-    }
-    WseiClassCard(
-        event = event,
-        nowEpochMillis = nowEpochMillis,
-        state = state,
-        modifier = modifier
-    )
-}
-
-@Composable
-private fun EmptyDayNotice(
-    dayLabel: String,
-    dateLabel: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh
-    ) {
-        Row(
-            modifier = Modifier.padding(22.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = M3XSquircleShape,
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(42.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = WseiIcons.CalendarMonth,
-                        contentDescription = null,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "Wolne od zajęć",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "$dayLabel ($dateLabel) — brak zajęć",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Na ten dzień nie ma zajęć. Wybierz inny dzień w kalendarzu.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
+private fun polishMonthGenitive(monthNumber: Int): String = when (monthNumber) {
+    1 -> "stycznia"
+    2 -> "lutego"
+    3 -> "marca"
+    4 -> "kwietnia"
+    5 -> "maja"
+    6 -> "czerwca"
+    7 -> "lipca"
+    8 -> "sierpnia"
+    9 -> "września"
+    10 -> "października"
+    11 -> "listopada"
+    12 -> "grudnia"
+    else -> ""
 }
