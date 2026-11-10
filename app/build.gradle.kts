@@ -15,8 +15,8 @@ android {
         applicationId = "com.M1chi0001.Taal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.4"
+        versionCode = 5
+        versionName = "0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -71,6 +71,9 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
 
+    // Fallback: HTML DOM parser for the ASP.NET web Wirtualny Dziekanat
+    implementation(libs.jsoup)
+
     // Background Sync & Live Notifications
     implementation(libs.androidx.work.runtime.ktx)
 
@@ -80,4 +83,7 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
+
+    // JVM unit tests (parsers, lenient JSON, ABP envelope)
+    testImplementation(libs.junit)
 }

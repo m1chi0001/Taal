@@ -17,10 +17,12 @@ import pl.lublin.wsei.plan.domain.model.StudentSession
 import pl.lublin.wsei.plan.domain.model.StudyPlanOverview
 
 /**
- * Pure REST API Data Source contract implemented by [pl.lublin.wsei.plan.data.remote.api.ArpApiDataSource]
- * for APR System Wirtualny Dziekanat (`https://dziekanat.wsei.lublin.pl:20830/`).
+ * Minimal contract every timetable source must fulfil. Implemented by:
+ * - [pl.lublin.wsei.plan.data.remote.api.ArpApiDataSource] — primary REST/JSON API (`:20830`),
+ * - [pl.lublin.wsei.plan.data.remote.html.WdHtmlDataSource] — fallback that logs in through the
+ *   ASP.NET web form and parses the timetable DOM with Jsoup.
  */
-interface WseiRemoteDataSource {
+interface TimetableDataSource {
     val sourceOrigin: DataSourceOrigin
 
     suspend fun authenticate(
@@ -28,6 +30,19 @@ interface WseiRemoteDataSource {
         password: String,
         twoFactorToken: String? = null
     ): Result<StudentSession>
+
+    suspend fun fetchSchedule(
+        session: StudentSession,
+        from: LocalDate,
+        to: LocalDate,
+        scheduleType: ScheduleFilterType = ScheduleFilterType.MY_PLAN
+    ): Result<List<ClassEvent>>
+}
+
+/**
+ * Full REST API contract (grades, finances, announcements…) — only the JSON API exposes these.
+ */
+interface WseiRemoteDataSource : TimetableDataSource {
 
     suspend fun changePassword(
         currentPassword: String,
@@ -41,13 +56,6 @@ interface WseiRemoteDataSource {
     suspend fun fetchStudyPlans(
         session: StudentSession
     ): Result<List<StudyPlanOverview>>
-
-    suspend fun fetchSchedule(
-        session: StudentSession,
-        from: LocalDate,
-        to: LocalDate,
-        scheduleType: ScheduleFilterType = ScheduleFilterType.MY_PLAN
-    ): Result<List<ClassEvent>>
 
     suspend fun fetchGrades(session: StudentSession): Result<List<GradeItem>>
 
@@ -141,12 +149,28 @@ interface ScheduleRepository {
 
     suspend fun downloadAnnouncementAttachment(attachmentId: Int): Result<AnnouncementAttachment>
 
+    /** Last cached academic modules (offline-first prefill for the UI). Never touches the network. */
+    suspend fun loadCachedAcademicModules(): CachedAcademicModules
+
+    /** Network refresh of every academic module into the local cache (used by the background worker). */
+    suspend fun refreshAcademicSnapshots(): Boolean
+
     suspend fun getEventById(eventId: String): ClassEvent?
 
     suspend fun getEventsOnDay(dateIso: String): List<ClassEvent>
 
     suspend fun getNextEventAfter(eventId: String): ClassEvent?
 }
+
+data class CachedAcademicModules(
+    val studentGroups: List<StudentSemesterGroups>? = null,
+    val studyPlans: List<StudyPlanOverview>? = null,
+    val grades: List<GradeItem>? = null,
+    val scholarships: List<ScholarshipApplication>? = null,
+    val financials: List<FinancialObligation>? = null,
+    val announcements: List<DeanAnnouncement>? = null,
+    val lastUpdatedEpochMillis: Long? = null
+)
 
 data class ActiveClassSnapshot(
     val activeEvent: ClassEvent,

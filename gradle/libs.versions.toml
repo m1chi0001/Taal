@@ -21,6 +21,10 @@ kotlinxDatetime = "0.6.2"
 # Networking: Ktor (100% Pure APR System Wirtualny Dziekanat REST Client)
 ktor = "3.1.0"
 
+# HTML fallback parser (ASP.NET Wirtualny Dziekanat)
+jsoup = "1.18.3"
+junit = "4.13.2"
+
 # Local Persistence & Background Work
 room = "2.7.0-rc01"
 datastore = "1.1.2"
@@ -65,6 +69,10 @@ ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-conte
 ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
 ktor-client-logging = { group = "io.ktor", name = "ktor-client-logging", version.ref = "ktor" }
 ktor-client-auth = { group = "io.ktor", name = "ktor-client-auth", version.ref = "ktor" }
+
+# HTML fallback & tests
+jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 # Room Database & DataStore
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }

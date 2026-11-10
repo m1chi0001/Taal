@@ -8,6 +8,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.Transaction
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.ClassType
@@ -191,15 +193,67 @@ interface ScheduleDao {
     @Query("DELETE FROM schedule_events WHERE dateIso BETWEEN :startDateIso AND :endDateIso")
     suspend fun deleteRange(startDateIso: String, endDateIso: String)
 
+    @Query(
+        """
+        DELETE FROM schedule_events
+        WHERE dateIso BETWEEN :startDateIso AND :endDateIso
+          AND (ownerStudId = :ownerStudId OR ownerStudId = 0)
+        """
+    )
+    suspend fun deleteRangeForOwner(ownerStudId: Int, startDateIso: String, endDateIso: String)
+
+    /**
+     * Atomic swap of one synced window (single source of truth): observers never see the empty
+     * intermediate state, and a crash between delete and insert can't wipe the cache.
+     */
+    @Transaction
+    suspend fun replaceEventsInRange(
+        ownerStudId: Int,
+        startDateIso: String,
+        endDateIso: String,
+        events: List<ClassEventEntity>
+    ) {
+        deleteRangeForOwner(ownerStudId, startDateIso, endDateIso)
+        upsertEvents(events)
+    }
+
     @Query("DELETE FROM schedule_events")
     suspend fun clearAllEvents()
 }
 
+/**
+ * Offline cache of non-timetable modules (grades, finances, announcements, groups, study plans,
+ * scholarships) stored as JSON of the domain models, one row per student and module.
+ */
+@Entity(tableName = "academic_snapshots", primaryKeys = ["ownerStudId", "snapshotKey"])
+data class AcademicSnapshotEntity(
+    val ownerStudId: Int,
+    val snapshotKey: String,
+    val payloadJson: String,
+    val updatedAtEpochMillis: Long
+)
+
+@Dao
+interface AcademicSnapshotDao {
+    @Upsert
+    suspend fun upsert(snapshot: AcademicSnapshotEntity)
+
+    @Query("SELECT * FROM academic_snapshots WHERE ownerStudId = :ownerStudId AND snapshotKey = :key LIMIT 1")
+    suspend fun get(ownerStudId: Int, key: String): AcademicSnapshotEntity?
+
+    @Query("SELECT * FROM academic_snapshots WHERE ownerStudId = :ownerStudId")
+    suspend fun getAll(ownerStudId: Int): List<AcademicSnapshotEntity>
+
+    @Query("DELETE FROM academic_snapshots")
+    suspend fun clearAll()
+}
+
 @Database(
-    entities = [ClassEventEntity::class],
-    version = 4,
+    entities = [ClassEventEntity::class, AcademicSnapshotEntity::class],
+    version = 5,
     exportSchema = false
 )
 abstract class ScheduleDatabase : RoomDatabase() {
     abstract fun scheduleDao(): ScheduleDao
+    abstract fun academicSnapshotDao(): AcademicSnapshotDao
 }

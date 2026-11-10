@@ -132,6 +132,7 @@ data class TimeSlot(
 @Serializable
 enum class DataSourceOrigin(val statusLabel: String) {
     APR_WD_API("Wirtualny Dziekanat APR System (API :20830)"),
+    HTML_FALLBACK("Wirtualny Dziekanat – strona WWW (tryb awaryjny)"),
     DEBUG_TEST_ACCOUNT("Konto Testowe WSEI (Tryb Debug)"),
     LOCAL_CACHE("Pamięć podręczna Offline (Room)")
 }

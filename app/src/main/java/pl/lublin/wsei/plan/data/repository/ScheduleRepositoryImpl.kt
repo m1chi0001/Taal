@@ -4,16 +4,26 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
+import kotlinx.serialization.SerializationException
+import pl.lublin.wsei.plan.data.local.AcademicSnapshotStore
 import pl.lublin.wsei.plan.data.local.EncryptedCredentialStore
+import pl.lublin.wsei.plan.data.local.SnapshotKey
 import pl.lublin.wsei.plan.data.local.ScheduleDao
 import pl.lublin.wsei.plan.data.local.toEntity
 import pl.lublin.wsei.plan.data.remote.api.ArpApiDataSource
+import pl.lublin.wsei.plan.data.remote.api.AprHttpException
+import pl.lublin.wsei.plan.data.remote.api.AprMalformedResponseException
+import pl.lublin.wsei.plan.data.remote.api.AprServerException
+import pl.lublin.wsei.plan.data.remote.api.AprSessionExpiredException
 import pl.lublin.wsei.plan.data.remote.api.ArpSessionCookieJar
+import pl.lublin.wsei.plan.data.remote.api.ArpTokenRefresher
+import pl.lublin.wsei.plan.data.remote.html.WdHtmlDataSource
 import pl.lublin.wsei.plan.domain.model.AcademicDay
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.ClassEvent
@@ -27,28 +37,43 @@ import pl.lublin.wsei.plan.domain.model.StudentSemesterGroups
 import pl.lublin.wsei.plan.domain.model.StudentSession
 import pl.lublin.wsei.plan.domain.model.StudyPlanOverview
 import pl.lublin.wsei.plan.domain.repository.ActiveClassSnapshot
+import pl.lublin.wsei.plan.domain.repository.CachedAcademicModules
 import pl.lublin.wsei.plan.domain.repository.ScheduleRepository
 import pl.lublin.wsei.plan.domain.repository.SyncReport
 import pl.lublin.wsei.plan.service.ClassAlarmScheduler
+import pl.lublin.wsei.plan.service.ScheduleSyncScheduler
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import javax.net.ssl.SSLException
 import pl.lublin.wsei.plan.ui.schedule.SampleWseiScheduleFactory
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Pure REST API + Offline-First Room Repository with strict multi-account isolation
- * and AES-256-GCM hardware-backed credential encryption ([EncryptedCredentialStore]):
+ * Offline-first repository — Room is the single source of truth:
  *
- * 1. Primary: [ArpApiDataSource] (100% reverse-engineered APR System Wirtualny Dziekanat API `:20830`)
- * 2. Internal Debug Test Account (`debug@wsei.lublin.pl` / `99901` + `debug123`)
- *    strictly isolated from real student accounts.
+ * - **Timetable**: UI observes Room (`observeAcademicDays`, `observeAllEvents`); [syncSchedule] fetches
+ *   from the REST API ([ArpApiDataSource]) and, when the API itself is unavailable/broken, from the web
+ *   portal parser ([WdHtmlDataSource]); the window is replaced atomically.
+ * - **Grades, finances, announcements, groups, plans, scholarships**: network first, persisted as
+ *   snapshots; on failure the last snapshot is returned, so screens work offline.
+ * - **Session**: silent re-login is done by [ArpTokenRefresher]; the refreshed token is propagated to
+ *   [currentSession] and the encrypted vault.
+ * - **Background**: [ScheduleSyncScheduler] keeps a periodic WorkManager sync while logged in.
+ *
+ * Internal Debug Test Account (`debug@wsei.lublin.pl` / `99901` + `debug123`) stays isolated.
  */
 @Singleton
 class ScheduleRepositoryImpl @Inject constructor(
     private val arpApiDataSource: ArpApiDataSource,
+    private val htmlDataSource: WdHtmlDataSource,
     private val sessionCookieJar: ArpSessionCookieJar,
+    private val tokenRefresher: ArpTokenRefresher,
     private val scheduleDao: ScheduleDao,
+    private val snapshotStore: AcademicSnapshotStore,
     private val encryptedCredentialStore: EncryptedCredentialStore,
-    private val alarmScheduler: ClassAlarmScheduler
+    private val alarmScheduler: ClassAlarmScheduler,
+    private val syncScheduler: ScheduleSyncScheduler
 ) : ScheduleRepository {
 
     private val _currentSession = MutableStateFlow<StudentSession?>(null)
@@ -57,6 +82,21 @@ class ScheduleRepositoryImpl @Inject constructor(
     companion object {
         private val DEBUG_LOGINS = setOf("debug", "debug@wsei.lublin.pl", "99901", "test")
         private const val DEBUG_PASSWORD = "debug123"
+    }
+
+    init {
+        tokenRefresher.onTokenRefreshed = { auth ->
+            val token = auth.accessToken.orEmpty()
+            val refreshed = _currentSession.value?.copy(accessToken = token)
+            if (refreshed != null && !refreshed.isDebugAccount) {
+                _currentSession.update { it?.copy(accessToken = token) }
+                val login = sessionCookieJar.savedLogin
+                val password = sessionCookieJar.savedPassword
+                if (login != null && password != null && encryptedCredentialStore.isRememberMeEnabled()) {
+                    encryptedCredentialStore.saveEncryptedCredentials(login, password, refreshed, rememberCredentials = true)
+                }
+            }
+        }
     }
 
     override fun getDecryptedSavedLogin(): String? {
@@ -75,6 +115,7 @@ class ScheduleRepositoryImpl @Inject constructor(
             sessionCookieJar.savedLogin = vault.login
             sessionCookieJar.savedPassword = vault.password
             _currentSession.value = cached
+            syncScheduler.schedulePeriodic()
             return cached
         }
         // Try silent re-authentication with decrypted credentials for fresh token & photo
@@ -91,6 +132,7 @@ class ScheduleRepositoryImpl @Inject constructor(
                 rememberCredentials = true
             )
             _currentSession.value = freshSession
+            syncScheduler.schedulePeriodic()
             return freshSession
         }
         // Offline fallback using encrypted cached session
@@ -113,9 +155,10 @@ class ScheduleRepositoryImpl @Inject constructor(
             return Result.success(loginWithDebugTestAccount(rememberCredentials = rememberCredentials))
         }
 
-        // Strict account isolation: wipe any previous user's cached events before authenticating
+        val previousStudId = _currentSession.value?.studId
+            ?: encryptedCredentialStore.loadDecryptedCredentials()?.savedSession?.studId
         sessionCookieJar.clearSession()
-        scheduleDao.clearAllEvents()
+        htmlDataSource.clearSession()
 
         val wdResult = arpApiDataSource.authenticate(
             usernameOrAlbum = cleanLogin,
@@ -125,6 +168,12 @@ class ScheduleRepositoryImpl @Inject constructor(
 
         if (wdResult.isSuccess) {
             val session = wdResult.getOrThrow()
+            // Strict account isolation: wipe another student's cache only once the new login succeeded
+            // (a failed login used to destroy the offline cache).
+            if (previousStudId == null || previousStudId != session.studId) {
+                scheduleDao.clearAllEvents()
+                snapshotStore.clearAll()
+            }
             encryptedCredentialStore.saveEncryptedCredentials(
                 login = cleanLogin,
                 password = password,
@@ -132,6 +181,7 @@ class ScheduleRepositoryImpl @Inject constructor(
                 rememberCredentials = rememberCredentials
             )
             _currentSession.value = session
+            syncScheduler.schedulePeriodic()
         }
 
         return wdResult
@@ -141,7 +191,10 @@ class ScheduleRepositoryImpl @Inject constructor(
         rememberCredentials: Boolean
     ): StudentSession {
         sessionCookieJar.clearSession()
+        htmlDataSource.clearSession()
         scheduleDao.clearAllEvents()
+        snapshotStore.clearAll()
+        syncScheduler.cancelAll()
 
         val debugSession = SampleWseiScheduleFactory.createDebugStudentSession()
         encryptedCredentialStore.saveEncryptedCredentials(
@@ -161,9 +214,12 @@ class ScheduleRepositoryImpl @Inject constructor(
     }
 
     override suspend fun logout() {
+        syncScheduler.cancelAll()
         sessionCookieJar.clearSession()
+        htmlDataSource.clearSession()
         encryptedCredentialStore.clearVault()
         scheduleDao.clearAllEvents()
+        snapshotStore.clearAll()
         _currentSession.value = null
     }
 
@@ -272,22 +328,111 @@ class ScheduleRepositoryImpl @Inject constructor(
             )
         }
 
-        val events = arpApiDataSource.fetchSchedule(
-            session = session,
-            from = startDate,
-            to = endDate,
-            scheduleType = scheduleType
-        ).getOrThrow()
+        val (events, origin) = fetchScheduleWithFallback(session, startDate, endDate, scheduleType)
 
-        scheduleDao.deleteRange(startDate.toString(), endDate.toString())
-        scheduleDao.upsertEvents(events.map { it.toEntity(ownerStudId = session.studId) })
+        scheduleDao.replaceEventsInRange(
+            ownerStudId = session.studId,
+            startDateIso = startDate.toString(),
+            endDateIso = endDate.toString(),
+            events = events.map { it.toEntity(ownerStudId = session.studId) }
+        )
         alarmScheduler.scheduleUpcomingClassAlarms(events)
 
         SyncReport(
             syncedEventsCount = events.size,
-            usedOrigin = DataSourceOrigin.APR_WD_API,
+            usedOrigin = origin,
             syncedAtEpochMillis = System.currentTimeMillis()
         )
+    }
+
+    /**
+     * REST API first. Falls back to the HTML portal only when the API itself is the problem
+     * (5xx/404, changed JSON, port 20830 blocked/timing out, silent re-auth rejected) and credentials
+     * are available. Plain "no internet" (UnknownHost) is not retried via HTML.
+     */
+    private suspend fun fetchScheduleWithFallback(
+        session: StudentSession,
+        startDate: LocalDate,
+        endDate: LocalDate,
+        scheduleType: ScheduleFilterType
+    ): Pair<List<ClassEvent>, DataSourceOrigin> {
+        val apiResult = arpApiDataSource.fetchSchedule(session, startDate, endDate, scheduleType)
+        apiResult.getOrNull()?.let { return it to DataSourceOrigin.APR_WD_API }
+
+        val apiError = apiResult.exceptionOrNull() ?: IllegalStateException("Nieznany błąd API.")
+        if (!shouldUseHtmlFallback(apiError) || !sessionCookieJar.hasCredentials ||
+            scheduleType != ScheduleFilterType.MY_PLAN
+        ) {
+            throw apiError
+        }
+        val htmlResult = htmlDataSource.fetchSchedule(session, startDate, endDate, scheduleType)
+        htmlResult.getOrNull()?.let { return it to DataSourceOrigin.HTML_FALLBACK }
+        htmlResult.exceptionOrNull()?.let { apiError.addSuppressed(it) }
+        throw apiError
+    }
+
+    private fun shouldUseHtmlFallback(error: Throwable): Boolean = when (error) {
+        is AprServerException -> true
+        is AprMalformedResponseException -> true
+        is SerializationException -> true
+        is AprHttpException -> error.statusCode == 404 || error.statusCode >= 500 || error.statusCode in 300..399
+        is AprSessionExpiredException -> true
+        is ConnectException, is SocketTimeoutException, is SSLException -> true
+        else -> false
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Academic modules — network first, Room snapshot as offline fallback
+    // ---------------------------------------------------------------------------------------------
+
+    private suspend fun <T> networkWithSnapshot(
+        key: SnapshotKey<T>,
+        fetch: suspend (StudentSession) -> Result<T>
+    ): Result<T> {
+        val session = _currentSession.value ?: return Result.failure(IllegalStateException("Nie jesteś zalogowany."))
+        val remote = fetch(session)
+        remote.getOrNull()?.let { value ->
+            runCatching { snapshotStore.save(session.studId, key, value) }
+            return remote
+        }
+        val cached = snapshotStore.load(session.studId, key) ?: return remote
+        return Result.success(cached.value)
+    }
+
+    override suspend fun loadCachedAcademicModules(): CachedAcademicModules {
+        val session = _currentSession.value ?: return CachedAcademicModules()
+        if (session.isDebugAccount) return CachedAcademicModules()
+        val id = session.studId
+        val groups = snapshotStore.load(id, SnapshotKey.Groups)
+        val plans = snapshotStore.load(id, SnapshotKey.StudyPlans)
+        val grades = snapshotStore.load(id, SnapshotKey.Grades)
+        val scholarships = snapshotStore.load(id, SnapshotKey.Scholarships)
+        val finances = snapshotStore.load(id, SnapshotKey.Finances)
+        val announcements = snapshotStore.load(id, SnapshotKey.Announcements)
+        return CachedAcademicModules(
+            studentGroups = groups?.value,
+            studyPlans = plans?.value,
+            grades = grades?.value,
+            scholarships = scholarships?.value,
+            financials = finances?.value,
+            announcements = announcements?.value,
+            lastUpdatedEpochMillis = listOfNotNull(groups, plans, grades, scholarships, finances, announcements)
+                .maxOfOrNull { it.updatedAtEpochMillis }
+        )
+    }
+
+    override suspend fun refreshAcademicSnapshots(): Boolean {
+        val session = _currentSession.value ?: return false
+        if (session.isDebugAccount) return true
+        val results = listOf(
+            fetchStudentGroups().isSuccess,
+            fetchStudyPlans().isSuccess,
+            fetchGrades().isSuccess,
+            fetchScholarships().isSuccess,
+            fetchFinancials().isSuccess,
+            fetchAnnouncements().isSuccess
+        )
+        return results.all { it }
     }
 
     override suspend fun fetchStudentGroups(): Result<List<StudentSemesterGroups>> {
@@ -295,7 +440,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         if (session.isDebugAccount) {
             return Result.success(SampleWseiScheduleFactory.createDemoStudentGroups())
         }
-        return arpApiDataSource.fetchStudentGroups(session)
+        return networkWithSnapshot(SnapshotKey.Groups) { arpApiDataSource.fetchStudentGroups(it) }
     }
 
     override suspend fun fetchStudyPlans(): Result<List<StudyPlanOverview>> {
@@ -303,7 +448,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         if (session.isDebugAccount) {
             return Result.success(SampleWseiScheduleFactory.createDemoStudyPlans())
         }
-        return arpApiDataSource.fetchStudyPlans(session)
+        return networkWithSnapshot(SnapshotKey.StudyPlans) { arpApiDataSource.fetchStudyPlans(it) }
     }
 
     override suspend fun fetchGrades(): Result<List<GradeItem>> {
@@ -311,7 +456,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         if (session.isDebugAccount) {
             return Result.success(SampleWseiScheduleFactory.createDemoGrades())
         }
-        return arpApiDataSource.fetchGrades(session)
+        return networkWithSnapshot(SnapshotKey.Grades) { arpApiDataSource.fetchGrades(it) }
     }
 
     override suspend fun fetchScholarships(): Result<List<ScholarshipApplication>> {
@@ -319,7 +464,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         if (session.isDebugAccount) {
             return Result.success(SampleWseiScheduleFactory.createDemoScholarships())
         }
-        return arpApiDataSource.fetchScholarships(session)
+        return networkWithSnapshot(SnapshotKey.Scholarships) { arpApiDataSource.fetchScholarships(it) }
     }
 
     override suspend fun fetchFinancials(): Result<List<FinancialObligation>> {
@@ -327,7 +472,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         if (session.isDebugAccount) {
             return Result.success(SampleWseiScheduleFactory.createDemoFinancials())
         }
-        return arpApiDataSource.fetchFinancials(session)
+        return networkWithSnapshot(SnapshotKey.Finances) { arpApiDataSource.fetchFinancials(it) }
     }
 
     override suspend fun fetchOnlinePaymentUrl(
@@ -346,7 +491,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         if (session.isDebugAccount) {
             return Result.success(SampleWseiScheduleFactory.createDemoAnnouncements())
         }
-        return arpApiDataSource.fetchAnnouncements(session)
+        return networkWithSnapshot(SnapshotKey.Announcements) { arpApiDataSource.fetchAnnouncements(it) }
     }
 
     override suspend fun markAnnouncementRead(announcementId: Int): Result<Unit> {
@@ -354,7 +499,17 @@ class ScheduleRepositoryImpl @Inject constructor(
         if (session.isDebugAccount) {
             return Result.success(Unit)
         }
-        return arpApiDataSource.markAnnouncementRead(session, announcementId)
+        val result = arpApiDataSource.markAnnouncementRead(session, announcementId)
+        if (result.isSuccess) {
+            snapshotStore.load(session.studId, SnapshotKey.Announcements)?.let { cached ->
+                snapshotStore.save(
+                    session.studId,
+                    SnapshotKey.Announcements,
+                    cached.value.map { if (it.announcementId == announcementId) it.copy(isRead = true) else it }
+                )
+            }
+        }
+        return result
     }
 
     override suspend fun downloadAnnouncementAttachment(

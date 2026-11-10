@@ -10,15 +10,19 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
+import pl.lublin.wsei.plan.data.local.AcademicSnapshotDao
 import pl.lublin.wsei.plan.data.local.ScheduleDao
 import pl.lublin.wsei.plan.data.local.ScheduleDatabase
 import pl.lublin.wsei.plan.data.remote.api.ArpAutoReauthInterceptor
 import pl.lublin.wsei.plan.data.remote.api.ArpSessionCookieJar
+import pl.lublin.wsei.plan.data.remote.api.ArpTokenRefresher
 import pl.lublin.wsei.plan.data.repository.ScheduleRepositoryImpl
 import pl.lublin.wsei.plan.domain.repository.ScheduleRepository
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
@@ -44,33 +48,38 @@ object AppNetworkAndDatabaseModule {
         isLenient = true
         coerceInputValues = true
         explicitNulls = false
+        encodeDefaults = true
     }
 
+    /**
+     * REST client for the APR API. Redirects are NOT followed: a 302 to the login page is a session
+     * expiry signal, handled by [ArpAutoReauthInterceptor] (previously the comment said so, but the
+     * interceptor never looked at 3xx and the refresh provider was hard-wired to `false`).
+     */
     @Provides
     @Singleton
     fun provideKtorHttpClient(
         cookieJar: ArpSessionCookieJar,
+        tokenRefresher: ArpTokenRefresher,
         json: Json
-    ): HttpClient {
-        return HttpClient(OkHttp) {
-            engine {
-                config {
-                    cookieJar(cookieJar)
-                    followRedirects(false) // Handled by ArpAutoReauthInterceptor to catch /Konto/Logowanie redirects
-                    addInterceptor(
-                        ArpAutoReauthInterceptor(
-                            cookieJar = cookieJar,
-                            tokenRefreshProvider = {
-                                // Re-authenticates using encrypted credentials stored in DataStore
-                                false
-                            }
-                        )
-                    )
-                }
+    ): HttpClient = HttpClient(OkHttp) {
+        expectSuccess = false // status codes are validated in decodeAbp()
+        engine {
+            config {
+                cookieJar(cookieJar)
+                followRedirects(false)
+                followSslRedirects(false)
+                retryOnConnectionFailure(true)
+                connectTimeout(15, TimeUnit.SECONDS)
+                readTimeout(30, TimeUnit.SECONDS)
+                addInterceptor(ArpAutoReauthInterceptor(cookieJar, tokenRefresher))
             }
-            install(ContentNegotiation) {
-                json(json)
-            }
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 45_000
+        }
+        install(ContentNegotiation) {
+            json(json)
         }
     }
 
@@ -88,4 +97,8 @@ object AppNetworkAndDatabaseModule {
 
     @Provides
     fun provideScheduleDao(database: ScheduleDatabase): ScheduleDao = database.scheduleDao()
+
+    @Provides
+    fun provideAcademicSnapshotDao(database: ScheduleDatabase): AcademicSnapshotDao =
+        database.academicSnapshotDao()
 }

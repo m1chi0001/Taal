@@ -627,6 +627,18 @@ class ScheduleViewModel @Inject constructor(
 
     private fun loadAllAcademicModules() {
         viewModelScope.launch {
+            // Offline-first: show the last cached modules immediately, then refresh from the network.
+            val cached = scheduleRepository.loadCachedAcademicModules()
+            _uiState.update { state ->
+                state.copy(
+                    studentGroups = cached.studentGroups ?: state.studentGroups,
+                    studyPlans = cached.studyPlans ?: state.studyPlans,
+                    grades = cached.grades ?: state.grades,
+                    scholarships = cached.scholarships ?: state.scholarships,
+                    financials = cached.financials ?: state.financials,
+                    announcements = cached.announcements ?: state.announcements
+                )
+            }
             coroutineScope {
                 val groupsDef = async { scheduleRepository.fetchStudentGroups() }
                 val plansDef = async { scheduleRepository.fetchStudyPlans() }

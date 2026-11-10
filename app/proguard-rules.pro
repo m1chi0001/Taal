@@ -12,3 +12,7 @@
 -keep class pl.lublin.wsei.plan.domain.model.** { *; }
 -keep class io.ktor.serialization.kotlinx.json.** { *; }
 -keep class kotlinx.coroutines.android.AndroidDispatcherFactory { *; }
+
+# Data layer: DTOs, lenient serializers, Room entities serialized into snapshots
+-keep class pl.lublin.wsei.plan.data.** { *; }
+-keep class org.jsoup.** { *; }
