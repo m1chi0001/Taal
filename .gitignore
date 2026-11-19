@@ -44,9 +44,10 @@ captures/
 .idea/modules.xml
 .idea/workspace.xml
 
-# Keystore files
+# Keystore files & environment secrets
 *.jks
 *.keystore
+.env*
 
 # External Native Build
 .externalNativeBuild
