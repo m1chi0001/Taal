@@ -1,110 +1,190 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@file:OptIn(
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class
+)
 
 package pl.lublin.wsei.plan.ui.subjects
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.domain.model.GradeItem
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiEmptyState
 import pl.lublin.wsei.plan.ui.components.WseiPill
-import pl.lublin.wsei.plan.ui.components.WseiScreenScaffold
+import pl.lublin.wsei.plan.ui.components.WseiScreenFrame
 import pl.lublin.wsei.plan.ui.components.WseiSectionTitle
 import pl.lublin.wsei.plan.ui.components.WseiStat
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
+import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
+import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
+import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import java.util.Locale
 
-/** Przedmioty bieżącego semestru: podsumowanie (średnia, ECTS) i lista ocen. */
+/**
+ * Przedmioty bieżącego semestru: podsumowanie (średnia, ECTS) i lista ocen.
+ * Na szerszych oknach oceny układają się w siatkę (2–3 kolumny) zamiast rozciągniętych kart.
+ */
 @Composable
 fun SubjectsScreen(
     uiState: ScheduleUiState,
     onRefresh: () -> Unit
 ) {
-    val session = uiState.currentSession
-    val totalEcts = remember(uiState.grades) { uiState.grades.sumOf { it.ects } }
-    val gradedCount = remember(uiState.grades) { uiState.grades.count { parseGrade(it.gradeValue) != null } }
+    val columns = LocalWseiWindowLayout.current.gridColumns
+    val grades = uiState.grades
+    val totalEcts = remember(grades) { grades.sumOf { it.ects } }
+    val gradedCount = remember(grades) { grades.count { parseGrade(it.gradeValue) != null } }
 
-    WseiScreenScaffold(
+    WseiScreenFrame(
         title = "Przedmioty",
         onRefresh = onRefresh,
         isRefreshing = uiState.isRefreshing
-    ) {
-        item(key = "semester_summary") {
-            val average = uiState.maskSensitive(
-                String.format(Locale.US, "%.2f", session?.averageCurrentSemester ?: 0.0)
-            )
-            WseiCard(
-                shape = WseiHeroShape,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                verticalSpacing = WseiSpacing.l
+    ) { scrollModifier ->
+        // With a single column the staggered grid lays out exactly like the previous list.
+        LazyVerticalStaggeredGrid(
+            columns = StaggeredGridCells.Fixed(columns),
+            modifier = Modifier
+                .fillMaxSize()
+                .then(scrollModifier),
+            contentPadding = wseiScreenContentPadding(),
+            verticalItemSpacing = WseiSpacing.betweenCards,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+        ) {
+            item(
+                key = "semester_summary",
+                contentType = "semester_summary",
+                span = StaggeredGridItemSpan.FullLine
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)) {
-                    Text(
-                        text = "Semestr ${session?.semesterNumber ?: 1}",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = session?.fieldOfStudy ?: "Kierunek",
-                        style = MaterialTheme.typography.headlineSmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                SemesterSummaryCard(
+                    uiState = uiState,
+                    totalEcts = totalEcts,
+                    gradedCount = gradedCount,
+                    subjectCount = grades.size
+                )
+            }
+
+            if (grades.isEmpty()) {
+                item(
+                    key = "grades_empty",
+                    contentType = "grades_empty",
+                    span = StaggeredGridItemSpan.FullLine
+                ) {
+                    WseiEmptyState(
+                        icon = WseiIcons.School,
+                        title = "Brak przedmiotów",
+                        message = "Oceny pojawią się tu po synchronizacji z Wirtualnym Dziekanatem."
                     )
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+            } else {
+                item(
+                    key = "grades_title",
+                    contentType = "grades_title",
+                    span = StaggeredGridItemSpan.FullLine
                 ) {
-                    val statColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
-                    val statContent = MaterialTheme.colorScheme.onPrimaryContainer
-                    WseiStat(average, "Średnia", Modifier.weight(1f), statColor, statContent)
-                    WseiStat(totalEcts.toString(), "ECTS", Modifier.weight(1f), statColor, statContent)
-                    WseiStat("$gradedCount/${uiState.grades.size}", "Ocenione", Modifier.weight(1f), statColor, statContent)
+                    WseiSectionTitle(text = "Oceny", trailing = "${grades.size} przedm.")
+                }
+                items(
+                    items = grades,
+                    key = { it.id },
+                    contentType = { "grade_item_card" }
+                ) { grade ->
+                    GradeCard(grade = grade, maskSensitive = uiState.isHideSensitiveData)
                 }
             }
         }
+    }
+}
 
-        if (uiState.grades.isEmpty()) {
-            item(key = "grades_empty") {
-                WseiEmptyState(
-                    icon = WseiIcons.School,
-                    title = "Brak przedmiotów",
-                    message = "Oceny pojawią się tu po synchronizacji z Wirtualnym Dziekanatem."
-                )
-            }
-        } else {
-            item(key = "grades_title") {
-                WseiSectionTitle(text = "Oceny", trailing = "${uiState.grades.size} przedm.")
-            }
-            items(
-                items = uiState.grades,
-                key = { it.id },
-                contentType = { "grade_item_card" }
-            ) { grade ->
-                GradeCard(grade = grade, maskSensitive = uiState.isHideSensitiveData)
-            }
+@Composable
+private fun SemesterSummaryCard(
+    uiState: ScheduleUiState,
+    totalEcts: Int,
+    gradedCount: Int,
+    subjectCount: Int
+) {
+    val session = uiState.currentSession
+    val colors = MaterialTheme.colorScheme
+    val average = uiState.maskSensitive(
+        String.format(Locale.US, "%.2f", session?.averageCurrentSemester ?: 0.0)
+    )
+    val gradedFraction = if (subjectCount > 0) gradedCount.toFloat() / subjectCount else 0f
+    val animatedGraded by animateFloatAsState(
+        targetValue = gradedFraction,
+        animationSpec = WseiMotion.size(),
+        label = "gradedProgress"
+    )
+    WseiCard(
+        shape = WseiHeroShape,
+        containerColor = colors.primaryContainer,
+        contentColor = colors.onPrimaryContainer,
+        verticalSpacing = WseiSpacing.l
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)) {
+            Text(
+                text = "Semestr ${session?.semesterNumber ?: 1}",
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.primary
+            )
+            Text(
+                text = session?.fieldOfStudy ?: "Kierunek",
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+        ) {
+            val statColor = colors.onPrimaryContainer.copy(alpha = 0.1f)
+            val statContent = colors.onPrimaryContainer
+            WseiStat(average, "Średnia", Modifier.weight(1f), statColor, statContent)
+            WseiStat(totalEcts.toString(), "ECTS", Modifier.weight(1f), statColor, statContent)
+            WseiStat("$gradedCount/$subjectCount", "Ocenione", Modifier.weight(1f), statColor, statContent)
+        }
+        if (subjectCount > 0) {
+            // How far the semester's grading has progressed — counts only, no grade values.
+            LinearWavyProgressIndicator(
+                progress = { animatedGraded },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(14.dp)
+                    .semantics {
+                        contentDescription = "Ocenione przedmioty: $gradedCount z $subjectCount"
+                    },
+                color = colors.primary,
+                trackColor = colors.onPrimaryContainer.copy(alpha = 0.16f)
+            )
         }
     }
 }

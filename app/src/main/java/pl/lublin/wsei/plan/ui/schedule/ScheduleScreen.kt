@@ -19,18 +19,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -38,6 +36,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -46,12 +45,16 @@ import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -70,6 +73,10 @@ import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DeliveryMode
 import pl.lublin.wsei.plan.domain.model.NextClassPreview
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
+import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
+import pl.lublin.wsei.plan.ui.adaptive.WseiTwoPane
+import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
+import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiClassCard
 import pl.lublin.wsei.plan.ui.components.WseiEmptyState
@@ -82,10 +89,11 @@ import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.ActiveHeroCardAsymmetricShape
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
-import pl.lublin.wsei.plan.ui.theme.WseiCardShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import java.time.Instant
 import java.time.YearMonth
+import java.time.ZoneId
 
 /**
  * Plan zajęć (Material 3 Expressive):
@@ -93,7 +101,8 @@ import java.time.YearMonth
  * - kalendarz tygodniowy rozwijany do pełnego miesiąca,
  * - karta trwających zajęć z falującym postępem i osią dnia,
  * - lista zajęć wybranego dnia.
- * Na szerokich ekranach (≥ 840 dp) układ dwukolumnowy.
+ * Na szerokich ekranach i rozłożonych składakach układ dwupanelowy (kalendarz | lista dnia),
+ * dopasowany do zawiasu.
  */
 @Composable
 fun ScheduleScreen(
@@ -110,73 +119,109 @@ fun ScheduleScreen(
     modifier: Modifier = Modifier,
     @Suppress("UNUSED_PARAMETER") onLogout: () -> Unit = {}
 ) {
+    val windowLayout = LocalWseiWindowLayout.current
+    val todayIso = remember(uiState.nowEpochMillis) { warsawTodayIso(uiState.nowEpochMillis) }
+    val dayEvents = uiState.selectedDay?.events.orEmpty()
+    // Lazy keys must be unique. Event ids are built from source data (id + date + start time),
+    // so a source that lists the same block twice would crash LazyColumn on a duplicate key.
+    val timelineRows = remember(dayEvents) { dayEvents.withUniqueKeys() }
+
     WseiScreenFrame(
         title = "Plan zajęć",
         modifier = modifier.fillMaxSize(),
         onRefresh = onRefreshSchedule,
         isRefreshing = uiState.isRefreshing
     ) { scrollModifier ->
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val controls: @Composable (Modifier) -> Unit = { controlsModifier ->
-                ScheduleControls(
-                    uiState = uiState,
-                    onSelectDay = onSelectDay,
-                    onSelectDate = onSelectDate,
-                    onToggleCalendarExpanded = onToggleCalendarExpanded,
-                    onPreviousCalendarPeriod = onPreviousCalendarPeriod,
-                    onNextCalendarPeriod = onNextCalendarPeriod,
-                    onSelectScheduleFilter = onSelectScheduleFilter,
-                    onToggleHeroExpanded = onToggleHeroExpanded,
-                    onSyncLiveNotification = onSyncLiveNotification,
-                    modifier = controlsModifier
-                )
-            }
+        val controls: @Composable (Modifier) -> Unit = { controlsModifier ->
+            ScheduleControls(
+                uiState = uiState,
+                todayIso = todayIso,
+                onSelectDay = onSelectDay,
+                onSelectDate = onSelectDate,
+                onToggleCalendarExpanded = onToggleCalendarExpanded,
+                onPreviousCalendarPeriod = onPreviousCalendarPeriod,
+                onNextCalendarPeriod = onNextCalendarPeriod,
+                onSelectScheduleFilter = onSelectScheduleFilter,
+                onToggleHeroExpanded = onToggleHeroExpanded,
+                onSyncLiveNotification = onSyncLiveNotification,
+                modifier = controlsModifier
+            )
+        }
+        val contentPadding = wseiScreenContentPadding()
 
-            if (maxWidth >= 840.dp) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = WseiSpacing.xxl),
-                    horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xxl)
-                ) {
+        if (windowLayout.supportsTwoPane) {
+            // Calendar + live class in the first pane, the day's classes in the second. The
+            // nested-scroll connection sits on the parent so both panes collapse the top bar,
+            // and both scroll containers reach the pull-to-refresh box above them.
+            val layoutDirection = LocalLayoutDirection.current
+            val paneTop = contentPadding.calculateTopPadding()
+            val paneBottom = contentPadding.calculateBottomPadding()
+            WseiTwoPane(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(scrollModifier)
+                    .padding(
+                        start = contentPadding.calculateStartPadding(layoutDirection),
+                        end = contentPadding.calculateEndPadding(layoutDirection)
+                    ),
+                gap = WseiSpacing.xxl,
+                first = {
                     controls(
                         Modifier
-                            .weight(0.46f)
-                            .widthIn(max = 520.dp)
-                            .fillMaxHeight()
+                            .fillMaxSize()
                             .verticalScroll(rememberScrollState())
-                            .padding(bottom = WseiSpacing.bottomBarClearance)
+                            .padding(top = paneTop, bottom = paneBottom)
                     )
+                },
+                second = {
                     LazyColumn(
-                        modifier = Modifier
-                            .weight(0.54f)
-                            .fillMaxHeight()
-                            .then(scrollModifier),
-                        contentPadding = PaddingValues(top = WseiSpacing.xs, bottom = WseiSpacing.bottomBarClearance),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = paneTop, bottom = paneBottom),
                         verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
                     ) {
-                        dayTimeline(uiState)
+                        dayTimeline(uiState, timelineRows)
                     }
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(scrollModifier),
-                    contentPadding = WseiSpacing.screenContent,
-                    verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
-                ) {
-                    item(key = "schedule_controls") { controls(Modifier) }
-                    dayTimeline(uiState)
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(scrollModifier),
+                contentPadding = contentPadding,
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+            ) {
+                item(key = "schedule_controls", contentType = "schedule_controls") {
+                    controls(if (windowLayout.isCompact) Modifier else Modifier.wseiReadableWidth())
                 }
+                dayTimeline(uiState, timelineRows, readableWidth = !windowLayout.isCompact)
             }
         }
     }
 }
 
+/** A class row with a key that is unique within the rendered day. */
+@Immutable
+private class TimelineRow(val key: String, val event: ClassEvent)
+
+private fun List<ClassEvent>.withUniqueKeys(): List<TimelineRow> {
+    val seen = HashMap<String, Int>(size)
+    return map { event ->
+        val occurrence = (seen[event.id] ?: 0) + 1
+        seen[event.id] = occurrence
+        TimelineRow(if (occurrence == 1) event.id else "${event.id}#$occurrence", event)
+    }
+}
+
+private fun warsawTodayIso(epochMillis: Long): String =
+    Instant.ofEpochMilli(epochMillis).atZone(WarsawZone).toLocalDate().toString()
+
+private val WarsawZone: ZoneId = ZoneId.of("Europe/Warsaw")
+
 @Composable
 private fun ScheduleControls(
     uiState: ScheduleUiState,
+    todayIso: String,
     onSelectDay: (Int) -> Unit,
     onSelectDate: (LocalDate) -> Unit,
     onToggleCalendarExpanded: () -> Unit,
@@ -202,6 +247,7 @@ private fun ScheduleControls(
             displayedMonth = uiState.displayedMonth,
             scheduledMonthDays = uiState.scheduledMonthDays,
             isExpanded = uiState.isCalendarExpanded,
+            todayIso = todayIso,
             onToggleExpanded = onToggleCalendarExpanded,
             onPreviousPeriod = onPreviousCalendarPeriod,
             onNextPeriod = onNextCalendarPeriod,
@@ -223,19 +269,24 @@ private fun ScheduleControls(
     }
 }
 
-/** Nagłówek dnia i karty zajęć — wspólne dla układu jedno- i dwukolumnowego. */
-private fun LazyListScope.dayTimeline(uiState: ScheduleUiState) {
+/** Nagłówek dnia i karty zajęć — wspólne dla układu jedno- i dwupanelowego. */
+private fun LazyListScope.dayTimeline(
+    uiState: ScheduleUiState,
+    rows: List<TimelineRow>,
+    readableWidth: Boolean = false
+) {
+    val itemModifier = if (readableWidth) Modifier.wseiReadableWidth() else Modifier
     val selectedDay = uiState.selectedDay
-    item(key = "day_header") {
-        DaySectionHeader(selectedDay = selectedDay)
+    item(key = "day_header", contentType = "day_header") {
+        DaySectionHeader(selectedDay = selectedDay, modifier = itemModifier)
     }
-    val dayEvents = selectedDay?.events.orEmpty()
-    if (dayEvents.isEmpty()) {
-        item(key = "empty_day") {
+    if (rows.isEmpty()) {
+        item(key = "empty_day", contentType = "empty_day") {
             WseiEmptyState(
                 icon = WseiIcons.CalendarMonth,
                 title = "Wolne od zajęć",
-                message = "Na ten dzień nie ma zajęć. Wybierz inny dzień w kalendarzu."
+                message = "Na ten dzień nie ma zajęć. Wybierz inny dzień w kalendarzu.",
+                modifier = itemModifier
             )
         }
     } else {
@@ -243,14 +294,20 @@ private fun LazyListScope.dayTimeline(uiState: ScheduleUiState) {
         val activeId = uiState.activeClass?.id
         val nextId = uiState.nextClassPreview?.nextEvent?.id
         items(
-            items = dayEvents,
-            key = { it.id },
+            items = rows,
+            key = { it.key },
             contentType = { "timeline_class_row" }
-        ) { event ->
+        ) { row ->
             WseiClassCard(
-                event = event,
+                event = row.event,
                 nowEpochMillis = now,
-                state = classRowStateOf(event, now, activeId, nextId)
+                state = classRowStateOf(row.event, now, activeId, nextId),
+                modifier = itemModifier.animateItem(
+                    fadeInSpec = WseiMotion.effects(),
+                    placementSpec = WseiMotion.spatial(),
+                    // Day switches replace every key; dropping old rows at once avoids two days overlapping.
+                    fadeOutSpec = null
+                )
             )
         }
     }
@@ -267,69 +324,47 @@ private fun ScheduleFilterButtonGroup(
     modifier: Modifier = Modifier
 ) {
     val filters = ScheduleFilterType.entries
+    // M3 Expressive connected button group: the checked segment morphs into a full pill and
+    // the pressed one squeezes its inner corners — shape motion comes from ToggleButton itself.
+    val colors = ToggleButtonDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        checkedContainerColor = MaterialTheme.colorScheme.primary,
+        checkedContentColor = MaterialTheme.colorScheme.onPrimary
+    )
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
     ) {
         filters.forEachIndexed { index, filter ->
             val selected = filter == selectedFilter
-            val isFirst = index == 0
-            val isLast = index == filters.lastIndex
-            // Wybrany segment zaokrągla się w pełną pigułkę; pozostałe mają małe rogi wewnętrzne.
-            val innerCorner by animateDpAsState(
-                targetValue = if (selected) 26.dp else 8.dp,
-                animationSpec = WseiMotion.fastSpatial(),
-                label = "filterInnerCorner"
-            )
-            val containerColor by animateColorAsState(
-                targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                animationSpec = WseiMotion.effects(),
-                label = "filterContainer"
-            )
-            val contentColor by animateColorAsState(
-                targetValue = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                animationSpec = WseiMotion.effects(),
-                label = "filterContent"
-            )
-            val interactionSource = remember { MutableInteractionSource() }
-            Surface(
-                onClick = { onSelectFilter(filter) },
-                shape = RoundedCornerShape(
-                    topStart = if (isFirst) 26.dp else innerCorner,
-                    bottomStart = if (isFirst) 26.dp else innerCorner,
-                    topEnd = if (isLast) 26.dp else innerCorner,
-                    bottomEnd = if (isLast) 26.dp else innerCorner
-                ),
-                color = containerColor,
-                contentColor = contentColor,
-                interactionSource = interactionSource,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .wseiPressScale(interactionSource, pressedScale = 0.96f)
-                    .semantics {
-                        role = Role.RadioButton
-                        this.selected = selected
-                    }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = WseiSpacing.l),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            ToggleButton(
+                checked = selected,
+                onCheckedChange = { onSelectFilter(filter) },
+                shapes = when (index) {
+                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    filters.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                },
+                colors = colors,
+                icon = {
                     Icon(
                         imageVector = if (filter == ScheduleFilterType.MY_PLAN) WseiIcons.Person else WseiIcons.Groups,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        contentDescription = null
                     )
-                    Spacer(modifier = Modifier.size(WseiSpacing.s))
-                    Text(
-                        text = filter.polishLabel,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        maxLines = 1
-                    )
-                }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 52.dp)
+                    .semantics { role = Role.RadioButton }
+            ) {
+                Text(
+                    text = filter.polishLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -347,6 +382,7 @@ private fun ExpandableCalendarCard(
     displayedMonth: Int,
     scheduledMonthDays: Set<Int>,
     isExpanded: Boolean,
+    todayIso: String,
     onToggleExpanded: () -> Unit,
     onPreviousPeriod: () -> Unit,
     onNextPeriod: () -> Unit,
@@ -354,7 +390,6 @@ private fun ExpandableCalendarCard(
     onSelectDate: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val todayIso = remember { java.time.LocalDate.now().toString() }
     val weekStart = daysOfCurrentWeek.firstOrNull()?.date
     val weekEnd = daysOfCurrentWeek.lastOrNull()?.date
     val subtitle = when {

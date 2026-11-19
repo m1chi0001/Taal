@@ -4,9 +4,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +28,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.domain.model.ClassEvent
+import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
+import pl.lublin.wsei.plan.ui.adaptive.WseiWidthClass
+import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
+import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiCardHeader
 import pl.lublin.wsei.plan.ui.components.WseiClassCard
@@ -44,8 +51,9 @@ import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.M3XSunnyShape
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -67,8 +75,12 @@ fun HomeScreen(
 ) {
     val session = uiState.currentSession
     val firstName = session?.firstName?.takeIf { it.isNotBlank() } ?: "Studencie"
-    val greeting = remember(firstName) {
-        val hour = LocalTime.now().hour
+    // Keyed on the current hour (from the per-minute ticker), so the greeting changes from
+    // "Dzień dobry" to "Cześć" while the app stays open.
+    val hour = remember(uiState.nowEpochMillis) {
+        Instant.ofEpochMilli(uiState.nowEpochMillis).atZone(ZoneId.systemDefault()).hour
+    }
+    val greeting = remember(firstName, hour) {
         val salutation = when (hour) {
             in 5..10 -> "Dzień dobry"
             in 18..23, in 0..4 -> "Dobry wieczór"
@@ -77,38 +89,95 @@ fun HomeScreen(
         "$salutation, $firstName"
     }
 
+    val windowLayout = LocalWseiWindowLayout.current
+    // The ticker in the ViewModel updates `nowEpochMillis` every minute, so "today" follows
+    // midnight without restarting the screen.
+    val todayIso = remember(uiState.nowEpochMillis) { localDateOf(uiState.nowEpochMillis).toString() }
+
     WseiScreenScaffold(
         title = greeting,
         onRefresh = onRefresh,
-        isRefreshing = uiState.isRefreshing
+        isRefreshing = uiState.isRefreshing,
+        contentPadding = wseiScreenContentPadding()
     ) {
         item(key = "home_intro") {
-            HomeIntro(uiState)
-        }
-        item(key = "home_today") {
-            TodayScheduleCard(uiState = uiState, onClick = onOpenSchedule)
-        }
-        item(key = "home_shortcuts") {
-            QuickShortcutsGrid(
+            HomeIntro(
                 uiState = uiState,
-                onOpenSchedule = onOpenSchedule,
-                onOpenSubjects = onOpenSubjects,
-                onOpenFinances = onOpenFinances,
-                onOpenAnnouncements = onOpenAnnouncements
+                todayIso = todayIso,
+                modifier = if (windowLayout.isCompact) Modifier else Modifier.wseiReadableWidth(HomeDashboardMaxWidth)
             )
         }
-        item(key = "home_payment") {
-            NextPaymentCard(uiState = uiState, onClick = onOpenFinances)
+        if (windowLayout.isCompact) {
+            item(key = "home_today") {
+                TodayScheduleCard(uiState = uiState, todayIso = todayIso, onClick = onOpenSchedule)
+            }
+            item(key = "home_shortcuts") {
+                QuickShortcutsGrid(
+                    uiState = uiState,
+                    onOpenSchedule = onOpenSchedule,
+                    onOpenSubjects = onOpenSubjects,
+                    onOpenFinances = onOpenFinances,
+                    onOpenAnnouncements = onOpenAnnouncements
+                )
+            }
+            item(key = "home_payment") {
+                NextPaymentCard(uiState = uiState, onClick = onOpenFinances)
+            }
+        } else {
+            // Tablets, unfolded foldables and landscape: the day plan on the left, the summary
+            // tiles in a side column — instead of four cards stretched edge to edge.
+            item(key = "home_dashboard") {
+                Row(
+                    modifier = Modifier.wseiReadableWidth(HomeDashboardMaxWidth),
+                    horizontalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+                ) {
+                    val primaryWeight = if (windowLayout.widthClass == WseiWidthClass.EXPANDED) 0.58f else 0.5f
+                    TodayScheduleCard(
+                        uiState = uiState,
+                        todayIso = todayIso,
+                        onClick = onOpenSchedule,
+                        modifier = Modifier.weight(primaryWeight)
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f - primaryWeight),
+                        verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+                    ) {
+                        QuickShortcutsGrid(
+                            uiState = uiState,
+                            onOpenSchedule = onOpenSchedule,
+                            onOpenSubjects = onOpenSubjects,
+                            onOpenFinances = onOpenFinances,
+                            onOpenAnnouncements = onOpenAnnouncements
+                        )
+                        NextPaymentCard(uiState = uiState, onClick = onOpenFinances)
+                    }
+                }
+            }
         }
     }
 }
 
+/** Width cap of the two-column dashboard so it stays readable on very wide windows. */
+private val HomeDashboardMaxWidth = 1200.dp
+
+/** Class dates (`dateIso`) are in Warsaw time, so "today" is resolved in the same zone. */
+private fun localDateOf(epochMillis: Long): LocalDate =
+    Instant.ofEpochMilli(epochMillis).atZone(WarsawZone).toLocalDate()
+
+private val WarsawZone: ZoneId = ZoneId.of("Europe/Warsaw")
+
 @Composable
-private fun HomeIntro(uiState: ScheduleUiState) {
+private fun HomeIntro(
+    uiState: ScheduleUiState,
+    todayIso: String,
+    modifier: Modifier = Modifier
+) {
     val session = uiState.currentSession
-    val today = remember { LocalDate.now().format(DayHeaderFormatter).replaceFirstChar { it.uppercase() } }
+    val today = remember(todayIso) {
+        LocalDate.parse(todayIso).format(DayHeaderFormatter).replaceFirstChar { it.uppercase() }
+    }
     Column(
-        modifier = Modifier.padding(horizontal = WseiSpacing.xs),
+        modifier = modifier.padding(horizontal = WseiSpacing.xs),
         verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
     ) {
         Text(
@@ -139,9 +208,10 @@ private fun HomeIntro(uiState: ScheduleUiState) {
 @Composable
 private fun TodayScheduleCard(
     uiState: ScheduleUiState,
-    onClick: () -> Unit
+    todayIso: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val todayIso = remember { LocalDate.now().toString() }
     val dayEvents: List<ClassEvent> = remember(uiState.allEvents, todayIso) {
         val upcomingDate = uiState.allEvents
             .asSequence()
@@ -165,7 +235,7 @@ private fun TodayScheduleCard(
             .replaceFirstChar { it.uppercase() }
     }
 
-    val remaining = dayEvents.filter { it.timeSlot.endEpochMillis > now }
+    val remaining = remember(dayEvents, now) { dayEvents.filter { it.timeSlot.endEpochMillis > now } }
     val source = remaining.ifEmpty { dayEvents }
     val visible = source.take(3)
     val hiddenCount = source.size - visible.size
@@ -173,6 +243,7 @@ private fun TodayScheduleCard(
     val nextId = remaining.firstOrNull { it.timeSlot.startEpochMillis > now }?.id
 
     WseiCard(
+        modifier = modifier,
         onClick = onClick,
         shape = WseiHeroShape,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -320,12 +391,19 @@ private fun QuickShortcutsGrid(
 
     Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
         shortcuts.chunked(2).forEachIndexed { rowIndex, row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
+            // Intrinsic height keeps both tiles of a row equally tall when a larger font scale
+            // makes one of them grow past the default height (previously the text was clipped).
+            Row(
+                modifier = Modifier.height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+            ) {
                 row.forEachIndexed { columnIndex, shortcut ->
                     ShortcutTile(
                         shortcut = shortcut,
                         shape = shortcutTileShape(rowIndex, columnIndex),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
                 }
             }
@@ -359,7 +437,7 @@ private fun ShortcutTile(
         contentColor = shortcut.contentColor,
         interactionSource = interactionSource,
         modifier = modifier
-            .height(132.dp)
+            .heightIn(min = 132.dp)
             .wseiPressScale(interactionSource, pressedScale = 0.95f)
     ) {
         Column(
@@ -375,7 +453,9 @@ private fun ShortcutTile(
                 iconSize = 22.dp
             )
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = WseiSpacing.s),
                 verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
             ) {
                 Text(
