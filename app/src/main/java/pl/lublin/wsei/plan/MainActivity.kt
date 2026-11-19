@@ -16,6 +16,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import pl.lublin.wsei.plan.data.local.AttachmentSaver
@@ -31,6 +33,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Rysowanie pod paskami systemowymi i wycięciem aparatu od pierwszej klatki; style pasków
+        // dopasowuje potem motyw aplikacji (WseiExpressiveTheme).
         enableEdgeToEdge()
 
         setContent {
@@ -41,6 +45,10 @@ class MainActivity : ComponentActivity() {
             val permissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission()
             ) { granted -> notificationsGranted = granted }
+            // Zgodę można też nadać (lub cofnąć) w ustawieniach systemu — sprawdzamy ją po powrocie.
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+                notificationsGranted = hasNotificationPermission()
+            }
             LaunchedEffect(uiState.currentSession?.studId, uiState.isLiveNotificationEnabled) {
                 if (uiState.currentSession != null &&
                     uiState.isLiveNotificationEnabled &&

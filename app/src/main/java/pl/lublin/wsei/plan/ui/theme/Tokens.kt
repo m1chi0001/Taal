@@ -33,6 +33,9 @@ object WseiSpacing {
     /** Miejsce na pływający pasek nawigacji nad dolną krawędzią. */
     val bottomBarClearance: Dp = 120.dp
 
+    /** Maksymalna szerokość formularzy (logowanie, powitanie) na tabletach i w poziomie. */
+    val formMaxWidth: Dp = 480.dp
+
     val screenContent = PaddingValues(
         start = screen,
         end = screen,

@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <color name="wsei_window_background">#FF0E1513</color>
     <style name="Theme.Taal" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/wsei_window_background</item>
         <item name="android:colorBackground">@color/wsei_window_background</item>
-        <item name="android:windowSplashScreenBackground">@color/wsei_window_background</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/wsei_window_background</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
+        <!-- Okno startowe (przed Compose): ikony pasków czytelne na tle motywu,
+             treść także pod wycięciem aparatu — tak jak po enableEdgeToEdge(). -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
     </style>
 </resources>
