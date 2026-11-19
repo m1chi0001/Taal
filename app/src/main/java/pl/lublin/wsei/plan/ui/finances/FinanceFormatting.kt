@@ -38,7 +38,21 @@ internal fun FinancialObligation.isDueThisMonth(today: java.time.LocalDate = jav
 internal val FinancialObligation.outstandingAmountPln: Double
     get() = abs(currentStatePln).takeIf { it > 0.0 } ?: amountPln
 
-internal fun formatPln(amount: Double): String = String.format(Locale("pl", "PL"), "%,.2f zł", amount)
+private val PolishLocale: Locale = Locale.forLanguageTag("pl-PL")
+
+internal fun formatPln(amount: Double): String = String.format(PolishLocale, "%,.2f zł", amount)
+
+/** Polska odmiana słowa „pozycja”: 1 pozycja, 2–4 pozycje, 5+ (oraz 12–14) pozycji. */
+internal fun polishItemCountLabel(count: Int): String {
+    val lastDigit = count % 10
+    val lastTwoDigits = count % 100
+    val noun = when {
+        count == 1 -> "pozycja"
+        lastDigit in 2..4 && lastTwoDigits !in 12..14 -> "pozycje"
+        else -> "pozycji"
+    }
+    return "$count $noun"
+}
 
 /** Należności posortowane: najbliższe do zapłaty → najpóźniejsze → zapłacone (od najnowszych). */
 internal fun List<FinancialObligation>.sortedForDisplay(): List<FinancialObligation> {

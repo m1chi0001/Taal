@@ -5,6 +5,7 @@
 
 package pl.lublin.wsei.plan.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,7 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
@@ -28,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -72,23 +74,38 @@ fun WseiClassCard(
     val ongoing = state == ClassRowState.ONGOING
     val finished = state == ClassRowState.FINISHED
     val colors = MaterialTheme.colorScheme
-    val containerColor = when {
-        ongoing -> colors.primaryContainer
-        showContainer -> colors.surfaceContainer
-        else -> Color.Transparent
-    }
+    // Rows change state while the screen is open (the ticker updates every minute), so colors
+    // cross-fade on an effects spring instead of jumping.
+    val containerColor by animateColorAsState(
+        targetValue = when {
+            ongoing -> colors.primaryContainer
+            showContainer -> colors.surfaceContainer
+            else -> colors.surfaceContainer.copy(alpha = 0f)
+        },
+        animationSpec = WseiMotion.effects(),
+        label = "classCardContainer"
+    )
     val contentColor = if (ongoing) colors.onPrimaryContainer else colors.onSurface
     val mutedColor = if (ongoing) contentColor.copy(alpha = 0.75f) else colors.onSurfaceVariant
-    val timeTileColor = when (state) {
-        ClassRowState.ONGOING -> colors.primary
-        ClassRowState.NEXT -> colors.tertiaryContainer
-        else -> colors.surfaceContainerHighest
-    }
+    val timeTileColor by animateColorAsState(
+        targetValue = when (state) {
+            ClassRowState.ONGOING -> colors.primary
+            ClassRowState.NEXT -> colors.tertiaryContainer
+            else -> colors.surfaceContainerHighest
+        },
+        animationSpec = WseiMotion.effects(),
+        label = "classTimeTile"
+    )
     val timeTileContent = when (state) {
         ClassRowState.ONGOING -> colors.onPrimary
         ClassRowState.NEXT -> colors.onTertiaryContainer
         else -> colors.onSurface
     }
+    val rowAlpha by animateFloatAsState(
+        targetValue = if (finished) 0.55f else 1f,
+        animationSpec = WseiMotion.effects(),
+        label = "classRowAlpha"
+    )
 
     Surface(
         shape = if (showContainer || ongoing) WseiCardShape else RoundedCornerShape(20.dp),
@@ -115,7 +132,7 @@ fun WseiClassCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .alpha(if (finished) 0.55f else 1f),
+                    .alpha(rowAlpha),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = if (compact) Alignment.CenterVertically else Alignment.Top
             ) {
@@ -123,10 +140,11 @@ fun WseiClassCard(
                     shape = RoundedCornerShape(18.dp),
                     color = timeTileColor,
                     contentColor = timeTileContent,
-                    modifier = Modifier.width(64.dp)
+                    // Min width only: with large font scales the time must not be clipped.
+                    modifier = Modifier.widthIn(min = 64.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = WseiSpacing.xs, vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
@@ -205,7 +223,11 @@ fun WseiClassCard(
                         progress = { progress },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(14.dp),
+                            .height(14.dp)
+                            .semantics {
+                                contentDescription = "Postęp zajęć: ${event.elapsedMinutes(nowEpochMillis)} " +
+                                    "z ${event.totalDurationMinutes} minut"
+                            },
                         color = colors.primary,
                         trackColor = contentColor.copy(alpha = 0.18f)
                     )

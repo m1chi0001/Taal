@@ -32,31 +32,41 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
@@ -66,6 +76,7 @@ import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import pl.lublin.wsei.plan.ui.theme.rememberDecodedStudentPhoto
 import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
+import kotlin.math.roundToInt
 
 // =========================================================================================
 // Podstawowe klocki interfejsu. Każdy ekran składa się z tych samych elementów, więc
@@ -286,25 +297,52 @@ fun WseiSectionTitle(
     }
 }
 
-/** Wiersz „etykieta — wartość” w kartach szczegółów. */
+/**
+ * Wiersz „etykieta — wartość” w kartach szczegółów. Wartość zajmuje najwyżej 60% szerokości
+ * i zawija się do kolejnych linii, więc długie nazwy (kierunek, wydział) nie wypychają etykiety
+ * poza kartę.
+ */
 @Composable
 fun WseiInfoRow(label: String, value: String, modifier: Modifier = Modifier) {
-    Row(
+    val spacing = WseiSpacing.m
+    Layout(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold
-        )
+        content = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.End
+            )
+        }
+    ) { measurables, constraints ->
+        val gap = spacing.roundToPx()
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        if (!constraints.hasBoundedWidth) {
+            val labelPlaceable = measurables[0].measure(loose)
+            val valuePlaceable = measurables[1].measure(loose)
+            val width = labelPlaceable.width + gap + valuePlaceable.width
+            val height = maxOf(labelPlaceable.height, valuePlaceable.height)
+            return@Layout layout(width, height) {
+                labelPlaceable.placeRelative(0, (height - labelPlaceable.height) / 2)
+                valuePlaceable.placeRelative(width - valuePlaceable.width, (height - valuePlaceable.height) / 2)
+            }
+        }
+        val total = constraints.maxWidth
+        val valuePlaceable = measurables[1].measure(loose.copy(maxWidth = (total * 0.6f).roundToInt()))
+        val labelWidth = (total - valuePlaceable.width - gap).coerceAtLeast(0)
+        val labelPlaceable = measurables[0].measure(loose.copy(maxWidth = labelWidth))
+        val height = maxOf(labelPlaceable.height, valuePlaceable.height)
+            .coerceIn(constraints.minHeight, constraints.maxHeight)
+        layout(total, height) {
+            labelPlaceable.placeRelative(0, (height - labelPlaceable.height) / 2)
+            valuePlaceable.placeRelative(total - valuePlaceable.width, (height - valuePlaceable.height) / 2)
+        }
     }
 }
 
@@ -349,7 +387,11 @@ fun WseiListGroup(
         verticalArrangement = Arrangement.spacedBy(WseiSpacing.inGroup)
     ) {
         entries.forEachIndexed { index, entry ->
-            entry.content(wseiGroupItemShape(index, entries.size))
+            // Stabilna tożsamość elementu: stan wewnątrz wiersza nie „przeskakuje” na sąsiada,
+            // gdy lista się zmienia (np. po odświeżeniu grup studenckich).
+            key(entry.key) {
+                entry.content(wseiGroupItemShape(index, entries.size))
+            }
         }
     }
 }
@@ -498,12 +540,25 @@ fun WseiStat(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = WseiSpacing.m),
             verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
         ) {
-            Text(text = value, style = MaterialTheme.typography.headlineSmall, maxLines = 1)
+            val valueStyle = MaterialTheme.typography.headlineSmall
+            // Wąskie kolumny (3 statystyki obok siebie na małym telefonie) zmniejszają czcionkę
+            // zamiast ucinać wartość.
+            Text(
+                text = value,
+                style = valueStyle,
+                maxLines = 1,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = 14.sp,
+                    maxFontSize = valueStyle.fontSize,
+                    stepSize = 1.sp
+                )
+            )
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
                 color = contentColor.copy(alpha = 0.75f),
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -667,8 +722,8 @@ fun WseiExpandableCard(
             }
             AnimatedVisibility(
                 visible = expanded,
-                enter = expandVertically(animationSpec = WseiMotion.size()) + fadeIn(),
-                exit = shrinkVertically(animationSpec = WseiMotion.size()) + fadeOut()
+                enter = expandVertically(animationSpec = WseiMotion.size()) + fadeIn(WseiMotion.effects()),
+                exit = shrinkVertically(animationSpec = WseiMotion.size()) + fadeOut(WseiMotion.effects())
             ) {
                 Column(
                     modifier = Modifier.padding(start = WseiSpacing.xl, end = WseiSpacing.xl, bottom = WseiSpacing.xl),
@@ -676,6 +731,90 @@ fun WseiExpandableCard(
                     content = body
                 )
             }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------------------
+// Prywatność, przełączniki i ładowanie
+// -----------------------------------------------------------------------------------------
+
+/** Wspólna maska dla danych wrażliwych (kwoty, oceny, numer albumu, numer konta). */
+const val WseiSensitiveMask: String = "••••••"
+
+/** Zwraca [value] albo maskę, gdy włączono tryb „Ukryj dane”. */
+fun wseiMasked(value: String, hidden: Boolean): String = if (hidden) WseiSensitiveMask else value
+
+private fun wseiSymbol(name: String, pathData: String): ImageVector =
+    ImageVector.Builder(
+        name = name,
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).addPath(
+        pathData = addPathNodes(pathData),
+        fill = SolidColor(Color.Black)
+    ).build()
+
+private val SwitchCheckIcon: ImageVector by lazy {
+    wseiSymbol("SwitchCheck", "M9,16.17L4.83,12l-1.42,1.41L9,19L21,7l-1.41,-1.41z")
+}
+
+private val SwitchCloseIcon: ImageVector by lazy {
+    wseiSymbol(
+        "SwitchClose",
+        "M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12z"
+    )
+}
+
+/**
+ * Przełącznik M3 z ikoną w kciuku (✓ / ✕) — stan jest czytelny także bez rozróżniania kolorów.
+ * Przekaż `onCheckedChange = null`, gdy cały wiersz listy obsługuje przełączanie.
+ */
+@Composable
+fun WseiSwitch(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier,
+        enabled = enabled,
+        thumbContent = {
+            Icon(
+                imageVector = if (checked) SwitchCheckIcon else SwitchCloseIcon,
+                contentDescription = null,
+                modifier = Modifier.size(SwitchDefaults.IconSize)
+            )
+        }
+    )
+}
+
+/** Ekspresyjny wskaźnik ładowania (M3 LoadingIndicator) z opcjonalnym podpisem. */
+@Composable
+fun WseiLoadingState(
+    modifier: Modifier = Modifier,
+    message: String? = null
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = WseiSpacing.xxl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(WseiSpacing.m)
+    ) {
+        LoadingIndicator(color = MaterialTheme.colorScheme.primary)
+        if (message != null) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

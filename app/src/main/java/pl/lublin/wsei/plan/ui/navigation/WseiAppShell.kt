@@ -16,15 +16,23 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,12 +48,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.window.core.layout.WindowSizeClass
 import kotlinx.datetime.LocalDate
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
 import pl.lublin.wsei.plan.domain.model.FinancialObligation
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
+import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
+import pl.lublin.wsei.plan.ui.adaptive.WseiWidthClass
+import pl.lublin.wsei.plan.ui.adaptive.rememberWseiWindowLayout
 import pl.lublin.wsei.plan.ui.components.LocalWseiProfileShortcut
 import pl.lublin.wsei.plan.ui.components.WseiProfileShortcut
 import pl.lublin.wsei.plan.ui.components.WseiSplashScreen
@@ -60,10 +73,12 @@ import pl.lublin.wsei.plan.ui.schedule.ScheduleScreen
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
 import pl.lublin.wsei.plan.ui.subjects.SubjectsScreen
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
+import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 
 /**
- * Główne miejsca w aplikacji. Pierwszych pięć leży na pływającym pasku nawigacji,
- * Profil otwiera się z awatara w prawym górnym rogu.
+ * Główne miejsca w aplikacji. Pierwszych pięć leży na pływającym pasku nawigacji (telefon)
+ * lub na bocznej szynie (tablet, składany, poziom). Profil otwiera się z awatara —
+ * w prawym górnym rogu ekranu albo w nagłówku szyny.
  */
 enum class WseiDestination(
     val label: String,
@@ -137,12 +152,18 @@ fun WseiAppShell(
         currentDestination = WseiDestination.MORE
     }
 
+    fun selectTab(destination: WseiDestination) {
+        // Ponowne dotknięcie „Więcej” wraca do huba z podekranu.
+        if (destination == currentDestination && destination == WseiDestination.MORE) {
+            moreSubView = MoreSubView.HUB
+        }
+        currentDestination = destination
+    }
+
     // Wstecz: podekran „Więcej” → hub, Profil → poprzednia zakładka, każda inna zakładka → Start.
-    BackHandler(
-        enabled = isLoggedIn && (
-            currentDestination != WseiDestination.START || moreSubView != MoreSubView.HUB
-            )
-    ) {
+    // Na Starcie wstecz zamyka aplikację — nawet jeśli w tle zapamiętany jest podekran „Więcej”
+    // (wcześniej taki stan połykał jedno naciśnięcie bez widocznego efektu).
+    BackHandler(enabled = isLoggedIn && currentDestination != WseiDestination.START) {
         when {
             currentDestination == WseiDestination.MORE && moreSubView != MoreSubView.HUB ->
                 moreSubView = MoreSubView.HUB
@@ -164,6 +185,7 @@ fun WseiAppShell(
     LaunchedEffect(isLoggedIn) {
         if (!isLoggedIn) {
             currentDestination = WseiDestination.START
+            profileReturnDestination = WseiDestination.START
             moreSubView = MoreSubView.HUB
         }
     }
@@ -175,105 +197,158 @@ fun WseiAppShell(
         else -> AuthPhase.LOGIN
     }
 
-    AnimatedContent(
-        targetState = phase,
-        transitionSpec = {
-            (fadeIn(WseiMotion.effects()) + scaleIn(WseiMotion.spatial(), initialScale = 0.96f)) togetherWith
-                fadeOut(WseiMotion.effects())
-        },
-        modifier = modifier.fillMaxSize(),
-        label = "authPhaseTransition"
-    ) { currentPhase ->
-        when (currentPhase) {
-            AuthPhase.SPLASH -> WseiSplashScreen()
-            AuthPhase.WELCOME -> WseiWelcomeScreen(
-                onContinue = {
-                    prefs.edit().putBoolean(PREF_WELCOME_SEEN, true).apply()
-                    welcomeSeen = true
-                }
-            )
-            AuthPhase.LOGIN -> LoginScreen(
-                isAuthenticating = scheduleUiState.isAuthenticating,
-                errorMessage = scheduleUiState.authError,
-                savedLoginHint = scheduleUiState.savedEncryptedLoginHint,
-                onLoginSubmit = onLoginSubmit,
-                onQuickDebugLogin = onQuickDebugLogin
-            )
-            AuthPhase.APP -> {
-                val session = scheduleUiState.currentSession
-                val profileShortcut = remember(session?.personPictureBase64, session?.fullName) {
-                    WseiProfileShortcut(
-                        photoBase64 = session?.personPictureBase64,
-                        fullName = session?.fullName ?: "Student",
-                        onOpen = { openProfile() }
-                    )
-                }
-                CompositionLocalProvider(LocalWseiProfileShortcut provides profileShortcut) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        AnimatedContent(
-                            targetState = currentDestination,
-                            transitionSpec = {
-                                (fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
-                                    slideInVertically(WseiMotion.spatial()) { it / 24 }) togetherWith
-                                    fadeOut(spring(stiffness = Spring.StiffnessHigh))
-                            },
-                            modifier = Modifier.fillMaxSize(),
-                            label = "destinationTransition"
-                        ) { destination ->
-                            DestinationContent(
-                                destination = destination,
-                                uiState = scheduleUiState,
-                                moreSubView = moreSubView,
-                                onNavigate = { currentDestination = it },
-                                onOpenMore = { openMore(it) },
-                                onNavigateMoreSubView = { moreSubView = it },
-                                onCloseProfile = { currentDestination = profileReturnDestination },
-                                onLogout = onLogout,
-                                onChangePassword = onChangePassword,
-                                onSelectDay = onSelectDay,
-                                onSelectDate = onSelectDate,
-                                onToggleCalendarExpanded = onToggleCalendarExpanded,
-                                onPreviousCalendarPeriod = onPreviousCalendarPeriod,
-                                onNextCalendarPeriod = onNextCalendarPeriod,
-                                onSelectScheduleFilter = onSelectScheduleFilter,
-                                onToggleHeroExpanded = onToggleHeroExpanded,
-                                onSyncLiveNotification = onSyncLiveNotification,
-                                onRefresh = onRefreshSchedule,
-                                onInitiateOnlinePayment = onInitiateOnlinePayment,
-                                onMarkAnnouncementRead = onMarkAnnouncementRead,
-                                onDownloadAttachment = onDownloadAttachment,
-                                onSelectThemeMode = onSelectThemeMode,
-                                onToggleLiveNotification = onToggleLiveNotification,
-                                onToggleHideSensitiveData = onToggleHideSensitiveData
-                            )
-                        }
+    // Klasa okna liczona raz dla całej aplikacji (także logowania i powitania) — ekrany czytają
+    // ją z LocalWseiWindowLayout i aktualizują się po obrocie lub rozłożeniu urządzenia.
+    val windowLayout = rememberWseiWindowLayout()
+    // Na niskich oknach (telefon w poziomie) pięć zakładek i awatar nie mieszczą się razem
+    // na szynie — awatar zostaje wtedy w górnym pasku ekranu.
+    val isTallWindow = currentWindowAdaptiveInfo().windowSizeClass
+        .isHeightAtLeastBreakpoint(WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND)
 
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .navigationBarsPadding()
-                                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            StatusMessage(
-                                message = scheduleUiState.statusBannerMessage,
-                                onDismiss = onDismissStatusBanner
-                            )
-                            AnimatedVisibility(
-                                visible = currentDestination != WseiDestination.PROFILE,
-                                enter = slideInVertically(WseiMotion.spatial()) { it * 2 } + fadeIn(),
-                                exit = slideOutVertically(WseiMotion.size()) { it * 2 } + fadeOut()
-                            ) {
-                                WseiFloatingNavigationBar(
+    CompositionLocalProvider(LocalWseiWindowLayout provides windowLayout) {
+        AnimatedContent(
+            targetState = phase,
+            transitionSpec = {
+                (fadeIn(WseiMotion.effects()) + scaleIn(WseiMotion.spatial(), initialScale = 0.96f)) togetherWith
+                    fadeOut(WseiMotion.effects())
+            },
+            modifier = modifier.fillMaxSize(),
+            label = "authPhaseTransition"
+        ) { currentPhase ->
+            when (currentPhase) {
+                AuthPhase.SPLASH -> WseiSplashScreen()
+                AuthPhase.WELCOME -> WseiWelcomeScreen(
+                    onContinue = {
+                        prefs.edit().putBoolean(PREF_WELCOME_SEEN, true).apply()
+                        welcomeSeen = true
+                    }
+                )
+                AuthPhase.LOGIN -> LoginScreen(
+                    isAuthenticating = scheduleUiState.isAuthenticating,
+                    errorMessage = scheduleUiState.authError,
+                    savedLoginHint = scheduleUiState.savedEncryptedLoginHint,
+                    onLoginSubmit = onLoginSubmit,
+                    onQuickDebugLogin = onQuickDebugLogin
+                )
+                AuthPhase.APP -> {
+                    val useRail = windowLayout.useNavigationRail
+                    val railShowsProfile = useRail && isTallWindow
+                    val session = scheduleUiState.currentSession
+                    val profileShortcut = remember(
+                        session?.personPictureBase64,
+                        session?.fullName,
+                        railShowsProfile
+                    ) {
+                        WseiProfileShortcut(
+                            photoBase64 = session?.personPictureBase64,
+                            fullName = session?.fullName ?: "Student",
+                            onOpen = { openProfile() },
+                            showInTopBar = !railShowsProfile
+                        )
+                    }
+                    // Każda zakładka zachowuje własny stan (przewinięcie listy, zwinięty pasek
+                    // tytułu, rozwinięte karty) przy przełączaniu i po zmianie konfiguracji.
+                    val tabStateHolder = rememberSaveableStateHolder()
+
+                    CompositionLocalProvider(LocalWseiProfileShortcut provides profileShortcut) {
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            if (useRail) {
+                                WseiNavigationRail(
                                     currentDestination = currentDestination,
                                     unreadAnnouncementsCount = scheduleUiState.unreadAnnouncementsCount,
-                                    onSelectDestination = { destination ->
-                                        if (destination == currentDestination && destination == WseiDestination.MORE) {
-                                            moreSubView = MoreSubView.HUB
-                                        }
-                                        currentDestination = destination
-                                    }
+                                    expanded = windowLayout.widthClass == WseiWidthClass.EXPANDED,
+                                    profileShortcut = if (railShowsProfile) profileShortcut else null,
+                                    onSelectDestination = { selectTab(it) }
                                 )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    // Szyna obsługuje już wcięcia od strony początkowej (pasek
+                                    // systemowy, wycięcie aparatu w poziomie).
+                                    .then(
+                                        if (useRail) {
+                                            Modifier.consumeWindowInsets(
+                                                WindowInsets.safeDrawing.only(WindowInsetsSides.Start)
+                                            )
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
+                                    // W poziomie wycięcie aparatu i 3-przyciskowy pasek systemu
+                                    // leżą z boku — treść nie może pod nie wchodzić.
+                                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                            ) {
+                                AnimatedContent(
+                                    targetState = currentDestination,
+                                    transitionSpec = {
+                                        (fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+                                            slideInVertically(WseiMotion.spatial()) { it / 24 }) togetherWith
+                                            fadeOut(spring(stiffness = Spring.StiffnessHigh))
+                                    },
+                                    modifier = Modifier.fillMaxSize(),
+                                    label = "destinationTransition"
+                                ) { destination ->
+                                    tabStateHolder.SaveableStateProvider(destination.name) {
+                                        DestinationContent(
+                                            destination = destination,
+                                            uiState = scheduleUiState,
+                                            moreSubView = moreSubView,
+                                            onNavigate = { currentDestination = it },
+                                            onOpenMore = { openMore(it) },
+                                            onNavigateMoreSubView = { moreSubView = it },
+                                            onCloseProfile = { currentDestination = profileReturnDestination },
+                                            onLogout = onLogout,
+                                            onChangePassword = onChangePassword,
+                                            onSelectDay = onSelectDay,
+                                            onSelectDate = onSelectDate,
+                                            onToggleCalendarExpanded = onToggleCalendarExpanded,
+                                            onPreviousCalendarPeriod = onPreviousCalendarPeriod,
+                                            onNextCalendarPeriod = onNextCalendarPeriod,
+                                            onSelectScheduleFilter = onSelectScheduleFilter,
+                                            onToggleHeroExpanded = onToggleHeroExpanded,
+                                            onSyncLiveNotification = onSyncLiveNotification,
+                                            onRefresh = onRefreshSchedule,
+                                            onInitiateOnlinePayment = onInitiateOnlinePayment,
+                                            onMarkAnnouncementRead = onMarkAnnouncementRead,
+                                            onDownloadAttachment = onDownloadAttachment,
+                                            onSelectThemeMode = onSelectThemeMode,
+                                            onToggleLiveNotification = onToggleLiveNotification,
+                                            onToggleHideSensitiveData = onToggleHideSensitiveData
+                                        )
+                                    }
+                                }
+
+                                // Komunikat stanu i (na telefonie) pływający pasek — na dole,
+                                // wyśrodkowane nad treścią, ponad paskiem systemowym.
+                                Column(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .navigationBarsPadding()
+                                        .padding(
+                                            start = WseiSpacing.m,
+                                            end = WseiSpacing.m,
+                                            bottom = if (useRail) WseiSpacing.l else WseiSpacing.m
+                                        ),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    StatusMessage(
+                                        message = scheduleUiState.statusBannerMessage,
+                                        onDismiss = onDismissStatusBanner
+                                    )
+                                    AnimatedVisibility(
+                                        visible = !useRail && currentDestination != WseiDestination.PROFILE,
+                                        enter = slideInVertically(WseiMotion.spatial()) { it * 2 } + fadeIn(),
+                                        exit = slideOutVertically(WseiMotion.size()) { it * 2 } + fadeOut()
+                                    ) {
+                                        WseiFloatingNavigationBar(
+                                            currentDestination = currentDestination,
+                                            unreadAnnouncementsCount = scheduleUiState.unreadAnnouncementsCount,
+                                            onSelectDestination = { selectTab(it) }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

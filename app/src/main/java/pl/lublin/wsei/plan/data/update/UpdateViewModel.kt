@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,15 +54,26 @@ class UpdateViewModel @Inject constructor(
         _state.update { it.copy(phase = UpdatePhase.DOWNLOADING, progress = 0f, message = null) }
         job = viewModelScope.launch {
             try {
-                val apk = manager.downloadApk(release) { p -> _state.update { it.copy(progress = p) } }
+                val apk = manager.downloadApk(release) { p ->
+                    // Late progress callbacks after a cancel must not overwrite the reset state.
+                    _state.update { if (it.phase == UpdatePhase.DOWNLOADING) it.copy(progress = p) else it }
+                }
                 _state.update { it.copy(phase = UpdatePhase.READY, apk = apk, progress = 1f) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: UpdateException) {
                 _state.update { it.copy(phase = UpdatePhase.ERROR, message = e.message) }
+            } catch (e: Exception) {
+                // Anything unexpected (e.g. a storage or security error) must not crash the app.
+                _state.update {
+                    it.copy(phase = UpdatePhase.ERROR, message = "Nie udało się pobrać aktualizacji. Spróbuj ponownie.")
+                }
             }
         }
     }
 
     fun cancelDownload() {
+        if (_state.value.phase != UpdatePhase.DOWNLOADING) return
         job?.cancel()
         _state.update { it.copy(phase = UpdatePhase.AVAILABLE, progress = 0f) }
     }

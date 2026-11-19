@@ -1,10 +1,15 @@
 package pl.lublin.wsei.plan.ui.theme
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.BitmapFactory
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.util.Base64
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.CircleShape
@@ -23,7 +28,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -292,6 +297,20 @@ fun rememberDecodedStudentPhoto(base64Photo: String?): ImageBitmap? {
     }
 }
 
+/**
+ * Czy dla danego trybu motywu aplikacja jest ciemna. Wspólne źródło prawdy dla schematu
+ * kolorów i ikon pasków systemowych.
+ */
+@Composable
+fun isWseiDarkTheme(themeMode: AppThemeMode): Boolean {
+    val systemInDark = isSystemInDarkTheme()
+    return when (themeMode) {
+        AppThemeMode.LIGHT -> false
+        AppThemeMode.DARK -> true
+        AppThemeMode.SYSTEM, AppThemeMode.DYNAMIC -> systemInDark
+    }
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun WseiExpressiveTheme(
@@ -299,14 +318,10 @@ fun WseiExpressiveTheme(
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    val systemInDark = isSystemInDarkTheme()
-    val isDark = when (themeMode) {
-        AppThemeMode.LIGHT -> false
-        AppThemeMode.DARK -> true
-        AppThemeMode.SYSTEM, AppThemeMode.DYNAMIC -> systemInDark
-    }
-    val isDynamic = (themeMode == AppThemeMode.SYSTEM || themeMode == AppThemeMode.DYNAMIC) &&
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val isDark = isWseiDarkTheme(themeMode)
+    // „Zgodny z systemem” to paleta Taal w jasnej lub ciemnej wersji jak w systemie; kolory
+    // z tapety (Material You) tylko w trybie „Dynamiczny”. Wcześniej oba tryby dawały to samo.
+    val isDynamic = themeMode == AppThemeMode.DYNAMIC && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     val colorScheme = when {
         isDynamic && isDark -> dynamicDarkColorScheme(context)
@@ -321,18 +336,32 @@ fun WseiExpressiveTheme(
         shapes = WseiExpressiveShapes,
         motionScheme = MotionScheme.expressive(),
     ) {
-        // Tło okna zgodne z motywem — eliminuje biały błysk wokół widoku podczas przejść.
         val windowBackground = MaterialTheme.colorScheme.background
+        // Półprzezroczysta osłona 3-przyciskowego paska systemu (Android 8–9; od Androida 10
+        // system dobiera ją sam według jasności ikon).
+        val navigationScrim = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
         val view = LocalView.current
         if (!view.isInEditMode) {
-            SideEffect {
-                val window = (view.context as? Activity)?.window
+            DisposableEffect(view, isDark, windowBackground, navigationScrim) {
+                val activity = view.context.findActivity()
+                val window = activity?.window
+                // Tło okna zgodne z motywem — eliminuje błysk wokół widoku podczas przejść.
                 window?.setBackgroundDrawable(ColorDrawable(windowBackground.toArgb()))
-                if (window != null) {
+                if (activity is ComponentActivity) {
+                    // Ikony pasków systemowych według motywu aplikacji, a nie systemu: przy
+                    // wymuszonym trybie ciemnym na jasnym systemie (lub odwrotnie) zostają czytelne.
+                    val transparent = Color.Transparent.toArgb()
+                    val scrim = navigationScrim.toArgb()
+                    activity.enableEdgeToEdge(
+                        statusBarStyle = SystemBarStyle.auto(transparent, transparent) { isDark },
+                        navigationBarStyle = SystemBarStyle.auto(scrim, scrim) { isDark }
+                    )
+                } else if (window != null) {
                     val controller = WindowCompat.getInsetsController(window, view)
                     controller.isAppearanceLightStatusBars = !isDark
                     controller.isAppearanceLightNavigationBars = !isDark
                 }
+                onDispose { }
             }
         }
         Surface(
@@ -341,4 +370,10 @@ fun WseiExpressiveTheme(
             content = content
         )
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

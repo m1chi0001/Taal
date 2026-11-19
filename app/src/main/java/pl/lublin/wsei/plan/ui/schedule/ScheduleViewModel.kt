@@ -283,7 +283,18 @@ class ScheduleViewModel @Inject constructor(
 
     private fun observeSessionAndSchedule() {
         viewModelScope.launch {
+            // Identity of the student whose data is currently loaded. The repository re-emits the
+            // session when the access token is refreshed in the background; that must not be
+            // treated as a new login (it used to reset the selected day to today and blank all
+            // loaded modules mid-session).
+            var loadedStudentKey: String? = null
             scheduleRepository.currentSession.collect { session ->
+                val studentKey = session?.let { "${it.userId}:${it.studId}:${it.isDebugAccount}" }
+                if (session != null && studentKey == loadedStudentKey) {
+                    _uiState.update { it.copy(currentSession = session) }
+                    return@collect
+                }
+                loadedStudentKey = studentKey
                 if (session == null) {
                     _uiState.update {
                         ScheduleUiState(
