@@ -86,10 +86,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            "${{ runner.temp }}/Taal-${{ github.ref_name }}.apk" \
-            --title "Taal ${{ github.ref_name }}" \
-            --generate-notes
+          NOTES_FILE=".github/release-notes/${{ github.ref_name }}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            # First line holds the release title (without a leading "# "), the rest is the body.
+            TITLE=$(head -n 1 "$NOTES_FILE" | sed 's/^# *//')
+            tail -n +2 "$NOTES_FILE" > "${{ runner.temp }}/release-notes.md"
+            gh release create "${{ github.ref_name }}" \
+              "${{ runner.temp }}/Taal-${{ github.ref_name }}.apk" \
+              --title "$TITLE" \
+              --notes-file "${{ runner.temp }}/release-notes.md"
+          else
+            gh release create "${{ github.ref_name }}" \
+              "${{ runner.temp }}/Taal-${{ github.ref_name }}.apk" \
+              --title "Taal ${{ github.ref_name }}" \
+              --generate-notes
+          fi
 
       - name: Clean up temporary keystore
         if: always()
