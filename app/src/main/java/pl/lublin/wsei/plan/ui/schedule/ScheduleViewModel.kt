@@ -58,12 +58,24 @@ import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import javax.inject.Inject
+import pl.lublin.wsei.plan.data.local.AppPreferencesStore
+import pl.lublin.wsei.plan.domain.attachments.AttachmentOpenResult
+import pl.lublin.wsei.plan.domain.attachments.AttachmentOpener
+import pl.lublin.wsei.plan.domain.calendar.CalendarSyncManager
+import pl.lublin.wsei.plan.domain.calendar.CalendarSyncResult
+import pl.lublin.wsei.plan.domain.calendar.DeviceCalendar
+import pl.lublin.wsei.plan.domain.model.AppColorPalette
 
-enum class AppThemeMode(val polishLabel: String) {
-    SYSTEM("Zgodny z systemem"),
-    LIGHT("Jasny"),
-    DARK("Ciemny"),
-    DYNAMIC("Dynamiczny (Material You)")
+/** Kept for source compatibility — the enum now lives in the domain layer. */
+typealias AppThemeMode = pl.lublin.wsei.plan.domain.model.AppThemeMode
+
+/** Progress of the schedule → device calendar export. */
+sealed interface CalendarSyncStatus {
+    data object Idle : CalendarSyncStatus
+    data object LoadingCalendars : CalendarSyncStatus
+    data object Syncing : CalendarSyncStatus
+    data class Done(val result: CalendarSyncResult) : CalendarSyncStatus
+    data class Failed(val message: String?) : CalendarSyncStatus
 }
 
 @Immutable
@@ -93,9 +105,23 @@ data class ScheduleUiState(
     val statusBannerMessage: String? = null,
     val errorMessage: String? = null,
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
+    val colorPalette: AppColorPalette = AppColorPalette.TAAL,
     val isLiveNotificationEnabled: Boolean = true,
-    val isHideSensitiveData: Boolean = false
+    val isHideSensitiveData: Boolean = false,
+    /** Writable device calendars, loaded on demand for the sync picker. */
+    val deviceCalendars: List<DeviceCalendar> = emptyList(),
+    /** Calendar last used for sync (persisted), preselected in the picker. */
+    val syncCalendarId: Long? = null,
+    val calendarSyncStatus: CalendarSyncStatus = CalendarSyncStatus.Idle,
+    /** Id of the attachment being downloaded/opened right now, for a per-item loading indicator. */
+    val openingAttachmentId: Int? = null
 ) {
+    /**
+     * Lecturer name/details as they may be shown: masked when "Ukryj dane" is on.
+     * Use for every lecturer label (cards, sheets, subjects, notifications).
+     */
+    fun maskLecturer(value: String): String = if (isHideSensitiveData && value.isNotBlank()) "••••••" else value
+
     /**
      * Zwraca zamaskowaną wartość (••••••), jeśli użytkownik włączył tryb ochrony danych wrażliwych.
      */
@@ -218,7 +244,10 @@ private fun currentWarsawLocalDate(nowMillis: Long = System.currentTimeMillis())
 
 @HiltViewModel
 class ScheduleViewModel @Inject constructor(
-    private val scheduleRepository: ScheduleRepository
+    private val scheduleRepository: ScheduleRepository,
+    private val preferencesStore: AppPreferencesStore,
+    private val calendarSyncManager: CalendarSyncManager,
+    private val attachmentOpener: AttachmentOpener
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -229,6 +258,7 @@ class ScheduleViewModel @Inject constructor(
     val uiState: StateFlow<ScheduleUiState> = _uiState.asStateFlow()
 
     init {
+        observeSettings()
         startLiveMinuteTicker()
         observeSessionAndSchedule()
         restoreEncryptedSessionOnStart()
@@ -302,8 +332,10 @@ class ScheduleViewModel @Inject constructor(
                             nowEpochMillis = System.currentTimeMillis(),
                             isSessionRestoring = it.isSessionRestoring,
                             themeMode = it.themeMode,
+                            colorPalette = it.colorPalette,
                             isLiveNotificationEnabled = it.isLiveNotificationEnabled,
-                            isHideSensitiveData = it.isHideSensitiveData
+                            isHideSensitiveData = it.isHideSensitiveData,
+                            syncCalendarId = it.syncCalendarId
                         )
                     }
                 } else {
@@ -443,8 +475,10 @@ class ScheduleViewModel @Inject constructor(
                     // Domyślnie true — bez tego po wylogowaniu zostawał ekran startowy zamiast logowania.
                     isSessionRestoring = false,
                     themeMode = it.themeMode,
+                    colorPalette = it.colorPalette,
                     isLiveNotificationEnabled = it.isLiveNotificationEnabled,
-                    isHideSensitiveData = it.isHideSensitiveData
+                    isHideSensitiveData = it.isHideSensitiveData,
+                    syncCalendarId = it.syncCalendarId
                 )
             }
         }
@@ -651,16 +685,99 @@ class ScheduleViewModel @Inject constructor(
         _uiState.update { it.copy(statusBannerMessage = null) }
     }
 
-    fun selectThemeMode(mode: AppThemeMode) {
-        _uiState.update { it.copy(themeMode = mode) }
+    /** Persisted settings are the single source of truth; the UI state mirrors them. */
+    private fun observeSettings() {
+        viewModelScope.launch {
+            preferencesStore.settings.collect { settings ->
+                _uiState.update {
+                    it.copy(
+                        themeMode = settings.themeMode,
+                        colorPalette = settings.colorPalette,
+                        isLiveNotificationEnabled = settings.isLiveNotificationEnabled,
+                        isHideSensitiveData = settings.hideSensitiveData,
+                        syncCalendarId = settings.syncCalendarId
+                    )
+                }
+            }
+        }
     }
 
-    fun setLiveNotificationEnabled(enabled: Boolean) {
-        _uiState.update { it.copy(isLiveNotificationEnabled = enabled) }
+    fun selectThemeMode(mode: AppThemeMode) = preferencesStore.setThemeMode(mode)
+
+    fun selectColorPalette(palette: AppColorPalette) = preferencesStore.setColorPalette(palette)
+
+    fun setLiveNotificationEnabled(enabled: Boolean) = preferencesStore.setLiveNotificationEnabled(enabled)
+
+    fun setHideSensitiveData(hidden: Boolean) = preferencesStore.setHideSensitiveData(hidden)
+
+    /** Loads writable device calendars for the picker. Requires calendar permissions. */
+    fun loadDeviceCalendars() {
+        _uiState.update { it.copy(calendarSyncStatus = CalendarSyncStatus.LoadingCalendars) }
+        viewModelScope.launch {
+            calendarSyncManager.listWritableCalendars().fold(
+                onSuccess = { calendars ->
+                    _uiState.update {
+                        it.copy(deviceCalendars = calendars, calendarSyncStatus = CalendarSyncStatus.Idle)
+                    }
+                },
+                onFailure = { err ->
+                    _uiState.update { it.copy(calendarSyncStatus = CalendarSyncStatus.Failed(err.message)) }
+                }
+            )
+        }
     }
 
-    fun setHideSensitiveData(hidden: Boolean) {
-        _uiState.update { it.copy(isHideSensitiveData = hidden) }
+    /** Exports the whole loaded schedule into [calendarId] (idempotent upsert). */
+    fun syncScheduleToCalendar(calendarId: Long) {
+        preferencesStore.setSyncCalendarId(calendarId)
+        _uiState.update { it.copy(calendarSyncStatus = CalendarSyncStatus.Syncing) }
+        viewModelScope.launch {
+            val state = _uiState.value
+            val result = calendarSyncManager.syncEvents(
+                calendarId = calendarId,
+                events = state.allEvents,
+                hideLecturer = state.isHideSensitiveData
+            )
+            _uiState.update {
+                it.copy(
+                    calendarSyncStatus = result.fold(
+                        onSuccess = { r -> CalendarSyncStatus.Done(r) },
+                        onFailure = { err -> CalendarSyncStatus.Failed(err.message) }
+                    )
+                )
+            }
+        }
+    }
+
+    fun dismissCalendarSyncStatus() {
+        _uiState.update { it.copy(calendarSyncStatus = CalendarSyncStatus.Idle) }
+    }
+
+    /**
+     * Downloads [attachment] with the active session and opens it in the default viewer app.
+     * Progress is exposed via [ScheduleUiState.openingAttachmentId]; failures via the status banner.
+     */
+    fun openAttachment(attachment: AnnouncementAttachment) {
+        if (_uiState.value.openingAttachmentId != null) return
+        _uiState.update { it.copy(openingAttachmentId = attachment.id) }
+        viewModelScope.launch {
+            val result = attachmentOpener.downloadAndOpen(attachment)
+            _uiState.update {
+                it.copy(
+                    openingAttachmentId = null,
+                    statusBannerMessage = result.fold(
+                        onSuccess = { outcome ->
+                            when (outcome) {
+                                is AttachmentOpenResult.Opened -> null
+                                is AttachmentOpenResult.NoViewerApp ->
+                                    "Brak aplikacji, która otworzy plik „${outcome.fileName}”."
+                            }
+                        },
+                        onFailure = { err -> err.message ?: "Nie udało się pobrać załącznika." }
+                    ) ?: it.statusBannerMessage
+                )
+            }
+        }
     }
 
     private fun loadAllAcademicModules() {

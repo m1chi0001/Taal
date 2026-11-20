@@ -103,6 +103,7 @@ import pl.lublin.wsei.plan.ui.components.WseiSwitch
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.navigation.MoreSubView
 import pl.lublin.wsei.plan.ui.schedule.AppThemeMode
+import pl.lublin.wsei.plan.domain.model.AppColorPalette
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
@@ -154,7 +155,8 @@ fun MoreScreen(
     onSelectThemeMode: (AppThemeMode) -> Unit,
     onToggleLiveNotification: (Boolean) -> Unit,
     onToggleHideSensitiveData: (Boolean) -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onSelectColorPalette: (AppColorPalette) -> Unit = {}
 ) {
     val windowLayout = LocalWseiWindowLayout.current
     val subPage: @Composable (MoreSubView, embedded: Boolean) -> Unit = { subView, embedded ->
@@ -235,7 +237,7 @@ fun MoreScreen(
  * powrotu ani drugiego skrótu do profilu (ten jest już w panelu huba).
  */
 @Composable
-private fun MorePage(
+internal fun MorePage(
     title: String,
     onBack: (() -> Unit)?,
     embedded: Boolean,
@@ -554,148 +556,6 @@ private fun MoreDetailPlaceholder(unreadCount: Int, onOpenAnnouncements: () -> U
 // -----------------------------------------------------------------------------------------
 
 @Composable
-private fun AnnouncementsScreen(
-    uiState: ScheduleUiState,
-    onBack: (() -> Unit)?,
-    embedded: Boolean,
-    onMarkRead: (DeanAnnouncement) -> Unit,
-    onDownloadAttachment: (AnnouncementAttachment) -> Unit,
-    onRefresh: () -> Unit
-) {
-    MorePage(
-        title = "Ogłoszenia",
-        onBack = onBack,
-        embedded = embedded,
-        onRefresh = onRefresh,
-        isRefreshing = uiState.isRefreshing
-    ) { itemModifier ->
-        if (uiState.announcements.isEmpty()) {
-            item(key = "announcements_empty", contentType = "empty") {
-                WseiEmptyState(
-                    icon = WseiIcons.Campaign,
-                    title = "Brak ogłoszeń",
-                    message = "Nowe wiadomości z dziekanatu pojawią się tutaj.",
-                    modifier = itemModifier
-                )
-            }
-        }
-        items(
-            items = uiState.announcements,
-            key = { "announcement_${it.id}" },
-            contentType = { "announcement_card" }
-        ) { announcement ->
-            AnnouncementCard(
-                announcement = announcement,
-                onMarkRead = { onMarkRead(announcement) },
-                onDownloadAttachment = onDownloadAttachment,
-                modifier = itemModifier
-            )
-        }
-    }
-}
-
-@Composable
-private fun AnnouncementCard(
-    announcement: DeanAnnouncement,
-    onMarkRead: () -> Unit,
-    onDownloadAttachment: (AnnouncementAttachment) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var expanded by rememberSaveable(announcement.id) { mutableStateOf(false) }
-    val unread = !announcement.isRead
-    val colors = MaterialTheme.colorScheme
-
-    WseiCard(
-        onClick = {
-            expanded = !expanded
-            if (unread) onMarkRead()
-        },
-        containerColor = if (unread) colors.surfaceContainerHigh else colors.surfaceContainer,
-        modifier = modifier.animateContentSize(WseiMotion.size())
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
-        ) {
-            WseiIconBadge(
-                icon = if (announcement.hasAttachment) WseiIcons.AttachFile else WseiIcons.Campaign,
-                shape = if (unread) M3XCookieShape else CircleShape,
-                containerColor = if (unread) colors.primary else colors.surfaceContainerHighest,
-                contentColor = if (unread) colors.onPrimary else colors.onSurfaceVariant
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
-            ) {
-                Text(
-                    text = "${announcement.authorDepartment} • ${announcement.publishedAtIso}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (unread) colors.primary else colors.onSurfaceVariant,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = announcement.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold,
-                    maxLines = if (expanded) Int.MAX_VALUE else 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (unread) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(colors.primary)
-                )
-            }
-        }
-
-        Text(
-            text = if (expanded) announcement.fullText else announcement.bodySnippet,
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.onSurfaceVariant,
-            maxLines = if (expanded) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        AnimatedVisibility(
-            visible = expanded && announcement.attachments.isNotEmpty(),
-            enter = expandVertically(WseiMotion.size()) + fadeIn(WseiMotion.effects()),
-            exit = shrinkVertically(WseiMotion.size()) + fadeOut(WseiMotion.effects())
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
-                announcement.attachments.forEach { attachment ->
-                    FilledTonalButton(
-                        onClick = { onDownloadAttachment(attachment) },
-                        shape = CircleShape
-                    ) {
-                        Icon(
-                            imageVector = WseiIcons.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = attachment.fileName,
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = WseiSpacing.s)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// -----------------------------------------------------------------------------------------
-// Ustawienia
-// -----------------------------------------------------------------------------------------
-
-@Composable
 private fun SettingsScreen(
     uiState: ScheduleUiState,
     onBack: (() -> Unit)?,
@@ -787,14 +647,13 @@ private fun SettingsSwitchItem(
 }
 
 /** Kolejność wyboru motywu w grupie przycisków. */
-private val ThemeModeOrder = listOf(AppThemeMode.LIGHT, AppThemeMode.DARK, AppThemeMode.SYSTEM, AppThemeMode.DYNAMIC)
+private val ThemeModeOrder = listOf(AppThemeMode.LIGHT, AppThemeMode.DARK, AppThemeMode.SYSTEM)
 
 private val AppThemeMode.shortLabel: String
     get() = when (this) {
         AppThemeMode.LIGHT -> "Jasny"
         AppThemeMode.DARK -> "Ciemny"
         AppThemeMode.SYSTEM -> "System"
-        AppThemeMode.DYNAMIC -> "Dynamiczny"
     }
 
 private val AppThemeMode.description: String
@@ -802,7 +661,6 @@ private val AppThemeMode.description: String
         AppThemeMode.SYSTEM -> "Jasny lub ciemny, tak jak w ustawieniach telefonu"
         AppThemeMode.LIGHT -> "Zawsze jasne kolory"
         AppThemeMode.DARK -> "Zawsze ciemne kolory"
-        AppThemeMode.DYNAMIC -> "Kolory dopasowane do tapety (Material You)"
     }
 
 private fun themeSymbol(name: String, pathData: String): ImageVector =
@@ -854,7 +712,6 @@ private val AppThemeMode.icon: ImageVector
         AppThemeMode.LIGHT -> LightModeIcon
         AppThemeMode.DARK -> DarkModeIcon
         AppThemeMode.SYSTEM -> SystemModeIcon
-        AppThemeMode.DYNAMIC -> WseiIcons.Palette
     }
 
 /**
@@ -881,7 +738,7 @@ private fun ThemeModeSelector(
             // Explicit scope: the enclosing Column also offers a `Modifier.weight`.
             val groupScope = this
             ThemeModeOrder.forEachIndexed { index, mode ->
-                val enabled = mode != AppThemeMode.DYNAMIC || dynamicSupported
+                val enabled = true
                 customItem(
                     buttonGroupContent = {
                         val interactionSource = remember { MutableInteractionSource() }

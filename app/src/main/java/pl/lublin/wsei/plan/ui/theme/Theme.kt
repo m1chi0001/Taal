@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.domain.model.AppColorPalette
 import pl.lublin.wsei.plan.ui.schedule.AppThemeMode
 import kotlin.math.PI
 import kotlin.math.cos
@@ -307,7 +308,7 @@ fun isWseiDarkTheme(themeMode: AppThemeMode): Boolean {
     return when (themeMode) {
         AppThemeMode.LIGHT -> false
         AppThemeMode.DARK -> true
-        AppThemeMode.SYSTEM, AppThemeMode.DYNAMIC -> systemInDark
+        AppThemeMode.SYSTEM -> systemInDark
     }
 }
 
@@ -315,13 +316,14 @@ fun isWseiDarkTheme(themeMode: AppThemeMode): Boolean {
 @Composable
 fun WseiExpressiveTheme(
     themeMode: AppThemeMode = AppThemeMode.SYSTEM,
+    colorPalette: AppColorPalette = AppColorPalette.TAAL,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
     val isDark = isWseiDarkTheme(themeMode)
     // „Zgodny z systemem” to paleta Taal w jasnej lub ciemnej wersji jak w systemie; kolory
     // z tapety (Material You) tylko w trybie „Dynamiczny”. Wcześniej oba tryby dawały to samo.
-    val isDynamic = themeMode == AppThemeMode.DYNAMIC && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val isDynamic = colorPalette == AppColorPalette.DYNAMIC && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     val colorScheme = when {
         isDynamic && isDark -> dynamicDarkColorScheme(context)

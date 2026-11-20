@@ -55,6 +55,7 @@ import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
 import pl.lublin.wsei.plan.domain.model.FinancialObligation
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
+import pl.lublin.wsei.plan.domain.model.AppColorPalette
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiWidthClass
 import pl.lublin.wsei.plan.ui.adaptive.rememberWseiWindowLayout
@@ -131,6 +132,10 @@ fun WseiAppShell(
     onDownloadAttachment: (AnnouncementAttachment) -> Unit,
     onDismissStatusBanner: () -> Unit,
     onSelectThemeMode: (AppThemeMode) -> Unit,
+    onSelectColorPalette: (AppColorPalette) -> Unit,
+    onLoadDeviceCalendars: () -> Unit,
+    onSyncToCalendar: (Long) -> Unit,
+    onDismissCalendarSyncStatus: () -> Unit,
     onToggleLiveNotification: (Boolean) -> Unit,
     onToggleHideSensitiveData: (Boolean) -> Unit,
     modifier: Modifier = Modifier
@@ -314,6 +319,10 @@ fun WseiAppShell(
                                             onMarkAnnouncementRead = onMarkAnnouncementRead,
                                             onDownloadAttachment = onDownloadAttachment,
                                             onSelectThemeMode = onSelectThemeMode,
+                                            onSelectColorPalette = onSelectColorPalette,
+                                            onLoadDeviceCalendars = onLoadDeviceCalendars,
+                                            onSyncToCalendar = onSyncToCalendar,
+                                            onDismissCalendarSyncStatus = onDismissCalendarSyncStatus,
                                             onToggleLiveNotification = onToggleLiveNotification,
                                             onToggleHideSensitiveData = onToggleHideSensitiveData
                                         )
@@ -382,6 +391,10 @@ private fun DestinationContent(
     onMarkAnnouncementRead: (DeanAnnouncement) -> Unit,
     onDownloadAttachment: (AnnouncementAttachment) -> Unit,
     onSelectThemeMode: (AppThemeMode) -> Unit,
+    onSelectColorPalette: (AppColorPalette) -> Unit,
+    onLoadDeviceCalendars: () -> Unit,
+    onSyncToCalendar: (Long) -> Unit,
+    onDismissCalendarSyncStatus: () -> Unit,
     onToggleLiveNotification: (Boolean) -> Unit,
     onToggleHideSensitiveData: (Boolean) -> Unit
 ) {
@@ -404,7 +417,10 @@ private fun DestinationContent(
             onSelectScheduleFilter = onSelectScheduleFilter,
             onToggleHeroExpanded = onToggleHeroExpanded,
             onSyncLiveNotification = onSyncLiveNotification,
-            onRefreshSchedule = onRefresh
+            onRefreshSchedule = onRefresh,
+            onLoadDeviceCalendars = onLoadDeviceCalendars,
+            onSyncToCalendar = onSyncToCalendar,
+            onDismissCalendarSyncStatus = onDismissCalendarSyncStatus
         )
         WseiDestination.SUBJECTS -> SubjectsScreen(
             uiState = uiState,
@@ -422,6 +438,7 @@ private fun DestinationContent(
             onMarkAnnouncementRead = onMarkAnnouncementRead,
             onDownloadAttachment = onDownloadAttachment,
             onSelectThemeMode = onSelectThemeMode,
+            onSelectColorPalette = onSelectColorPalette,
             onToggleLiveNotification = onToggleLiveNotification,
             onToggleHideSensitiveData = onToggleHideSensitiveData,
             onRefresh = onRefresh

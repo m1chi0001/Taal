@@ -119,6 +119,9 @@ fun ScheduleScreen(
     onSyncLiveNotification: (ClassEvent) -> Unit,
     onRefreshSchedule: () -> Unit,
     modifier: Modifier = Modifier,
+    onLoadDeviceCalendars: () -> Unit = {},
+    onSyncToCalendar: (calendarId: Long) -> Unit = {},
+    onDismissCalendarSyncStatus: () -> Unit = {},
     @Suppress("UNUSED_PARAMETER") onLogout: () -> Unit = {}
 ) {
     val windowLayout = LocalWseiWindowLayout.current
