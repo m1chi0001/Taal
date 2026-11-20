@@ -161,8 +161,8 @@ private fun NavigationPillItem(
             }
             AnimatedVisibility(
                 visible = selected,
-                enter = expandHorizontally(animationSpec = WseiMotion.spatial()) + fadeIn(WseiMotion.effects()),
-                exit = shrinkHorizontally(animationSpec = WseiMotion.spatial()) + fadeOut(WseiMotion.effects())
+                enter = expandHorizontally(animationSpec = WseiMotion.fastSpatial()) + fadeIn(WseiMotion.effects()),
+                exit = shrinkHorizontally(animationSpec = WseiMotion.size()) + fadeOut(WseiMotion.fastEffects())
             ) {
                 Text(
                     text = destination.shortLabel,

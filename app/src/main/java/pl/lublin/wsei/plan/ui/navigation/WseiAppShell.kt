@@ -4,8 +4,6 @@ import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -215,7 +213,7 @@ fun WseiAppShell(
             targetState = phase,
             transitionSpec = {
                 (fadeIn(WseiMotion.effects()) + scaleIn(WseiMotion.spatial(), initialScale = 0.96f)) togetherWith
-                    fadeOut(WseiMotion.effects())
+                    fadeOut(WseiMotion.fastEffects())
             },
             modifier = modifier.fillMaxSize(),
             label = "authPhaseTransition"
@@ -288,9 +286,11 @@ fun WseiAppShell(
                                 AnimatedContent(
                                     targetState = currentDestination,
                                     transitionSpec = {
-                                        (fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
-                                            slideInVertically(WseiMotion.spatial()) { it / 24 }) togetherWith
-                                            fadeOut(spring(stiffness = Spring.StiffnessHigh))
+                                        // Quick cross-fade with a short spring lift; the old tab
+                                        // leaves almost instantly so the two never overlap visibly.
+                                        (fadeIn(WseiMotion.effects()) +
+                                            slideInVertically(WseiMotion.fastSpatial()) { it / 32 }) togetherWith
+                                            fadeOut(WseiMotion.fastEffects())
                                     },
                                     modifier = Modifier.fillMaxSize(),
                                     label = "destinationTransition"
@@ -348,8 +348,8 @@ fun WseiAppShell(
                                     )
                                     AnimatedVisibility(
                                         visible = !useRail && currentDestination != WseiDestination.PROFILE,
-                                        enter = slideInVertically(WseiMotion.spatial()) { it * 2 } + fadeIn(),
-                                        exit = slideOutVertically(WseiMotion.size()) { it * 2 } + fadeOut()
+                                        enter = slideInVertically(WseiMotion.spatial()) { it * 2 } + fadeIn(WseiMotion.effects()),
+                                        exit = slideOutVertically(WseiMotion.size()) { it * 2 } + fadeOut(WseiMotion.fastEffects())
                                     ) {
                                         WseiFloatingNavigationBar(
                                             currentDestination = currentDestination,
@@ -467,8 +467,8 @@ private fun StatusMessage(message: String?, onDismiss: () -> Unit) {
 
     AnimatedVisibility(
         visible = message != null,
-        enter = slideInVertically(WseiMotion.spatial()) { it } + fadeIn(),
-        exit = slideOutVertically(WseiMotion.size()) { it } + fadeOut()
+        enter = slideInVertically(WseiMotion.spatial()) { it } + fadeIn(WseiMotion.effects()),
+        exit = slideOutVertically(WseiMotion.size()) { it } + fadeOut(WseiMotion.fastEffects())
     ) {
         Surface(
             shape = MaterialTheme.shapes.large,

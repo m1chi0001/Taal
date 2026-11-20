@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="pl">
+    <!-- Plan zajęć: karta „Trwa teraz” -->
+    <string name="schedule_hero_status_live">Trwa teraz</string>
+    <string name="schedule_hero_time_range">%1$s – %2$s</string>
+    <string name="schedule_hero_remaining_value">%1$d min</string>
+    <string name="schedule_hero_remaining_label">do końca zajęć</string>
+    <string name="schedule_hero_elapsed">%1$d z %2$d min</string>
+    <string name="schedule_hero_ends_at">koniec %1$s</string>
+    <string name="schedule_hero_state">Trwają zajęcia: %1$s, pozostało %2$d min</string>
+    <string name="schedule_hero_progress_cd">Postęp zajęć: %1$d z %2$d minut</string>
+    <string name="schedule_hero_expand_cd">Pokaż plan dnia i następne zajęcia</string>
+    <string name="schedule_hero_collapse_cd">Zwiń szczegóły zajęć</string>
+    <string name="schedule_hero_next_title">Następnie o %1$s</string>
+    <string name="schedule_hero_next_break">%1$d min przerwy</string>
+    <string name="schedule_hero_next_no_break">Bez przerwy</string>
+
+    <!-- Synchronizacja z kalendarzem urządzenia -->
+    <string name="calendar_sync_action">Synchronizuj z kalendarzem</string>
+    <string name="calendar_sync_picker_title">Wybierz kalendarz</string>
+    <string name="calendar_sync_picker_message">Zajęcia z planu trafią do wybranego kalendarza. Kolejne synchronizacje aktualizują je bez tworzenia duplikatów.</string>
+    <string name="calendar_sync_hidden_lecturer_note">Opcja „Ukryj dane” jest włączona — prowadzący nie zostaną zapisani w kalendarzu.</string>
+    <string name="calendar_sync_loading">Wczytywanie kalendarzy…</string>
+    <string name="calendar_sync_empty">Nie znaleziono kalendarza, w którym można zapisywać wydarzenia. Dodaj konto z kalendarzem (np. Google) w ustawieniach telefonu i spróbuj ponownie.</string>
+    <string name="calendar_sync_primary">Główny</string>
+    <string name="calendar_sync_confirm">Synchronizuj</string>
+    <string name="calendar_sync_cancel">Anuluj</string>
+    <string name="calendar_sync_close">Zamknij</string>
+    <string name="calendar_sync_in_progress">Synchronizowanie planu z kalendarzem…</string>
+    <string name="calendar_sync_done_title">Plan zsynchronizowany</string>
+    <string name="calendar_sync_done_message">Dodano: %1$d, zaktualizowano: %2$d, usunięto: %3$d.</string>
+    <string name="calendar_sync_done_no_changes">Kalendarz był już aktualny — nic nie trzeba było zmieniać.</string>
+    <string name="calendar_sync_failed_title">Nie udało się zsynchronizować</string>
+    <string name="calendar_sync_failed_generic">Spróbuj ponownie za chwilę.</string>
+    <string name="calendar_permission_title">Dostęp do kalendarza</string>
+    <string name="calendar_permission_denied">Taal potrzebuje dostępu do kalendarza, aby zapisać w nim Twoje zajęcia. Bez tej zgody synchronizacja nie jest możliwa.</string>
+    <string name="calendar_permission_permanently_denied">Dostęp do kalendarza jest zablokowany. Włącz uprawnienie „Kalendarz” w ustawieniach aplikacji, aby synchronizować plan.</string>
+    <string name="calendar_permission_retry">Spróbuj ponownie</string>
+    <string name="calendar_permission_open_settings">Otwórz ustawienia</string>
+
+    <!-- Ogłoszenia: załączniki -->
+    <string name="announcements_attachments_title">Załączniki</string>
+    <string name="announcements_attachment_open_cd">Otwórz załącznik %1$s</string>
+    <string name="announcements_attachment_opening">Pobieranie i otwieranie załącznika…</string>
+    <plurals name="announcements_attachments_count">
+        <item quantity="one">%1$d załącznik</item>
+        <item quantity="few">%1$d załączniki</item>
+        <item quantity="many">%1$d załączników</item>
+        <item quantity="other">%1$d załącznika</item>
+    </plurals>
+</resources>

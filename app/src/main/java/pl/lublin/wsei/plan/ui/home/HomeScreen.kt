@@ -276,7 +276,8 @@ private fun TodayScheduleCard(
                     nowEpochMillis = now,
                     state = classRowStateOf(event, now, activeId, nextId),
                     compact = true,
-                    showContainer = false
+                    showContainer = false,
+                    lecturerLabel = uiState.maskLecturer(event.lecturer.displayNameOrPlaceholder)
                 )
             }
             if (hiddenCount > 0) {

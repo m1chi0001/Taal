@@ -61,6 +61,9 @@ fun classRowStateOf(
  * Karta zajęć (Start i Plan zajęć).
  * Po lewej „kafelek czasu”, po prawej przedmiot, forma, sala i prowadzący.
  * Trwające zajęcia dostają kolor główny i falujący pasek postępu.
+ *
+ * @param lecturerLabel lecturer line as it may be shown — pass `uiState.maskLecturer(...)` so
+ *   "Ukryj dane" hides the name; defaults to the unmasked name for previews and legacy callers.
  */
 @Composable
 fun WseiClassCard(
@@ -69,7 +72,8 @@ fun WseiClassCard(
     state: ClassRowState,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
-    showContainer: Boolean = true
+    showContainer: Boolean = true,
+    lecturerLabel: String = event.lecturer.displayNameOrPlaceholder
 ) {
     val ongoing = state == ClassRowState.ONGOING
     val finished = state == ClassRowState.FINISHED
@@ -207,7 +211,7 @@ fun WseiClassCard(
                         event.room.addressLabel?.let { address ->
                             ClassDetailLine(WseiIcons.Home, address, mutedColor)
                         }
-                        ClassDetailLine(WseiIcons.Person, event.lecturer.displayNameOrPlaceholder, mutedColor)
+                        ClassDetailLine(WseiIcons.Person, lecturerLabel, mutedColor)
                     }
                 }
             }

@@ -1,30 +1,49 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class
+)
 
 package pl.lublin.wsei.plan.ui.schedule
 
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,29 +54,50 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -69,7 +109,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import kotlinx.datetime.LocalDate
+import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.domain.calendar.DeviceCalendar
 import pl.lublin.wsei.plan.domain.model.AcademicDay
 import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DeliveryMode
@@ -82,7 +127,6 @@ import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiClassCard
 import pl.lublin.wsei.plan.ui.components.WseiEmptyState
-import pl.lublin.wsei.plan.ui.components.WseiIconBadge
 import pl.lublin.wsei.plan.ui.components.WseiPill
 import pl.lublin.wsei.plan.ui.components.WseiScreenFrame
 import pl.lublin.wsei.plan.ui.components.classRowStateOf
@@ -91,11 +135,14 @@ import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.ActiveHeroCardAsymmetricShape
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
+import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
+import java.util.Locale
 
 /**
  * Plan zajęć (Material 3 Expressive):
@@ -131,6 +178,72 @@ fun ScheduleScreen(
     // so a source that lists the same block twice would crash LazyColumn on a duplicate key.
     val timelineRows = remember(dayEvents) { dayEvents.withUniqueKeys() }
 
+    // ---- Calendar sync: permission → calendar picker → progress → result ----
+    val context = LocalContext.current
+    var isCalendarPickerVisible by rememberSaveable { mutableStateOf(false) }
+    var calendarPermissionIssue by rememberSaveable { mutableStateOf<CalendarPermissionIssue?>(null) }
+    val openCalendarPicker = {
+        calendarPermissionIssue = null
+        onLoadDeviceCalendars()
+        isCalendarPickerVisible = true
+    }
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val denied = CalendarPermissions.filterNot { grants[it] == true || context.hasPermission(it) }
+        if (denied.isEmpty()) {
+            openCalendarPicker()
+        } else {
+            // Right after a denial the system only offers the rationale while it may still ask;
+            // no rationale means "don't ask again" — the user has to go to the app settings.
+            val activity = context.findActivity()
+            val canAskAgain = activity != null &&
+                denied.any { ActivityCompat.shouldShowRequestPermissionRationale(activity, it) }
+            calendarPermissionIssue = if (canAskAgain) {
+                CalendarPermissionIssue.DENIED
+            } else {
+                CalendarPermissionIssue.PERMANENTLY_DENIED
+            }
+        }
+    }
+    val requestCalendarSync: () -> Unit = {
+        if (CalendarPermissions.all { context.hasPermission(it) }) {
+            openCalendarPicker()
+        } else {
+            calendarPermissionLauncher.launch(CalendarPermissions)
+        }
+    }
+    val syncStatus = uiState.calendarSyncStatus
+    val isCalendarSyncBusy = syncStatus is CalendarSyncStatus.LoadingCalendars ||
+        syncStatus is CalendarSyncStatus.Syncing
+
+    CalendarSyncDialogs(
+        status = syncStatus,
+        calendars = uiState.deviceCalendars,
+        lastSyncCalendarId = uiState.syncCalendarId,
+        isLecturerHidden = uiState.isHideSensitiveData,
+        isPickerVisible = isCalendarPickerVisible,
+        permissionIssue = calendarPermissionIssue,
+        onDismissPicker = { isCalendarPickerVisible = false },
+        onConfirmCalendar = { calendarId ->
+            isCalendarPickerVisible = false
+            onSyncToCalendar(calendarId)
+        },
+        onDismissStatus = {
+            isCalendarPickerVisible = false
+            onDismissCalendarSyncStatus()
+        },
+        onDismissPermissionIssue = { calendarPermissionIssue = null },
+        onRetryPermission = {
+            calendarPermissionIssue = null
+            calendarPermissionLauncher.launch(CalendarPermissions)
+        },
+        onOpenAppSettings = {
+            calendarPermissionIssue = null
+            context.openAppSettings()
+        }
+    )
+
     WseiScreenFrame(
         title = "Plan zajęć",
         modifier = modifier.fillMaxSize(),
@@ -149,6 +262,8 @@ fun ScheduleScreen(
                 onSelectScheduleFilter = onSelectScheduleFilter,
                 onToggleHeroExpanded = onToggleHeroExpanded,
                 onSyncLiveNotification = onSyncLiveNotification,
+                isCalendarSyncBusy = isCalendarSyncBusy,
+                onRequestCalendarSync = requestCalendarSync,
                 modifier = controlsModifier
             )
         }
@@ -235,16 +350,26 @@ private fun ScheduleControls(
     onSelectScheduleFilter: (ScheduleFilterType) -> Unit,
     onToggleHeroExpanded: () -> Unit,
     onSyncLiveNotification: (ClassEvent) -> Unit,
+    isCalendarSyncBusy: Boolean,
+    onRequestCalendarSync: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
     ) {
-        ScheduleFilterButtonGroup(
-            selectedFilter = uiState.scheduleFilterType,
-            onSelectFilter = onSelectScheduleFilter
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+        ) {
+            ScheduleFilterButtonGroup(
+                selectedFilter = uiState.scheduleFilterType,
+                onSelectFilter = onSelectScheduleFilter,
+                modifier = Modifier.weight(1f)
+            )
+            CalendarSyncButton(isBusy = isCalendarSyncBusy, onClick = onRequestCalendarSync)
+        }
         ExpandableCalendarCard(
             daysOfCurrentWeek = uiState.days,
             selectedDate = uiState.selectedDate,
@@ -260,16 +385,71 @@ private fun ScheduleControls(
             onSelectDate = onSelectDate
         )
         val activeClass = uiState.activeClass
-        if (activeClass != null) {
-            ActiveClassHeroCard(
-                activeClass = activeClass,
-                dayEvents = uiState.activeDayEvents,
-                nextClassPreview = uiState.nextClassPreview,
-                nowEpochMillis = uiState.nowEpochMillis,
-                isExpanded = uiState.isHeroExpanded,
-                onToggleExpand = onToggleHeroExpanded,
-                onTriggerLiveNotification = { onSyncLiveNotification(activeClass) }
-            )
+        // The last live class stays rendered while the card animates out when the class ends
+        // (a plain holder, not state — writing it during composition causes no extra pass).
+        val lastActiveHolder = remember { arrayOfNulls<ClassEvent>(1) }
+        if (activeClass != null) lastActiveHolder[0] = activeClass
+        AnimatedVisibility(
+            visible = activeClass != null,
+            enter = expandVertically(WseiMotion.size()) + fadeIn(WseiMotion.effects()) +
+                scaleIn(WseiMotion.spatial(), initialScale = 0.94f),
+            exit = shrinkVertically(WseiMotion.size()) + fadeOut(WseiMotion.fastEffects())
+        ) {
+            val shown = activeClass ?: lastActiveHolder[0]
+            if (shown != null) {
+                ActiveClassHeroCard(
+                    activeClass = shown,
+                    dayEvents = uiState.activeDayEvents,
+                    nextClassPreview = uiState.nextClassPreview,
+                    nowEpochMillis = uiState.nowEpochMillis,
+                    isExpanded = uiState.isHeroExpanded,
+                    onToggleExpand = onToggleHeroExpanded,
+                    lecturerLabel = uiState.maskLecturer(shown.lecturer.displayNameOrPlaceholder),
+                    onTriggerLiveNotification = { onSyncLiveNotification(shown) }
+                )
+            }
+        }
+    }
+}
+
+/** Tonal icon action for the device-calendar export, with a long-press tooltip. */
+@Composable
+private fun CalendarSyncButton(isBusy: Boolean, onClick: () -> Unit) {
+    val label = stringResource(R.string.calendar_sync_action)
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
+        tooltip = { PlainTooltip { Text(label) } },
+        state = rememberTooltipState()
+    ) {
+        FilledTonalIconButton(
+            onClick = onClick,
+            enabled = !isBusy,
+            shape = M3XSquircleShape,
+            modifier = Modifier
+                .size(52.dp)
+                .semantics { contentDescription = label }
+        ) {
+            AnimatedContent(
+                targetState = isBusy,
+                transitionSpec = {
+                    (fadeIn(WseiMotion.effects()) + scaleIn(WseiMotion.fastSpatial(), initialScale = 0.6f)) togetherWith
+                        fadeOut(WseiMotion.fastEffects())
+                },
+                label = "calendarSyncBusy"
+            ) { busy ->
+                if (busy) {
+                    LoadingIndicator(
+                        modifier = Modifier.size(32.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Icon(
+                        imageVector = WseiIcons.CalendarMonth,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -307,6 +487,7 @@ private fun LazyListScope.dayTimeline(
                 event = row.event,
                 nowEpochMillis = now,
                 state = classRowStateOf(row.event, now, activeId, nextId),
+                lecturerLabel = uiState.maskLecturer(row.event.lecturer.displayNameOrPlaceholder),
                 modifier = itemModifier.animateItem(
                     fadeInSpec = WseiMotion.effects(),
                     placementSpec = WseiMotion.spatial(),
@@ -404,8 +585,10 @@ private fun ExpandableCalendarCard(
         else -> ""
     }
 
+    // No animateContentSize here: the week/month AnimatedVisibility pair already animates the
+    // height, and a second size animation on the card made the swap stutter.
     WseiCard(
-        modifier = modifier.animateContentSize(animationSpec = WseiMotion.size()),
+        modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         contentPadding = PaddingValues(WseiSpacing.l),
         verticalSpacing = WseiSpacing.m
@@ -474,8 +657,8 @@ private fun ExpandableCalendarCard(
 
         AnimatedVisibility(
             visible = !isExpanded,
-            enter = expandVertically(WseiMotion.size()) + fadeIn(),
-            exit = shrinkVertically(WseiMotion.size()) + fadeOut()
+            enter = expandVertically(WseiMotion.size()) + fadeIn(WseiMotion.effects()),
+            exit = shrinkVertically(WseiMotion.size()) + fadeOut(WseiMotion.fastEffects())
         ) {
             WeekDaysStrip(
                 days = daysOfCurrentWeek,
@@ -486,8 +669,8 @@ private fun ExpandableCalendarCard(
         }
         AnimatedVisibility(
             visible = isExpanded,
-            enter = expandVertically(WseiMotion.size()) + fadeIn(),
-            exit = shrinkVertically(WseiMotion.size()) + fadeOut()
+            enter = expandVertically(WseiMotion.size()) + fadeIn(WseiMotion.effects()),
+            exit = shrinkVertically(WseiMotion.size()) + fadeOut(WseiMotion.fastEffects())
         ) {
             MonthGrid(
                 displayedYear = displayedYear,
@@ -606,8 +789,12 @@ private fun MonthGrid(
             while (size % 7 != 0) add(null)
         }.chunked(7)
     }
-    val todayPrefix = "%04d-%02d-".format(displayedYear, displayedMonth)
-    val todayDay = if (todayIso.startsWith(todayPrefix)) todayIso.takeLast(2).toIntOrNull() else null
+    // Locale.ROOT: with a non-Latin-digit default locale the prefix never matched the ISO date,
+    // so "today" lost its outline in the month grid.
+    val todayDay = remember(displayedYear, displayedMonth, todayIso) {
+        val todayPrefix = String.format(Locale.ROOT, "%04d-%02d-", displayedYear, displayedMonth)
+        if (todayIso.startsWith(todayPrefix)) todayIso.takeLast(2).toIntOrNull() else null
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -689,6 +876,17 @@ private fun polishMonthName(monthNumber: Int): String = when (monthNumber) {
 // Trwające zajęcia
 // -----------------------------------------------------------------------------------------
 
+/** Hero content switches to two columns once the card is at least this wide (medium+ windows). */
+private val HeroTwoColumnMinWidth = 560.dp
+
+/**
+ * „Trwa teraz” — karta trwających zajęć (M3 Expressive):
+ * status, przedmiot i forma, przedział godzin, sala i prowadzący (maskowany przy „Ukryj dane”),
+ * falujący postęp z liczbą minut do końca, a po rozwinięciu oś dnia i zapowiedź następnych zajęć.
+ * Na szerokich oknach treść układa się w dwie kolumny zamiast rozciągać się na całą szerokość.
+ *
+ * @param lecturerLabel lecturer as it may be shown — pass `uiState.maskLecturer(...)`.
+ */
 @Composable
 fun ActiveClassHeroCard(
     activeClass: ClassEvent,
@@ -698,8 +896,190 @@ fun ActiveClassHeroCard(
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     modifier: Modifier = Modifier,
+    lecturerLabel: String = activeClass.lecturer.displayNameOrPlaceholder,
     @Suppress("UNUSED_PARAMETER") onTriggerLiveNotification: () -> Unit = {}
 ) {
+    val colors = MaterialTheme.colorScheme
+    val remainingMin = activeClass.remainingMinutes(nowEpochMillis)
+    val stateText = stringResource(R.string.schedule_hero_state, activeClass.subject.name, remainingMin)
+
+    WseiCard(
+        onClick = onToggleExpand,
+        shape = ActiveHeroCardAsymmetricShape,
+        containerColor = colors.primaryContainer,
+        contentColor = colors.onPrimaryContainer,
+        contentPadding = PaddingValues(WseiSpacing.xl),
+        verticalSpacing = WseiSpacing.l,
+        modifier = modifier.semantics { stateDescription = stateText }
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            if (maxWidth >= HeroTwoColumnMinWidth) {
+                Row(horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xxl)) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(WseiSpacing.l)
+                    ) {
+                        HeroHeader(activeClass = activeClass, isExpanded = isExpanded)
+                        HeroDetails(activeClass = activeClass, lecturerLabel = lecturerLabel)
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(WseiSpacing.l)
+                    ) {
+                        HeroProgress(activeClass = activeClass, nowEpochMillis = nowEpochMillis)
+                        HeroExpandedContent(
+                            isExpanded = isExpanded,
+                            activeClass = activeClass,
+                            dayEvents = dayEvents,
+                            nextClassPreview = nextClassPreview,
+                            nowEpochMillis = nowEpochMillis
+                        )
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.l)) {
+                    HeroHeader(activeClass = activeClass, isExpanded = isExpanded)
+                    HeroProgress(activeClass = activeClass, nowEpochMillis = nowEpochMillis)
+                    HeroDetails(activeClass = activeClass, lecturerLabel = lecturerLabel)
+                    HeroExpandedContent(
+                        isExpanded = isExpanded,
+                        activeClass = activeClass,
+                        dayEvents = dayEvents,
+                        nextClassPreview = nextClassPreview,
+                        nowEpochMillis = nowEpochMillis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Status chip, time range, expand affordance, then the accent badge with type and subject. */
+@Composable
+private fun HeroHeader(activeClass: ClassEvent, isExpanded: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = WseiMotion.fastSpatial(),
+        label = "heroChevron"
+    )
+    val toggleLabel = stringResource(
+        if (isExpanded) R.string.schedule_hero_collapse_cd else R.string.schedule_hero_expand_cd
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.m)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s),
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
+            ) {
+                LiveStatusChip()
+                WseiPill(
+                    text = stringResource(
+                        R.string.schedule_hero_time_range,
+                        activeClass.timeSlot.startFormatted,
+                        activeClass.timeSlot.endFormatted
+                    ),
+                    icon = WseiIcons.Schedule,
+                    containerColor = colors.onPrimaryContainer.copy(alpha = 0.1f),
+                    contentColor = colors.onPrimaryContainer,
+                    emphasized = true,
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(colors.onPrimaryContainer.copy(alpha = 0.08f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = WseiIcons.ExpandMore,
+                    // Read as part of the (clickable) card: tells what a tap does.
+                    contentDescription = toggleLabel,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .graphicsLayer { rotationZ = chevronRotation }
+                )
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(60.dp)
+                    .clip(MaterialShapes.Cookie9Sided.toShape())
+                    .background(colors.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = WseiIcons.forSubject(activeClass.subject.name, activeClass.classType),
+                    contentDescription = null,
+                    tint = colors.onPrimary,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
+            ) {
+                Text(
+                    text = activeClass.classType.polishLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = activeClass.subject.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() }
+                )
+            }
+        }
+    }
+}
+
+/** „Trwa teraz” status chip with a sunny-shaped live marker. */
+@Composable
+private fun LiveStatusChip() {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        shape = CircleShape,
+        color = colors.primary,
+        contentColor = colors.onPrimary
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 8.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(MaterialShapes.Sunny.toShape())
+                    .background(colors.onPrimary)
+            )
+            Text(
+                text = stringResource(R.string.schedule_hero_status_live),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/** Remaining minutes as the key figure, wavy progress and elapsed/total underneath. */
+@Composable
+private fun HeroProgress(activeClass: ClassEvent, nowEpochMillis: Long) {
+    val colors = MaterialTheme.colorScheme
     val elapsedMin = activeClass.elapsedMinutes(nowEpochMillis)
     val totalMin = activeClass.totalDurationMinutes
     val remainingMin = activeClass.remainingMinutes(nowEpochMillis)
@@ -708,140 +1088,181 @@ fun ActiveClassHeroCard(
         animationSpec = WseiMotion.size(),
         label = "liveClassProgress"
     )
-    val colors = MaterialTheme.colorScheme
-    val location = if (activeClass.deliveryMode == DeliveryMode.ON_SITE) {
-        activeClass.room.displayLabel
-    } else {
-        activeClass.deliveryMode.polishBadge
-    }
+    val progressDescription = stringResource(R.string.schedule_hero_progress_cd, elapsedMin, totalMin)
+    val mutedColor = colors.onPrimaryContainer.copy(alpha = 0.78f)
 
-    WseiCard(
-        onClick = onToggleExpand,
-        shape = ActiveHeroCardAsymmetricShape,
-        containerColor = colors.primaryContainer,
-        contentColor = colors.onPrimaryContainer,
-        verticalSpacing = WseiSpacing.l,
-        modifier = modifier
-            .animateContentSize(WseiMotion.size())
-            .semantics {
-                stateDescription = "Trwają zajęcia: ${activeClass.subject.name}, pozostało $remainingMin minut"
-            }
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
-        ) {
-            WseiIconBadge(
-                icon = WseiIcons.forSubject(activeClass.subject.name, activeClass.classType),
-                shape = M3XCookieShape,
-                containerColor = colors.primary,
-                contentColor = colors.onPrimary,
-                size = 52.dp,
-                iconSize = 26.dp
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
+        Row(verticalAlignment = Alignment.Bottom) {
             Column(modifier = Modifier.weight(1f)) {
+                AnimatedContent(
+                    targetState = remainingMin,
+                    transitionSpec = {
+                        (slideInVertically(WseiMotion.spatial()) { it / 2 } + fadeIn(WseiMotion.effects())) togetherWith
+                            (slideOutVertically(WseiMotion.spatial()) { -it / 2 } + fadeOut(WseiMotion.fastEffects())) using
+                            SizeTransform(clip = false)
+                    },
+                    label = "heroRemainingMinutes"
+                ) { minutes ->
+                    Text(
+                        text = stringResource(R.string.schedule_hero_remaining_value, minutes),
+                        style = MaterialTheme.typography.displaySmall,
+                        maxLines = 1
+                    )
+                }
                 Text(
-                    text = "Trwa teraz • ${activeClass.classType.polishLabel}",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.primary
-                )
-                Text(
-                    text = activeClass.subject.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.semantics { heading() }
-                )
-            }
-        }
-
-        Row(
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "$remainingMin min",
-                    style = MaterialTheme.typography.displaySmall,
-                    maxLines = 1
-                )
-                Text(
-                    text = "do końca • $elapsedMin z $totalMin min",
+                    text = stringResource(R.string.schedule_hero_remaining_label),
                     style = MaterialTheme.typography.labelLarge,
-                    color = colors.onPrimaryContainer.copy(alpha = 0.75f)
+                    color = mutedColor,
+                    maxLines = 1
                 )
             }
             WseiPill(
-                text = "do ${activeClass.timeSlot.endFormatted}",
+                text = stringResource(R.string.schedule_hero_ends_at, activeClass.timeSlot.endFormatted),
                 icon = WseiIcons.Schedule,
                 containerColor = colors.primary,
                 contentColor = colors.onPrimary,
-                emphasized = true
+                emphasized = true,
+                modifier = Modifier.padding(bottom = WseiSpacing.xxs)
             )
         }
-
         LinearWavyProgressIndicator(
             progress = { animatedProgress },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(16.dp)
-                .semantics { contentDescription = "Postęp zajęć: $elapsedMin z $totalMin minut" },
+                .semantics { contentDescription = progressDescription },
             color = colors.primary,
             trackColor = colors.onPrimaryContainer.copy(alpha = 0.16f)
         )
+        Text(
+            text = stringResource(R.string.schedule_hero_elapsed, elapsedMin, totalMin),
+            style = MaterialTheme.typography.labelMedium,
+            color = mutedColor
+        )
+    }
+}
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
-        ) {
+/** Room / delivery mode, lecturer (already masked by the caller) and group. */
+@Composable
+private fun HeroDetails(activeClass: ClassEvent, lecturerLabel: String) {
+    val colors = MaterialTheme.colorScheme
+    val chipColor = colors.onPrimaryContainer.copy(alpha = 0.1f)
+    val location = if (activeClass.deliveryMode == DeliveryMode.ON_SITE) {
+        activeClass.room.displayLabel
+    } else {
+        activeClass.deliveryMode.polishBadge
+    }
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s),
+        verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+    ) {
+        WseiPill(
+            text = location,
+            icon = WseiIcons.LocationOn,
+            containerColor = chipColor,
+            contentColor = colors.onPrimaryContainer
+        )
+        WseiPill(
+            text = lecturerLabel,
+            icon = WseiIcons.Person,
+            containerColor = chipColor,
+            contentColor = colors.onPrimaryContainer
+        )
+        if (activeClass.groupCode.isNotBlank()) {
             WseiPill(
-                text = location,
-                icon = WseiIcons.LocationOn,
-                containerColor = colors.onPrimaryContainer.copy(alpha = 0.1f),
+                text = activeClass.groupCode,
+                icon = WseiIcons.Groups,
+                containerColor = chipColor,
                 contentColor = colors.onPrimaryContainer
             )
-            WseiPill(
-                text = activeClass.lecturer.displayNameOrPlaceholder,
-                icon = WseiIcons.Person,
-                containerColor = colors.onPrimaryContainer.copy(alpha = 0.1f),
-                contentColor = colors.onPrimaryContainer,
-                modifier = Modifier.weight(1f, fill = false)
-            )
         }
+    }
+}
 
-        SegmentedDayProgressBarCompose(
-            dayEvents = dayEvents.ifEmpty { listOf(activeClass) },
-            nowEpochMillis = nowEpochMillis
-        )
-
-        AnimatedVisibility(
-            visible = isExpanded && nextClassPreview != null,
-            enter = expandVertically(WseiMotion.size()) + fadeIn(),
-            exit = shrinkVertically(WseiMotion.size()) + fadeOut()
-        ) {
+/** Day timeline and the next class — revealed with a single size animation. */
+@Composable
+private fun HeroExpandedContent(
+    isExpanded: Boolean,
+    activeClass: ClassEvent,
+    dayEvents: List<ClassEvent>,
+    nextClassPreview: NextClassPreview?,
+    nowEpochMillis: Long
+) {
+    AnimatedVisibility(
+        visible = isExpanded,
+        enter = expandVertically(WseiMotion.size()) + fadeIn(WseiMotion.effects()),
+        exit = shrinkVertically(WseiMotion.size()) + fadeOut(WseiMotion.fastEffects())
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.m)) {
+            SegmentedDayProgressBarCompose(
+                dayEvents = dayEvents.ifEmpty { listOf(activeClass) },
+                nowEpochMillis = nowEpochMillis
+            )
             if (nextClassPreview != null) {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = colors.onPrimaryContainer.copy(alpha = 0.08f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = WseiSpacing.l, vertical = WseiSpacing.m),
-                        verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
-                    ) {
-                        Text(
-                            text = "Następnie",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.tertiary
-                        )
-                        Text(
-                            text = nextClassPreview.summaryText,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                }
+                NextClassPreviewCard(preview = nextClassPreview)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NextClassPreviewCard(preview: NextClassPreview) {
+    val colors = MaterialTheme.colorScheme
+    val next = preview.nextEvent
+    val location = if (next.deliveryMode == DeliveryMode.ON_SITE) next.room.displayLabel else next.deliveryMode.polishBadge
+    val breakLabel = if (preview.breakDurationMinutes > 0) {
+        stringResource(R.string.schedule_hero_next_break, preview.breakDurationMinutes)
+    } else {
+        stringResource(R.string.schedule_hero_next_no_break)
+    }
+    Surface(
+        shape = WseiInsetShape,
+        color = colors.surfaceContainerLowest.copy(alpha = 0.55f),
+        contentColor = colors.onSurface,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = WseiSpacing.l, vertical = WseiSpacing.m),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(MaterialShapes.Clover4Leaf.toShape())
+                    .background(colors.tertiaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = WseiIcons.ArrowForward,
+                    contentDescription = null,
+                    tint = colors.onTertiaryContainer,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
+            ) {
+                Text(
+                    text = stringResource(R.string.schedule_hero_next_title, next.timeSlot.startFormatted),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.tertiary
+                )
+                Text(
+                    text = next.subject.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "$breakLabel • $location",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -998,4 +1419,342 @@ private fun polishMonthGenitive(monthNumber: Int): String = when (monthNumber) {
     11 -> "listopada"
     12 -> "grudnia"
     else -> ""
+}
+
+// -----------------------------------------------------------------------------------------
+// Synchronizacja z kalendarzem urządzenia
+// -----------------------------------------------------------------------------------------
+
+private val CalendarPermissions = arrayOf(
+    Manifest.permission.READ_CALENDAR,
+    Manifest.permission.WRITE_CALENDAR
+)
+
+/** Why calendar access is missing after the system permission dialog. */
+private enum class CalendarPermissionIssue { DENIED, PERMANENTLY_DENIED }
+
+private fun Context.hasPermission(permission: String): Boolean =
+    ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+private fun Context.openAppSettings() {
+    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { startActivity(intent) }
+}
+
+/**
+ * All dialogs of the calendar export flow. The ViewModel status wins over the picker:
+ * while syncing a progress dialog is shown, then the result (counts or error) until dismissed.
+ */
+@Composable
+private fun CalendarSyncDialogs(
+    status: CalendarSyncStatus,
+    calendars: List<DeviceCalendar>,
+    lastSyncCalendarId: Long?,
+    isLecturerHidden: Boolean,
+    isPickerVisible: Boolean,
+    permissionIssue: CalendarPermissionIssue?,
+    onDismissPicker: () -> Unit,
+    onConfirmCalendar: (Long) -> Unit,
+    onDismissStatus: () -> Unit,
+    onDismissPermissionIssue: () -> Unit,
+    onRetryPermission: () -> Unit,
+    onOpenAppSettings: () -> Unit
+) {
+    when {
+        permissionIssue != null -> CalendarPermissionDialog(
+            issue = permissionIssue,
+            onDismiss = onDismissPermissionIssue,
+            onRetry = onRetryPermission,
+            onOpenSettings = onOpenAppSettings
+        )
+        status is CalendarSyncStatus.Syncing -> CalendarSyncProgressDialog()
+        status is CalendarSyncStatus.Done -> CalendarSyncResultDialog(
+            icon = WseiIcons.CheckCircle,
+            title = stringResource(R.string.calendar_sync_done_title),
+            message = with(status.result) {
+                if (inserted == 0 && updated == 0 && deleted == 0) {
+                    stringResource(R.string.calendar_sync_done_no_changes)
+                } else {
+                    stringResource(R.string.calendar_sync_done_message, inserted, updated, deleted)
+                }
+            },
+            onDismiss = onDismissStatus
+        )
+        status is CalendarSyncStatus.Failed -> CalendarSyncResultDialog(
+            icon = WseiIcons.Info,
+            title = stringResource(R.string.calendar_sync_failed_title),
+            message = status.message?.takeIf { it.isNotBlank() }
+                ?: stringResource(R.string.calendar_sync_failed_generic),
+            onDismiss = onDismissStatus
+        )
+        isPickerVisible -> CalendarPickerDialog(
+            isLoading = status is CalendarSyncStatus.LoadingCalendars,
+            calendars = calendars,
+            lastSyncCalendarId = lastSyncCalendarId,
+            isLecturerHidden = isLecturerHidden,
+            onDismiss = onDismissPicker,
+            onConfirm = onConfirmCalendar
+        )
+    }
+}
+
+@Composable
+private fun CalendarPickerDialog(
+    isLoading: Boolean,
+    calendars: List<DeviceCalendar>,
+    lastSyncCalendarId: Long?,
+    isLecturerHidden: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (Long) -> Unit
+) {
+    var chosenId by rememberSaveable { mutableStateOf<Long?>(null) }
+    // Explicit choice → calendar used last time → the primary account calendar → the first one.
+    val selectedId = remember(chosenId, calendars, lastSyncCalendarId) {
+        chosenId?.takeIf { id -> calendars.any { it.id == id } }
+            ?: lastSyncCalendarId?.takeIf { id -> calendars.any { it.id == id } }
+            ?: calendars.firstOrNull { it.isPrimary }?.id
+            ?: calendars.firstOrNull()?.id
+    }
+    val canConfirm = !isLoading && selectedId != null
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(imageVector = WseiIcons.CalendarMonth, contentDescription = null) },
+        title = { Text(text = stringResource(R.string.calendar_sync_picker_title)) },
+        text = {
+            AnimatedContent(
+                targetState = when {
+                    isLoading -> PickerContent.LOADING
+                    calendars.isEmpty() -> PickerContent.EMPTY
+                    else -> PickerContent.LIST
+                },
+                transitionSpec = {
+                    fadeIn(WseiMotion.effects()) togetherWith fadeOut(WseiMotion.fastEffects()) using
+                        SizeTransform(clip = false) { _, _ -> WseiMotion.size() }
+                },
+                label = "calendarPickerContent"
+            ) { content ->
+                when (content) {
+                    PickerContent.LOADING -> Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = WseiSpacing.l),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
+                    ) {
+                        LoadingIndicator(modifier = Modifier.size(40.dp))
+                        Text(
+                            text = stringResource(R.string.calendar_sync_loading),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    PickerContent.EMPTY -> Text(
+                        text = stringResource(R.string.calendar_sync_empty),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    PickerContent.LIST -> Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.m)) {
+                        Text(
+                            text = stringResource(R.string.calendar_sync_picker_message),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (isLecturerHidden) {
+                            Text(
+                                text = stringResource(R.string.calendar_sync_hidden_lecturer_note),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 320.dp)
+                                .verticalScroll(rememberScrollState())
+                                .selectableGroup(),
+                            verticalArrangement = Arrangement.spacedBy(WseiSpacing.inGroup)
+                        ) {
+                            calendars.forEachIndexed { index, calendar ->
+                                CalendarOptionRow(
+                                    calendar = calendar,
+                                    selected = calendar.id == selectedId,
+                                    shape = wseiGroupItemShape(index, calendars.size),
+                                    onSelect = { chosenId = calendar.id }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { selectedId?.let(onConfirm) },
+                enabled = canConfirm
+            ) {
+                Text(text = stringResource(R.string.calendar_sync_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.calendar_sync_cancel))
+            }
+        }
+    )
+}
+
+private enum class PickerContent { LOADING, EMPTY, LIST }
+
+@Composable
+private fun CalendarOptionRow(
+    calendar: DeviceCalendar,
+    selected: Boolean,
+    shape: Shape,
+    onSelect: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val containerColor by animateColorAsState(
+        targetValue = if (selected) colors.secondaryContainer else colors.surfaceContainerHigh,
+        animationSpec = WseiMotion.effects(),
+        label = "calendarOptionContainer"
+    )
+    // The calendar's own colour (from the provider); falls back to the theme accent.
+    val dotColor = calendar.colorArgb?.let { Color(it) } ?: colors.primary
+    Surface(
+        selected = selected,
+        onClick = onSelect,
+        shape = shape,
+        color = containerColor,
+        contentColor = if (selected) colors.onSecondaryContainer else colors.onSurface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { role = Role.RadioButton }
+    ) {
+        Row(
+            modifier = Modifier.padding(start = WseiSpacing.xs, end = WseiSpacing.m, top = WseiSpacing.xs, bottom = WseiSpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+        ) {
+            RadioButton(selected = selected, onClick = null, modifier = Modifier.padding(WseiSpacing.s))
+            Box(
+                modifier = Modifier
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .background(dotColor)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = calendar.displayName,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (calendar.accountName.isNotBlank() && calendar.accountName != calendar.displayName) {
+                    Text(
+                        text = calendar.accountName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            if (calendar.isPrimary) {
+                WseiPill(
+                    text = stringResource(R.string.calendar_sync_primary),
+                    containerColor = colors.tertiaryContainer,
+                    contentColor = colors.onTertiaryContainer
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarSyncProgressDialog() {
+    AlertDialog(
+        // Syncing is short and must not be interrupted half-way; the result dialog follows.
+        onDismissRequest = {},
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+        confirmButton = {},
+        text = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)
+            ) {
+                LoadingIndicator(modifier = Modifier.size(48.dp))
+                Text(
+                    text = stringResource(R.string.calendar_sync_in_progress),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    )
+}
+
+@Composable
+private fun CalendarSyncResultDialog(
+    icon: ImageVector,
+    title: String,
+    message: String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(imageVector = icon, contentDescription = null) },
+        title = { Text(text = title) },
+        text = { Text(text = message) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.calendar_sync_close))
+            }
+        }
+    )
+}
+
+@Composable
+private fun CalendarPermissionDialog(
+    issue: CalendarPermissionIssue,
+    onDismiss: () -> Unit,
+    onRetry: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    val permanentlyDenied = issue == CalendarPermissionIssue.PERMANENTLY_DENIED
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(imageVector = WseiIcons.CalendarMonth, contentDescription = null) },
+        title = { Text(text = stringResource(R.string.calendar_permission_title)) },
+        text = {
+            Text(
+                text = stringResource(
+                    if (permanentlyDenied) {
+                        R.string.calendar_permission_permanently_denied
+                    } else {
+                        R.string.calendar_permission_denied
+                    }
+                )
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = if (permanentlyDenied) onOpenSettings else onRetry) {
+                Text(
+                    text = stringResource(
+                        if (permanentlyDenied) R.string.calendar_permission_open_settings else R.string.calendar_permission_retry
+                    )
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.calendar_sync_cancel))
+            }
+        }
+    )
 }

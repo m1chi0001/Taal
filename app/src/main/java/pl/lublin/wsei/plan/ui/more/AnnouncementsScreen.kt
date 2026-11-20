@@ -108,6 +108,15 @@ import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
 
 @Composable
 internal fun AnnouncementsScreen(
@@ -118,6 +127,7 @@ internal fun AnnouncementsScreen(
     onDownloadAttachment: (AnnouncementAttachment) -> Unit,
     onRefresh: () -> Unit
 ) {
+    val openingAttachmentId = uiState.openingAttachmentId
     MorePage(
         title = "Ogłoszenia",
         onBack = onBack,
@@ -134,18 +144,24 @@ internal fun AnnouncementsScreen(
                     modifier = itemModifier
                 )
             }
-        }
-        items(
-            items = uiState.announcements,
-            key = { "announcement_${it.id}" },
-            contentType = { "announcement_card" }
-        ) { announcement ->
-            AnnouncementCard(
-                announcement = announcement,
-                onMarkRead = { onMarkRead(announcement) },
-                onDownloadAttachment = onDownloadAttachment,
-                modifier = itemModifier
-            )
+        } else {
+            items(
+                items = uiState.announcements,
+                key = { "announcement_${it.id}" },
+                contentType = { "announcement_card" }
+            ) { announcement ->
+                AnnouncementCard(
+                    announcement = announcement,
+                    openingAttachmentId = openingAttachmentId,
+                    onMarkRead = onMarkRead,
+                    onDownloadAttachment = onDownloadAttachment,
+                    modifier = itemModifier.animateItem(
+                        fadeInSpec = WseiMotion.effects(),
+                        placementSpec = WseiMotion.spatial(),
+                        fadeOutSpec = WseiMotion.fastEffects()
+                    )
+                )
+            }
         }
     }
 }
@@ -153,20 +169,24 @@ internal fun AnnouncementsScreen(
 @Composable
 private fun AnnouncementCard(
     announcement: DeanAnnouncement,
-    onMarkRead: () -> Unit,
+    openingAttachmentId: Int?,
+    onMarkRead: (DeanAnnouncement) -> Unit,
     onDownloadAttachment: (AnnouncementAttachment) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expanded by rememberSaveable(announcement.id) { mutableStateOf(false) }
     val unread = !announcement.isRead
     val colors = MaterialTheme.colorScheme
+    val attachments = announcement.attachments
 
     WseiCard(
         onClick = {
             expanded = !expanded
-            if (unread) onMarkRead()
+            if (unread) onMarkRead(announcement)
         },
         containerColor = if (unread) colors.surfaceContainerHigh else colors.surfaceContainer,
+        // A single size animation for the whole card: the body text and the attachment list
+        // change height together, without a second (competing) AnimatedVisibility resize.
         modifier = modifier.animateContentSize(WseiMotion.size())
     ) {
         Row(
@@ -174,7 +194,7 @@ private fun AnnouncementCard(
             horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
         ) {
             WseiIconBadge(
-                icon = if (announcement.hasAttachment) WseiIcons.AttachFile else WseiIcons.Campaign,
+                icon = if (announcement.hasAttachment || attachments.isNotEmpty()) WseiIcons.AttachFile else WseiIcons.Campaign,
                 shape = if (unread) M3XCookieShape else CircleShape,
                 containerColor = if (unread) colors.primary else colors.surfaceContainerHighest,
                 contentColor = if (unread) colors.onPrimary else colors.onSurfaceVariant
@@ -217,30 +237,98 @@ private fun AnnouncementCard(
             overflow = TextOverflow.Ellipsis
         )
 
-        AnimatedVisibility(
-            visible = expanded && announcement.attachments.isNotEmpty(),
-            enter = expandVertically(WseiMotion.size()) + fadeIn(WseiMotion.effects()),
-            exit = shrinkVertically(WseiMotion.size()) + fadeOut(WseiMotion.effects())
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
-                announcement.attachments.forEach { attachment ->
-                    FilledTonalButton(
-                        onClick = { onDownloadAttachment(attachment) },
-                        shape = CircleShape
-                    ) {
-                        Icon(
-                            imageVector = WseiIcons.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = attachment.fileName,
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = WseiSpacing.s)
+        if (attachments.isNotEmpty()) {
+            if (expanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)) {
+                    Text(
+                        text = stringResource(R.string.announcements_attachments_title),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.onSurfaceVariant,
+                        modifier = Modifier.padding(start = WseiSpacing.xs, bottom = WseiSpacing.xxs)
+                    )
+                    attachments.forEach { attachment ->
+                        AttachmentButton(
+                            attachment = attachment,
+                            isOpening = openingAttachmentId == attachment.id,
+                            // The ViewModel opens one file at a time; the others wait.
+                            enabled = openingAttachmentId == null,
+                            onClick = { onDownloadAttachment(attachment) }
                         )
                     }
+                }
+            } else {
+                WseiPill(
+                    text = pluralStringResource(
+                        R.plurals.announcements_attachments_count,
+                        attachments.size,
+                        attachments.size
+                    ),
+                    icon = WseiIcons.AttachFile,
+                    containerColor = colors.secondaryContainer,
+                    contentColor = colors.onSecondaryContainer
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentButton(
+    attachment: AnnouncementAttachment,
+    isOpening: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val openDescription = stringResource(R.string.announcements_attachment_open_cd, attachment.fileName)
+    val openingDescription = stringResource(R.string.announcements_attachment_opening)
+    FilledTonalButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = WseiInsetShape,
+        contentPadding = PaddingValues(start = WseiSpacing.l, end = WseiSpacing.m, top = WseiSpacing.s, bottom = WseiSpacing.s),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .semantics {
+                contentDescription = openDescription
+                if (isOpening) stateDescription = openingDescription
+            }
+    ) {
+        Icon(
+            imageVector = WseiIcons.AttachFile,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = attachment.fileName,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.MiddleEllipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = WseiSpacing.s)
+        )
+        Box(modifier = Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+            AnimatedContent(
+                targetState = isOpening,
+                transitionSpec = {
+                    (fadeIn(WseiMotion.effects()) + scaleIn(WseiMotion.fastSpatial(), initialScale = 0.6f)) togetherWith
+                        fadeOut(WseiMotion.fastEffects())
+                },
+                label = "attachmentOpening"
+            ) { opening ->
+                if (opening) {
+                    LoadingIndicator(
+                        modifier = Modifier.size(28.dp),
+                        color = colors.primary
+                    )
+                } else {
+                    Icon(
+                        imageVector = WseiIcons.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }
