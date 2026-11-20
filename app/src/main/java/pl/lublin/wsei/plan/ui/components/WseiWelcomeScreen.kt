@@ -53,6 +53,8 @@ import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
+import androidx.compose.ui.res.stringResource
+import pl.lublin.wsei.plan.R
 
 /**
  * Ekran powitalny pokazywany raz, przed pierwszym logowaniem.
@@ -115,14 +117,14 @@ fun WseiWelcomeScreen(
 
     val intro: @Composable (TextAlign) -> Unit = { align ->
         Text(
-            text = "Taal",
+            text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.displayMedium,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.semantics { heading() }
         )
         Spacer(Modifier.height(WseiSpacing.s))
         Text(
-            text = "Plan zajęć, oceny i opłaty z Wirtualnego Dziekanatu WSEI — w jednym miejscu.",
+            text = stringResource(R.string.welcome_tagline),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = align
@@ -135,9 +137,9 @@ fun WseiWelcomeScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             val points = listOf(
-                WseiIcons.CalendarMonth to "Plan na dziś i na cały tydzień",
-                WseiIcons.School to "Oceny, średnia i punkty ECTS",
-                WseiIcons.AccountBalanceWallet to "Opłaty, numer konta i stypendia"
+                WseiIcons.CalendarMonth to stringResource(R.string.welcome_point_schedule),
+                WseiIcons.School to stringResource(R.string.welcome_point_grades),
+                WseiIcons.AccountBalanceWallet to stringResource(R.string.welcome_point_finances)
             )
             points.forEachIndexed { index, (icon, text) ->
                 WseiListItem(
@@ -158,7 +160,7 @@ fun WseiWelcomeScreen(
                 .fillMaxWidth()
                 .height(60.dp)
         ) {
-            Text(text = "Zaczynamy", style = MaterialTheme.typography.titleMedium)
+            Text(text = stringResource(R.string.welcome_continue), style = MaterialTheme.typography.titleMedium)
             Icon(
                 imageVector = WseiIcons.ArrowForward,
                 contentDescription = null,
@@ -171,7 +173,7 @@ fun WseiWelcomeScreen(
         Spacer(Modifier.height(WseiSpacing.l))
 
         Text(
-            text = "Niezależny projekt studencki, niepowiązany oficjalnie z Uniwersytetem WSEI ani z APR System.",
+            text = stringResource(R.string.about_disclaimer),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center

@@ -64,6 +64,9 @@ import pl.lublin.wsei.plan.domain.calendar.CalendarSyncManager
 import pl.lublin.wsei.plan.domain.calendar.CalendarSyncResult
 import pl.lublin.wsei.plan.domain.calendar.DeviceCalendar
 import pl.lublin.wsei.plan.domain.model.AppColorPalette
+import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.data.local.LocalizedStrings
+import pl.lublin.wsei.plan.data.local.describeError
 
 /** Kept for source compatibility — the enum now lives in the domain layer. */
 typealias AppThemeMode = pl.lublin.wsei.plan.domain.model.AppThemeMode
@@ -225,14 +228,15 @@ data class ScheduleUiState(
             )
     }
 
-    val primaryStudentGroupLabel: String
+    /** First real group code (or the course-of-study code); null when the student has none. */
+    val primaryStudentGroupLabel: String?
         get() {
             val firstGroup = studentGroups
                 .firstOrNull()
                 ?.groups
                 ?.firstOrNull { !it.formName.equals("Tok", ignoreCase = true) }
                 ?.groupCode
-            return firstGroup ?: currentSession?.courseOfStudyCode ?: "Brak grupy"
+            return firstGroup ?: currentSession?.courseOfStudyCode
         }
 }
 
@@ -246,7 +250,8 @@ class ScheduleViewModel @Inject constructor(
     private val scheduleRepository: ScheduleRepository,
     private val preferencesStore: AppPreferencesStore,
     private val calendarSyncManager: CalendarSyncManager,
-    private val attachmentOpener: AttachmentOpener
+    private val attachmentOpener: AttachmentOpener,
+    private val strings: LocalizedStrings
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -426,8 +431,7 @@ class ScheduleViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isAuthenticating = false,
-                            authError = error.message
-                                ?: "Nie udało się zalogować. Sprawdź dane i połączenie z internetem."
+                            authError = strings.describeError(error, R.string.error_login_generic)
                         )
                     }
                 }
@@ -489,8 +493,8 @@ class ScheduleViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     statusBannerMessage = res.fold(
-                        onSuccess = { "Hasło zostało zmienione." },
-                        onFailure = { err -> err.message ?: "Nie udało się zmienić hasła." }
+                        onSuccess = { strings.get(R.string.status_password_changed) },
+                        onFailure = { err -> strings.describeError(err, R.string.error_password_change) }
                     )
                 )
             }
@@ -608,7 +612,11 @@ class ScheduleViewModel @Inject constructor(
                     _uiState.update { s ->
                         s.copy(
                             isRefreshing = false,
-                            errorMessage = if (session.isDebugAccount) null else err.message
+                            errorMessage = if (session.isDebugAccount) {
+                                null
+                            } else {
+                                strings.describeError(err, R.string.error_schedule_refresh)
+                            }
                         )
                     }
                 }
@@ -628,13 +636,13 @@ class ScheduleViewModel @Inject constructor(
             res.fold(
                 onSuccess = { url ->
                     _uiState.update {
-                        it.copy(statusBannerMessage = "Otwieram płatność: ${charge.title}")
+                        it.copy(statusBannerMessage = strings.get(R.string.status_payment_opening, charge.title))
                     }
                     onOpenUrl(url)
                 },
                 onFailure = { err ->
                     _uiState.update {
-                        it.copy(statusBannerMessage = err.message ?: "Nie udało się rozpocząć płatności.")
+                        it.copy(statusBannerMessage = strings.describeError(err, R.string.error_payment_start))
                     }
                 }
             )
@@ -694,7 +702,7 @@ class ScheduleViewModel @Inject constructor(
                     }
                 },
                 onFailure = { err ->
-                    _uiState.update { it.copy(calendarSyncStatus = CalendarSyncStatus.Failed(err.message)) }
+                    _uiState.update { it.copy(calendarSyncStatus = CalendarSyncStatus.Failed(strings.describeError(err, R.string.calendar_sync_failed_generic))) }
                 }
             )
         }
@@ -715,7 +723,7 @@ class ScheduleViewModel @Inject constructor(
                 it.copy(
                     calendarSyncStatus = result.fold(
                         onSuccess = { r -> CalendarSyncStatus.Done(r) },
-                        onFailure = { err -> CalendarSyncStatus.Failed(err.message) }
+                        onFailure = { err -> CalendarSyncStatus.Failed(strings.describeError(err, R.string.calendar_sync_failed_generic)) }
                     )
                 )
             }
@@ -743,10 +751,10 @@ class ScheduleViewModel @Inject constructor(
                             when (outcome) {
                                 is AttachmentOpenResult.Opened -> null
                                 is AttachmentOpenResult.NoViewerApp ->
-                                    "Brak aplikacji, która otworzy plik „${outcome.fileName}”."
+                                    strings.get(R.string.error_attachment_no_viewer, outcome.fileName)
                             }
                         },
-                        onFailure = { err -> err.message ?: "Nie udało się pobrać załącznika." }
+                        onFailure = { err -> strings.describeError(err, R.string.error_attachment_download) }
                     ) ?: it.statusBannerMessage
                 )
             }

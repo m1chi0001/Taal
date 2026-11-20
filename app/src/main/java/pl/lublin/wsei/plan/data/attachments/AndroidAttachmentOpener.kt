@@ -18,6 +18,7 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
+import pl.lublin.wsei.plan.data.local.LocalizedStrings
 
 /**
  * [AttachmentOpener] that downloads the file through [ScheduleRepository] (active session: bearer
@@ -31,7 +32,8 @@ import kotlin.coroutines.cancellation.CancellationException
 @Singleton
 class AndroidAttachmentOpener @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val scheduleRepository: ScheduleRepository
+    private val scheduleRepository: ScheduleRepository,
+    private val strings: LocalizedStrings
 ) : AttachmentOpener {
 
     override suspend fun downloadAndOpen(attachment: AnnouncementAttachment): Result<AttachmentOpenResult> = try {
@@ -76,13 +78,13 @@ class AndroidAttachmentOpener @Inject constructor(
 
     private fun decode(base64: String?): ByteArray {
         val encoded = base64?.substringAfter("base64,")?.trim()?.takeIf { it.isNotEmpty() }
-            ?: throw IllegalStateException(context.getString(R.string.data_attachment_empty))
+            ?: throw IllegalStateException(strings.get(R.string.data_attachment_empty))
         val bytes = try {
             Base64.decode(encoded, Base64.DEFAULT)
         } catch (e: IllegalArgumentException) {
-            throw IllegalStateException(context.getString(R.string.data_attachment_corrupt), e)
+            throw IllegalStateException(strings.get(R.string.data_attachment_corrupt), e)
         }
-        if (bytes.isEmpty()) throw IllegalStateException(context.getString(R.string.data_attachment_empty))
+        if (bytes.isEmpty()) throw IllegalStateException(strings.get(R.string.data_attachment_empty))
         return bytes
     }
 

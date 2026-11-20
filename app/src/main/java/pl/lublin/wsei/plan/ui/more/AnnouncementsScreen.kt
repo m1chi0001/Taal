@@ -129,7 +129,7 @@ internal fun AnnouncementsScreen(
 ) {
     val openingAttachmentId = uiState.openingAttachmentId
     MorePage(
-        title = "Ogłoszenia",
+        title = stringResource(R.string.announcements_title),
         onBack = onBack,
         embedded = embedded,
         onRefresh = onRefresh,
@@ -139,8 +139,8 @@ internal fun AnnouncementsScreen(
             item(key = "announcements_empty", contentType = "empty") {
                 WseiEmptyState(
                     icon = WseiIcons.Campaign,
-                    title = "Brak ogłoszeń",
-                    message = "Nowe wiadomości z dziekanatu pojawią się tutaj.",
+                    title = stringResource(R.string.announcements_empty_title),
+                    message = stringResource(R.string.announcements_empty_message),
                     modifier = itemModifier
                 )
             }
@@ -204,7 +204,11 @@ private fun AnnouncementCard(
                 verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
             ) {
                 Text(
-                    text = "${announcement.authorDepartment} • ${announcement.publishedAtIso}",
+                    text = stringResource(
+                        R.string.announcements_meta,
+                        announcement.authorDepartment,
+                        announcement.publishedAtIso
+                    ),
                     style = MaterialTheme.typography.labelMedium,
                     color = if (unread) colors.primary else colors.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,

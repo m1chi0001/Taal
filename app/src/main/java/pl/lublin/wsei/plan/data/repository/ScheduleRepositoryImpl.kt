@@ -49,6 +49,8 @@ import javax.net.ssl.SSLException
 import pl.lublin.wsei.plan.ui.schedule.SampleWseiScheduleFactory
 import javax.inject.Inject
 import javax.inject.Singleton
+import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.data.local.LocalizedStrings
 
 /**
  * Offline-first repository — Room is the single source of truth:
@@ -74,7 +76,8 @@ class ScheduleRepositoryImpl @Inject constructor(
     private val snapshotStore: AcademicSnapshotStore,
     private val encryptedCredentialStore: EncryptedCredentialStore,
     private val alarmScheduler: ClassAlarmScheduler,
-    private val syncScheduler: ScheduleSyncScheduler
+    private val syncScheduler: ScheduleSyncScheduler,
+    private val strings: LocalizedStrings
 ) : ScheduleRepository {
 
     private val _currentSession = MutableStateFlow<StudentSession?>(null)
@@ -228,7 +231,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         currentPassword: String,
         newPassword: String
     ): Result<Unit> {
-        val session = _currentSession.value ?: return Result.failure(IllegalStateException("Nie jesteś zalogowany."))
+        val session = _currentSession.value ?: return Result.failure(notLoggedIn())
         if (session.isDebugAccount) {
             return Result.success(Unit)
         }
@@ -312,7 +315,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         forceRefresh: Boolean
     ): Result<SyncReport> = runCatching {
         val session = _currentSession.value
-            ?: error("Nie jesteś zalogowany.")
+            ?: throw notLoggedIn()
 
         if (session.isDebugAccount) {
             val demoEvents = SampleWseiScheduleFactory.createDemoAcademicCalendarEvents(
@@ -367,7 +370,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         val apiResult = arpApiDataSource.fetchSchedule(session, startDate, endDate, scheduleType)
         apiResult.getOrNull()?.let { return it to DataSourceOrigin.APR_WD_API }
 
-        val apiError = apiResult.exceptionOrNull() ?: IllegalStateException("Nieznany błąd API.")
+        val apiError = apiResult.exceptionOrNull() ?: IllegalStateException(strings.get(R.string.error_unknown))
         if (!shouldUseHtmlFallback(apiError) || !sessionCookieJar.hasCredentials ||
             scheduleType != ScheduleFilterType.MY_PLAN
         ) {
@@ -397,7 +400,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         key: SnapshotKey<T>,
         fetch: suspend (StudentSession) -> Result<T>
     ): Result<T> {
-        val session = _currentSession.value ?: return Result.failure(IllegalStateException("Nie jesteś zalogowany."))
+        val session = _currentSession.value ?: return Result.failure(notLoggedIn())
         val remote = fetch(session)
         remote.getOrNull()?.let { value ->
             runCatching { snapshotStore.save(session.studId, key, value) }
@@ -487,7 +490,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         chargeId: Int,
         amountPln: Double
     ): Result<String> {
-        val session = _currentSession.value ?: return Result.failure(IllegalStateException("Nie jesteś zalogowany."))
+        val session = _currentSession.value ?: return Result.failure(notLoggedIn())
         if (session.isDebugAccount) {
             return Result.success("https://platnosci.bm.pl/wsei-lublin?chargeId=$chargeId&price=$amountPln")
         }
@@ -523,7 +526,7 @@ class ScheduleRepositoryImpl @Inject constructor(
     override suspend fun downloadAnnouncementAttachment(
         attachmentId: Int
     ): Result<AnnouncementAttachment> {
-        val session = _currentSession.value ?: return Result.failure(IllegalStateException("Nie jesteś zalogowany."))
+        val session = _currentSession.value ?: return Result.failure(notLoggedIn())
         if (session.isDebugAccount) {
             return Result.success(
                 AnnouncementAttachment(
@@ -552,6 +555,9 @@ class ScheduleRepositoryImpl @Inject constructor(
             excludeId = current.id
         )?.toDomain()
     }
+
+    private fun notLoggedIn(): IllegalStateException =
+        IllegalStateException(strings.get(R.string.error_not_logged_in))
 
     private fun buildDateRange(start: LocalDate, end: LocalDate): List<LocalDate> {
         val dates = mutableListOf<LocalDate>()

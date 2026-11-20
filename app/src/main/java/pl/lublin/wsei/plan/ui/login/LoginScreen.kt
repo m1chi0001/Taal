@@ -72,6 +72,8 @@ import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import androidx.compose.ui.res.stringResource
+import pl.lublin.wsei.plan.R
 
 /**
  * Logowanie do Wirtualnego Dziekanatu WSEI.
@@ -94,19 +96,19 @@ fun LoginScreen(
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var rememberCredentials by rememberSaveable { mutableStateOf(true) }
-    var validationError by rememberSaveable { mutableStateOf<String?>(null) }
+    var showValidationError by rememberSaveable { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
     val isDebuggable = remember(context) {
         (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     }
-    val shownError = validationError ?: errorMessage
+    val shownError = if (showValidationError) stringResource(R.string.login_validation_empty) else errorMessage
     val scrollState = rememberScrollState()
 
     fun submit() {
         focusManager.clearFocus()
         if (username.isBlank() || password.isBlank()) {
-            validationError = "Wpisz numer albumu i hasło."
+            showValidationError = true
         } else {
             onLoginSubmit(username.trim(), password, rememberCredentials)
         }
@@ -136,12 +138,12 @@ fun LoginScreen(
         }
         Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)) {
             Text(
-                text = "Zaloguj się",
+                text = stringResource(R.string.login_title),
                 style = MaterialTheme.typography.displaySmall,
                 modifier = Modifier.semantics { heading() }
             )
             Text(
-                text = "Użyj danych z Wirtualnego Dziekanatu WSEI.",
+                text = stringResource(R.string.login_subtitle),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -162,13 +164,13 @@ fun LoginScreen(
                     value = username,
                     onValueChange = {
                         username = it
-                        validationError = null
+                        showValidationError = false
                     },
-                    label = { Text("Numer albumu lub e-mail") },
+                    label = { Text(stringResource(R.string.login_username_label)) },
                     leadingIcon = { Icon(imageVector = WseiIcons.Person, contentDescription = null) },
                     singleLine = true,
                     enabled = !isAuthenticating,
-                    isError = validationError != null && username.isBlank(),
+                    isError = showValidationError && username.isBlank(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Email,
                         imeAction = ImeAction.Next
@@ -185,15 +187,17 @@ fun LoginScreen(
                     value = password,
                     onValueChange = {
                         password = it
-                        validationError = null
+                        showValidationError = false
                     },
-                    label = { Text("Hasło") },
+                    label = { Text(stringResource(R.string.login_password_label)) },
                     leadingIcon = { Icon(imageVector = WseiIcons.Lock, contentDescription = null) },
                     trailingIcon = {
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(
                                 imageVector = if (passwordVisible) WseiIcons.VisibilityOff else WseiIcons.Visibility,
-                                contentDescription = if (passwordVisible) "Ukryj hasło" else "Pokaż hasło"
+                                contentDescription = stringResource(
+                                    if (passwordVisible) R.string.login_hide_password else R.string.login_show_password
+                                )
                             )
                         }
                     },
@@ -248,11 +252,11 @@ fun LoginScreen(
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Zapamiętaj mnie",
+                            text = stringResource(R.string.login_remember_me),
                             style = MaterialTheme.typography.labelLarge
                         )
                         Text(
-                            text = "Dane są szyfrowane w Android Keystore.",
+                            text = stringResource(R.string.login_remember_me_supporting),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -282,9 +286,9 @@ fun LoginScreen(
                             color = MaterialTheme.colorScheme.onPrimary
                         )
                         Spacer(Modifier.width(WseiSpacing.m))
-                        Text(text = "Logowanie…", style = MaterialTheme.typography.titleMedium)
+                        Text(text = stringResource(R.string.login_in_progress), style = MaterialTheme.typography.titleMedium)
                     } else {
-                        Text(text = "Zaloguj się", style = MaterialTheme.typography.titleMedium)
+                        Text(text = stringResource(R.string.login_submit), style = MaterialTheme.typography.titleMedium)
                         Icon(
                             imageVector = WseiIcons.ArrowForward,
                             contentDescription = null,
@@ -303,7 +307,7 @@ fun LoginScreen(
                 enabled = !isAuthenticating,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
-                Text(text = "Konto testowe (debug)")
+                Text(text = stringResource(R.string.login_debug_account))
             }
         }
     }

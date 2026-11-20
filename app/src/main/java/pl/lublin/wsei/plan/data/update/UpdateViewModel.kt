@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
+import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.data.local.LocalizedStrings
 
 enum class UpdatePhase { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING, READY, ERROR }
 
@@ -26,7 +28,8 @@ data class UpdateState(
 
 @HiltViewModel
 class UpdateViewModel @Inject constructor(
-    private val manager: UpdateManager
+    private val manager: UpdateManager,
+    private val strings: LocalizedStrings
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(UpdateState())
@@ -66,7 +69,7 @@ class UpdateViewModel @Inject constructor(
             } catch (e: Exception) {
                 // Anything unexpected (e.g. a storage or security error) must not crash the app.
                 _state.update {
-                    it.copy(phase = UpdatePhase.ERROR, message = "Nie udało się pobrać aktualizacji. Spróbuj ponownie.")
+                    it.copy(phase = UpdatePhase.ERROR, message = strings.get(R.string.update_error_download_generic))
                 }
             }
         }

@@ -77,6 +77,8 @@ import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import pl.lublin.wsei.plan.ui.theme.rememberDecodedStudentPhoto
 import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
 import kotlin.math.roundToInt
+import androidx.compose.ui.res.stringResource
+import pl.lublin.wsei.plan.R
 
 // =========================================================================================
 // Podstawowe klocki interfejsu. Każdy ekran składa się z tych samych elementów, więc
@@ -596,7 +598,7 @@ fun StudentAvatar(
         if (decodedBitmap != null) {
             Image(
                 bitmap = decodedBitmap,
-                contentDescription = "Zdjęcie: $fullName",
+                contentDescription = stringResource(R.string.common_photo_of, fullName),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
@@ -689,7 +691,7 @@ fun WseiExpandableCard(
                     .fillMaxWidth()
                     .clickable(
                         role = Role.Button,
-                        onClickLabel = if (expanded) "Zwiń" else "Rozwiń",
+                        onClickLabel = stringResource(if (expanded) R.string.common_collapse else R.string.common_expand),
                         onClick = onToggle
                     )
                     .padding(WseiSpacing.xl),

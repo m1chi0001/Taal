@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared UI strings: common labels, navigation, domain labels, welcome, login, home, subjects, finances, profile and the More tab. -->
+<resources>
+    <!-- Common -->
+    <string name="common_ok">OK</string>
+    <string name="common_student">Student</string>
+    <string name="common_profile_of">Profil: %1$s</string>
+
+    <!-- Navigation -->
+    <string name="nav_start">Start</string>
+    <string name="nav_start_short">Start</string>
+    <string name="nav_start_cd">Ekran startowy</string>
+    <string name="nav_schedule">Plan zajęć</string>
+    <string name="nav_schedule_short">Plan</string>
+    <string name="nav_schedule_cd">Plan zajęć i kalendarz</string>
+    <string name="nav_subjects">Przedmioty</string>
+    <string name="nav_subjects_short">Oceny</string>
+    <string name="nav_subjects_cd">Przedmioty, punkty ECTS i oceny</string>
+    <string name="nav_finances">Finanse</string>
+    <string name="nav_finances_short">Finanse</string>
+    <string name="nav_finances_cd">Opłaty i stypendia</string>
+    <string name="nav_more">Więcej</string>
+    <string name="nav_more_short">Więcej</string>
+    <string name="nav_more_cd">Ogłoszenia, ustawienia i informacje o aplikacji</string>
+    <string name="nav_profile">Profil</string>
+    <string name="nav_profile_short">Profil</string>
+    <string name="nav_profile_cd">Dane studenta, tok studiów i grupy</string>
+    <plurals name="nav_unread_announcements_cd">
+        <item quantity="one">%1$d nieprzeczytane ogłoszenie</item>
+        <item quantity="few">%1$d nieprzeczytane ogłoszenia</item>
+        <item quantity="many">%1$d nieprzeczytanych ogłoszeń</item>
+        <item quantity="other">%1$d nieprzeczytanego ogłoszenia</item>
+    </plurals>
+    <string name="common_back">Wróć</string>
+    <string name="common_expand">Rozwiń</string>
+    <string name="common_collapse">Zwiń</string>
+    <string name="common_photo_of">Zdjęcie: %1$s</string>
+
+    <!-- Class forms, delivery modes, schedule variants -->
+    <string name="class_type_lecture">Wykład</string>
+    <string name="class_type_lab">Laboratorium</string>
+    <string name="class_type_exercise">Ćwiczenia</string>
+    <string name="class_type_project">Projekt</string>
+    <string name="class_type_elearning">E-learning</string>
+    <string name="class_type_practice">Praktyczne zajęcia zawodowe</string>
+    <string name="class_type_seminar">Seminarium</string>
+    <string name="class_type_exam">Egzamin / zaliczenie</string>
+    <string name="delivery_mode_on_site">Stacjonarnie</string>
+    <string name="delivery_mode_remote">Streaming</string>
+    <string name="delivery_mode_elearning">E-learning</string>
+    <string name="schedule_filter_my_plan">Mój plan</string>
+    <string name="schedule_filter_group_plan">Plan grupy</string>
+
+    <!-- Rooms and lecturers -->
+    <string name="room_number">Sala %1$s</string>
+    <string name="room_tbd">Sala do ustalenia</string>
+    <string name="room_streaming_remote">Streaming (zajęcia zdalne)</string>
+    <string name="room_elearning">E-learning</string>
+    <string name="lecturer_missing">Brak prowadzącego</string>
+
+    <!-- Days of the week -->
+    <string name="day_monday">Poniedziałek</string>
+    <string name="day_tuesday">Wtorek</string>
+    <string name="day_wednesday">Środa</string>
+    <string name="day_thursday">Czwartek</string>
+    <string name="day_friday">Piątek</string>
+    <string name="day_saturday">Sobota</string>
+    <string name="day_sunday">Niedziela</string>
+    <string name="day_monday_short">Pon</string>
+    <string name="day_tuesday_short">Wt</string>
+    <string name="day_wednesday_short">Śr</string>
+    <string name="day_thursday_short">Czw</string>
+    <string name="day_friday_short">Pt</string>
+    <string name="day_saturday_short">Sob</string>
+    <string name="day_sunday_short">Ndz</string>
+
+    <!-- Class card -->
+    <string name="class_state_ongoing">Trwa teraz</string>
+    <string name="class_state_next">Następne zajęcia</string>
+    <string name="class_state_finished">Zakończone</string>
+    <string name="class_state_upcoming">Zaplanowane</string>
+    <string name="class_badge_ongoing">Trwa teraz</string>
+    <string name="class_badge_next">Następne</string>
+    <string name="class_card_type_room">%1$s • %2$s</string>
+    <string name="class_card_progress">%1$d z %2$d min • do %3$s</string>
+    <string name="day_monday_min">Pn</string>
+    <string name="day_tuesday_min">Wt</string>
+    <string name="day_wednesday_min">Śr</string>
+    <string name="day_thursday_min">Cz</string>
+    <string name="day_friday_min">Pt</string>
+    <string name="day_saturday_min">So</string>
+    <string name="day_sunday_min">Nd</string>
+
+    <!-- Months (nominative, calendar title) -->
+    <string name="month_january">Styczeń</string>
+    <string name="month_february">Luty</string>
+    <string name="month_march">Marzec</string>
+    <string name="month_april">Kwiecień</string>
+    <string name="month_may">Maj</string>
+    <string name="month_june">Czerwiec</string>
+    <string name="month_july">Lipiec</string>
+    <string name="month_august">Sierpień</string>
+    <string name="month_september">Wrzesień</string>
+    <string name="month_october">Październik</string>
+    <string name="month_november">Listopad</string>
+    <string name="month_december">Grudzień</string>
+
+    <!-- Welcome -->
+    <string name="welcome_tagline">Plan zajęć, oceny i opłaty z Wirtualnego Dziekanatu WSEI — w jednym miejscu.</string>
+    <string name="welcome_point_schedule">Plan na dziś i na cały tydzień</string>
+    <string name="welcome_point_grades">Oceny, średnia i punkty ECTS</string>
+    <string name="welcome_point_finances">Opłaty, numer konta i stypendia</string>
+    <string name="welcome_continue">Zaczynamy</string>
+
+    <!-- Login -->
+    <string name="login_title">Zaloguj się</string>
+    <string name="login_subtitle">Użyj danych z Wirtualnego Dziekanatu WSEI.</string>
+    <string name="login_username_label">Numer albumu lub e-mail</string>
+    <string name="login_password_label">Hasło</string>
+    <string name="login_show_password">Pokaż hasło</string>
+    <string name="login_hide_password">Ukryj hasło</string>
+    <string name="login_remember_me">Zapamiętaj mnie</string>
+    <string name="login_remember_me_supporting">Dane są szyfrowane w Android Keystore.</string>
+    <string name="login_in_progress">Logowanie…</string>
+    <string name="login_submit">Zaloguj się</string>
+    <string name="login_debug_account">Konto testowe (debug)</string>
+    <string name="login_validation_empty">Wpisz numer albumu i hasło.</string>
+
+    <!-- Home -->
+    <string name="home_greeting_morning">Dzień dobry, %1$s</string>
+    <string name="home_greeting_day">Cześć, %1$s</string>
+    <string name="home_greeting_evening">Dobry wieczór, %1$s</string>
+    <string name="home_greeting_fallback_name">Studencie</string>
+    <string name="home_album_number">Album %1$s</string>
+    <string name="home_today">Dzisiaj</string>
+    <string name="home_today_overline">%1$s • %2$s</string>
+    <string name="home_next_session_overline">Najbliższy zjazd • %1$s</string>
+    <plurals name="home_classes_short">
+        <item quantity="one">%1$d zaj.</item>
+        <item quantity="few">%1$d zaj.</item>
+        <item quantity="many">%1$d zaj.</item>
+        <item quantity="other">%1$d zaj.</item>
+    </plurals>
+    <string name="home_no_classes">Brak zaplanowanych zajęć. Odpocznij!</string>
+    <plurals name="home_more_in_schedule">
+        <item quantity="one">+ %1$d więcej w planie</item>
+        <item quantity="few">+ %1$d więcej w planie</item>
+        <item quantity="many">+ %1$d więcej w planie</item>
+        <item quantity="other">+ %1$d więcej w planie</item>
+    </plurals>
+    <plurals name="home_week_classes">
+        <item quantity="one">%1$d zaj. w tym tyg.</item>
+        <item quantity="few">%1$d zaj. w tym tyg.</item>
+        <item quantity="many">%1$d zaj. w tym tyg.</item>
+        <item quantity="other">%1$d zaj. w tym tyg.</item>
+    </plurals>
+    <string name="home_week_free">Wolny tydzień</string>
+    <string name="home_shortcut_grades">Oceny</string>
+    <string name="home_average_value">Średnia %1$s</string>
+    <plurals name="home_unpaid_count">
+        <item quantity="one">%1$d do zapłaty</item>
+        <item quantity="few">%1$d do zapłaty</item>
+        <item quantity="many">%1$d do zapłaty</item>
+        <item quantity="other">%1$d do zapłaty</item>
+    </plurals>
+    <string name="home_all_paid">Wszystko opłacone</string>
+    <plurals name="home_unread_count">
+        <item quantity="one">%1$d nieprzeczytane</item>
+        <item quantity="few">%1$d nieprzeczytane</item>
+        <item quantity="many">%1$d nieprzeczytanych</item>
+        <item quantity="other">%1$d nieprzeczytanego</item>
+    </plurals>
+    <string name="home_no_new_announcements">Brak nowych</string>
+    <string name="home_payment_due_this_month">Termin w tym miesiącu</string>
+    <string name="home_payment_next">Najbliższa opłata</string>
+    <string name="home_payment_due_date">Termin: %1$s</string>
+    <string name="home_payment_none_supporting">Brak zaległości w bieżącym okresie.</string>
+
+    <!-- Subjects -->
+    <string name="subjects_empty_title">Brak przedmiotów</string>
+    <string name="subjects_empty_message">Oceny pojawią się tu po synchronizacji z Wirtualnym Dziekanatem.</string>
+    <string name="subjects_grades_title">Oceny</string>
+    <plurals name="subjects_count_short">
+        <item quantity="one">%1$d przedm.</item>
+        <item quantity="few">%1$d przedm.</item>
+        <item quantity="many">%1$d przedm.</item>
+        <item quantity="other">%1$d przedm.</item>
+    </plurals>
+    <string name="subjects_average">Średnia</string>
+    <string name="subjects_ects">ECTS</string>
+    <string name="subjects_ects_value">%1$d ECTS</string>
+    <string name="subjects_graded">Ocenione</string>
+    <string name="subjects_graded_value">%1$d/%2$d</string>
+    <string name="subjects_graded_cd">Ocenione przedmioty: %1$d z %2$d</string>
+    <string name="subjects_partial_grades">Cząstkowe: %1$s</string>
+    <string name="subjects_grade_awarded">wpis %1$s</string>
+
+    <!-- Finances -->
+    <string name="finances_scholarship_history_title">Historia decyzji stypendialnych</string>
+    <string name="finances_empty_title">Brak należności</string>
+    <string name="finances_empty_message">Nie znaleziono żadnych opłat na Twoim koncie.</string>
+    <string name="finances_section_unpaid">Do zapłaty</string>
+    <string name="finances_section_paid">Zapłacone</string>
+    <string name="finances_section_scholarships">Stypendia</string>
+    <string name="finances_scholarships_empty_title">Brak wniosków</string>
+    <string name="finances_scholarships_empty_message">W tym semestrze nie złożono wniosku stypendialnego.</string>
+    <string name="finances_balance">Saldo</string>
+    <string name="finances_to_pay_with_count">Do zapłaty • %1$s</string>
+    <plurals name="finances_items_count">
+        <item quantity="one">%1$d pozycja</item>
+        <item quantity="few">%1$d pozycje</item>
+        <item quantity="many">%1$d pozycji</item>
+        <item quantity="other">%1$d pozycji</item>
+    </plurals>
+    <string name="finances_all_settled">Wszystko uregulowane</string>
+    <string name="finances_account_number">Indywidualny numer konta</string>
+    <string name="finances_account_number_clip_label">Numer konta</string>
+    <string name="finances_account_copy_cd">Kopiuj numer konta</string>
+    <string name="finances_account_copied_cd">Skopiowano numer konta</string>
+    <string name="finances_pay_online">Zapłać online • %1$s</string>
+    <string name="finances_due_this_month">Termin w tym miesiącu • %1$s</string>
+    <string name="finances_paid_on">Zapłacone • %1$s</string>
+    <string name="finances_due_on">Termin %1$s</string>
+    <string name="finances_status">Status</string>
+    <string name="finances_due_date">Termin płatności</string>
+    <string name="finances_payment_date">Data wpłaty</string>
+    <string name="finances_amount_charged">Kwota naliczona</string>
+    <string name="finances_interest_charged">Odsetki naliczone</string>
+    <string name="finances_interest_paid">Odsetki zapłacone</string>
+    <string name="finances_amortization">Umorzenie</string>
+    <string name="finances_discount">Bonifikata</string>
+    <string name="finances_expired">Przedawnienie</string>
+    <string name="finances_scholarship_overline">%1$s • %2$s</string>
+    <string name="finances_scholarship_submitted">Data wniosku</string>
+    <string name="finances_scholarship_decision">Decyzja</string>
+    <string name="finances_scholarship_decision_pending">W toku</string>
+    <string name="finances_scholarship_decision_date">Data decyzji</string>
+    <string name="finances_payout_label">%1$s • %2$s</string>
+    <string name="finances_scholarship_history">Historia decyzji</string>
+
+    <!-- Profile -->
+    <string name="profile_section_studies">Studia</string>
+    <string name="profile_course_of_study">Tok studiów</string>
+    <string name="profile_field_of_study">Kierunek</string>
+    <string name="profile_specialization">Specjalność</string>
+    <string name="profile_specialization_general">Ogólna</string>
+    <string name="profile_department">Wydział</string>
+    <string name="profile_study_mode">Tryb studiów</string>
+    <string name="profile_obtained_title">Otrzymywany tytuł</string>
+    <string name="profile_year_semester">Rok / semestr</string>
+    <string name="profile_year_semester_value">Rok %1$d • Semestr %2$d</string>
+    <string name="profile_group">Grupa</string>
+    <string name="profile_no_group">Brak grupy</string>
+    <string name="profile_average_current">Średnia (bieżący sem.)</string>
+    <string name="profile_average_previous">Średnia (poprzedni sem.)</string>
+    <string name="profile_average_overall">Średnia ze studiów</string>
+    <string name="profile_student_groups">Grupy studenckie</string>
+    <string name="profile_study_plan">Plan studiów</string>
+    <string name="profile_plan_subject_title">%1$d. %2$s</string>
+    <string name="profile_plan_subject_supporting">%1$s • %2$s • %3$d godz.</string>
+    <string name="profile_section_account">Konto</string>
+    <string name="profile_change_password">Zmień hasło</string>
+    <string name="profile_change_password_supporting">Hasło do Wirtualnego Dziekanatu</string>
+    <string name="profile_logout">Wyloguj się</string>
+    <string name="profile_logout_supporting">Zakończ sesję na tym urządzeniu</string>
+    <string name="profile_status_default">Studiuje</string>
+    <string name="profile_stat_semester_average">Śr. semestru</string>
+    <string name="profile_stat_overall_average">Śr. studiów</string>
+    <string name="profile_stat_semester">Semestr</string>
+    <string name="profile_current_password">Obecne hasło</string>
+    <string name="profile_new_password">Nowe hasło</string>
+    <string name="profile_show_passwords">Pokaż hasła</string>
+    <string name="profile_hide_passwords">Ukryj hasła</string>
+    <string name="profile_save_password">Zapisz nowe hasło</string>
+
+    <!-- Announcements -->
+    <string name="announcements_title">Ogłoszenia</string>
+    <string name="announcements_empty_title">Brak ogłoszeń</string>
+    <string name="announcements_empty_message">Nowe wiadomości z dziekanatu pojawią się tutaj.</string>
+    <string name="announcements_meta">%1$s • %2$s</string>
+
+    <!-- More -->
+    <string name="more_announcements_supporting">Wiadomości z dziekanatu i załączniki</string>
+    <string name="more_link_virtual_dean">Wirtualny dziekanat</string>
+    <string name="more_link_elearning">Platforma e-learningowa</string>
+    <string name="more_useful_links">Przydatne linki</string>
+    <string name="more_pick_section_title">Wybierz sekcję</string>
+    <string name="more_pick_section_message">Ogłoszenia, ustawienia i informacje o aplikacji otworzą się w tym miejscu.</string>
+    <string name="more_announcements_with_count">Ogłoszenia • %1$s</string>
+    <string name="more_show_announcements">Pokaż ogłoszenia</string>
+    <plurals name="more_new_count">
+        <item quantity="one">%1$d nowe</item>
+        <item quantity="few">%1$d nowe</item>
+        <item quantity="many">%1$d nowych</item>
+        <item quantity="other">%1$d nowego</item>
+    </plurals>
+</resources>

@@ -118,6 +118,7 @@ import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import pl.lublin.wsei.plan.ui.theme.isWseiDarkTheme
 import pl.lublin.wsei.plan.ui.theme.wseiPaletteSwatch
+import androidx.compose.ui.res.pluralStringResource
 
 private const val LINK_VIRTUAL_DEAN = "https://dziekanat.wsei.lublin.pl/"
 private const val LINK_ELEARNING = "https://dl.wsei.pl/"
@@ -288,13 +289,9 @@ private class HubEntry(
     val unreadCount: Int = 0
 )
 
-/** „1 nowe”, „3 nowe”, „5 nowych”, „12 nowych”, „22 nowe”. */
-private fun polishNewCountLabel(count: Int): String {
-    val lastDigit = count % 10
-    val lastTwoDigits = count % 100
-    val word = if (count == 1 || (lastDigit in 2..4 && lastTwoDigits !in 12..14)) "nowe" else "nowych"
-    return "$count $word"
-}
+/** Badge with the number of unread announcements („1 nowe”, „5 nowych”). */
+@Composable
+private fun newCountLabel(count: Int): String = pluralStringResource(R.plurals.more_new_count, count, count)
 
 @Composable
 private fun MoreHub(
@@ -310,8 +307,8 @@ private fun MoreHub(
     val sections = listOf(
         HubEntry(
             key = "announcements",
-            title = "Ogłoszenia",
-            supporting = "Wiadomości z dziekanatu i załączniki",
+            title = stringResource(R.string.announcements_title),
+            supporting = stringResource(R.string.more_announcements_supporting),
             icon = WseiIcons.Campaign,
             onClick = { onOpen(MoreSubView.ANNOUNCEMENTS) },
             subView = MoreSubView.ANNOUNCEMENTS,
@@ -337,14 +334,14 @@ private fun MoreHub(
     val links = listOf(
         HubEntry(
             key = "link_dean",
-            title = "Wirtualny dziekanat",
+            title = stringResource(R.string.more_link_virtual_dean),
             supporting = "dziekanat.wsei.lublin.pl",
             icon = WseiIcons.Badge,
             onClick = { openLink(LINK_VIRTUAL_DEAN) }
         ),
         HubEntry(
             key = "link_elearning",
-            title = "Platforma e-learningowa",
+            title = stringResource(R.string.more_link_elearning),
             supporting = "dl.wsei.pl",
             icon = WseiIcons.School,
             onClick = { openLink(LINK_ELEARNING) }
@@ -353,7 +350,7 @@ private fun MoreHub(
     // Tiles on medium windows; a compact list on phones and in the narrow hub pane.
     val useTiles = !forceList && !windowLayout.isCompact
 
-    WseiScreenFrame(title = "Więcej") { scrollModifier ->
+    WseiScreenFrame(title = stringResource(R.string.nav_more)) { scrollModifier ->
         val itemModifier = Modifier.wseiReadableWidth()
         LazyColumn(
             modifier = Modifier
@@ -370,7 +367,7 @@ private fun MoreHub(
                 }
             }
             item(key = "section_links", contentType = "section") {
-                WseiSectionTitle("Przydatne linki", modifier = itemModifier)
+                WseiSectionTitle(stringResource(R.string.more_useful_links), modifier = itemModifier)
             }
             item(key = "links_list", contentType = "hub_group") {
                 if (useTiles) {
@@ -387,7 +384,7 @@ private fun MoreHub(
 private fun HubTrailing(entry: HubEntry) {
     if (entry.unreadCount > 0) {
         WseiPill(
-            text = polishNewCountLabel(entry.unreadCount),
+            text = newCountLabel(entry.unreadCount),
             containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
             emphasized = true
@@ -526,12 +523,12 @@ private fun MoreDetailPlaceholder(unreadCount: Int, onOpenAnnouncements: () -> U
                 )
             }
             Text(
-                text = "Wybierz sekcję",
+                text = stringResource(R.string.more_pick_section_title),
                 style = MaterialTheme.typography.headlineSmall,
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "Ogłoszenia, ustawienia i informacje o aplikacji otworzą się w tym miejscu.",
+                text = stringResource(R.string.more_pick_section_message),
                 style = MaterialTheme.typography.bodyLarge,
                 color = colors.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -544,9 +541,9 @@ private fun MoreDetailPlaceholder(unreadCount: Int, onOpenAnnouncements: () -> U
                 )
                 Text(
                     text = if (unreadCount > 0) {
-                        "Ogłoszenia • ${polishNewCountLabel(unreadCount)}"
+                        stringResource(R.string.more_announcements_with_count, newCountLabel(unreadCount))
                     } else {
-                        "Pokaż ogłoszenia"
+                        stringResource(R.string.more_show_announcements)
                     },
                     modifier = Modifier.padding(start = WseiSpacing.s)
                 )

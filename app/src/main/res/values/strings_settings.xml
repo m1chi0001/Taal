@@ -59,6 +59,7 @@
     <string name="about_licence_copyright">Prawa autorskie</string>
     <string name="about_licence_font">Czcionka</string>
     <string name="about_licence_data">Dane</string>
+    <string name="about_licence_data_value">Wirtualny Dziekanat (APR System)</string>
     <string name="about_disclaimer">Niezależny projekt studencki, niepowiązany oficjalnie z Uniwersytetem WSEI ani z APR System.</string>
 
     <string name="about_update_title">Aktualizacje</string>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings of the data layer: calendar sync, attachments and the Live Notification. -->
+<resources>
+    <!-- Calendar sync -->
+    <string name="calendar_unnamed">Календар без назви</string>
+    <string name="calendar_event_title">%1$s (%2$s)</string>
+    <string name="calendar_event_lecturer">Викладач: %1$s</string>
+    <string name="calendar_event_group">Група: %1$s</string>
+    <string name="calendar_event_mode">Формат: %1$s</string>
+    <string name="calendar_event_alert">Увага: %1$s</string>
+    <string name="calendar_event_footer">Додано через Taal</string>
+    <string name="calendar_error_permission">Немає доступу до календаря. Дозвольте Taal читати й записувати календар у налаштуваннях системи.</string>
+    <string name="calendar_error_unavailable">Вибраний календар недоступний або лише для читання. Виберіть інший календар.</string>
+    <string name="calendar_error_generic">Не вдалося синхронізувати розклад із календарем. Спробуйте ще раз.</string>
+
+    <!-- Announcement attachments -->
+    <string name="data_attachment_empty">Вкладення порожнє.</string>
+    <string name="data_attachment_corrupt">Не вдалося прочитати завантажене вкладення.</string>
+
+    <!-- Live Notification -->
+    <string name="notif_channel_name">Заняття наживо</string>
+    <string name="notif_channel_description">Перебіг поточних занять на заблокованому екрані та в рядку стану.</string>
+    <string name="notif_loading">Завантаження розкладу…</string>
+    <string name="notif_status_ongoing">Триває · до %1$s</string>
+    <string name="notif_status_upcoming">Через %1$s · о %2$s</string>
+    <string name="notif_status_starting">Починається · о %1$s</string>
+    <string name="notif_break_until">Перерва до %1$s</string>
+    <string name="notif_remaining">Залишилося %1$s</string>
+    <string name="notif_next">Далі: %1$s о %2$s</string>
+    <string name="notif_duration_min">%1$d хв</string>
+    <string name="notif_duration_hours">%1$d год</string>
+    <string name="notif_duration_hours_min">%1$d год %2$d хв</string>
+    <string name="notif_room">Аудиторія %1$s</string>
+    <string name="notif_room_tbd">Аудиторію уточнюють</string>
+    <string name="notif_room_streaming">Трансляція</string>
+    <string name="notif_room_elearning">E-learning</string>
+</resources>

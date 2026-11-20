@@ -22,6 +22,9 @@ import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
+import pl.lublin.wsei.plan.data.local.LocalizedStrings
+import pl.lublin.wsei.plan.l10n.labelRes
+import pl.lublin.wsei.plan.l10n.localizedLabel
 
 /** Failure of a calendar operation with a user-facing (Polish) [message]. */
 class CalendarSyncException(message: String, cause: Throwable? = null) : Exception(message, cause)
@@ -44,7 +47,8 @@ class CalendarSyncException(message: String, cause: Throwable? = null) : Excepti
  */
 @Singleton
 class AndroidCalendarSyncManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val strings: LocalizedStrings
 ) : CalendarSyncManager {
 
     private val resolver get() = context.contentResolver
@@ -74,7 +78,7 @@ class AndroidCalendarSyncManager @Inject constructor(
                 calendars += DeviceCalendar(
                     id = c.getLong(idCol),
                     displayName = c.stringOrEmpty(nameCol)
-                        .ifBlank { account.ifBlank { context.getString(R.string.calendar_unnamed) } },
+                        .ifBlank { account.ifBlank { strings.get(R.string.calendar_unnamed) } },
                     accountName = account,
                     colorArgb = if (c.isNull(colorCol)) null else c.getInt(colorCol),
                     isPrimary = (!c.isNull(primaryCol) && c.getInt(primaryCol) == 1) ||
@@ -156,7 +160,7 @@ class AndroidCalendarSyncManager @Inject constructor(
             null,
             null
         )?.use { c -> c.moveToFirst() && c.getInt(0) >= Calendars.CAL_ACCESS_CONTRIBUTOR } ?: false
-        if (!writable) throw CalendarSyncException(context.getString(R.string.calendar_error_unavailable))
+        if (!writable) throw CalendarSyncException(strings.get(R.string.calendar_error_unavailable))
     }
 
     private fun queryTaalEvents(calendarId: Long): List<ExistingEvent> {
@@ -207,7 +211,7 @@ class AndroidCalendarSyncManager @Inject constructor(
         hideLecturer: Boolean
     ): ContentValues = ContentValues().apply {
         put(Events.CALENDAR_ID, calendarId)
-        put(Events.TITLE, context.getString(R.string.calendar_event_title, event.subject.name, event.classType.polishLabel))
+        put(Events.TITLE, strings.get(R.string.calendar_event_title, event.subject.name, strings.get(event.classType.labelRes)))
         put(Events.EVENT_LOCATION, location(event))
         put(Events.DESCRIPTION, description(key, event, hideLecturer))
         put(Events.DTSTART, event.timeSlot.startEpochMillis)
@@ -218,24 +222,24 @@ class AndroidCalendarSyncManager @Inject constructor(
     }
 
     private fun location(event: ClassEvent): String =
-        listOfNotNull(event.room.displayLabel, event.room.addressLabel)
+        listOfNotNull(event.room.localizedLabel(strings.context()), event.room.addressLabel)
             .filter { it.isNotBlank() }
             .joinToString(", ")
 
     private fun description(key: String, event: ClassEvent, hideLecturer: Boolean): String {
         val lines = mutableListOf<String>()
         if (!hideLecturer && event.lecturer.hasName) {
-            lines += context.getString(R.string.calendar_event_lecturer, event.lecturer.fullDisplayName)
+            lines += strings.get(R.string.calendar_event_lecturer, event.lecturer.fullDisplayName)
         }
         if (event.groupCode.isNotBlank()) {
-            lines += context.getString(R.string.calendar_event_group, event.groupCode)
+            lines += strings.get(R.string.calendar_event_group, event.groupCode)
         }
-        lines += context.getString(R.string.calendar_event_mode, event.deliveryMode.polishBadge)
+        lines += strings.get(R.string.calendar_event_mode, strings.get(event.deliveryMode.labelRes))
         event.incidentAlert?.takeIf { it.isNotBlank() }?.let {
-            lines += context.getString(R.string.calendar_event_alert, it)
+            lines += strings.get(R.string.calendar_event_alert, it)
         }
         lines += ""
-        lines += context.getString(R.string.calendar_event_footer) + " $MARKER_PREFIX$key]"
+        lines += strings.get(R.string.calendar_event_footer) + " $MARKER_PREFIX$key]"
         return lines.joinToString("\n")
     }
 
@@ -255,9 +259,9 @@ class AndroidCalendarSyncManager @Inject constructor(
         } catch (e: CalendarSyncException) {
             Result.failure(e)
         } catch (e: SecurityException) {
-            Result.failure(CalendarSyncException(context.getString(R.string.calendar_error_permission), e))
+            Result.failure(CalendarSyncException(strings.get(R.string.calendar_error_permission), e))
         } catch (e: Exception) {
-            Result.failure(CalendarSyncException(context.getString(R.string.calendar_error_generic), e))
+            Result.failure(CalendarSyncException(strings.get(R.string.calendar_error_generic), e))
         }
     }
 

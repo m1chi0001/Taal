@@ -49,6 +49,8 @@ import pl.lublin.wsei.plan.ui.adaptive.WseiReadableContentMaxWidth
 import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import androidx.compose.ui.res.stringResource
+import pl.lublin.wsei.plan.R
 
 /**
  * Skrót do profilu w prawym górnym rogu każdego głównego ekranu (zdjęcie studenta).
@@ -120,7 +122,7 @@ fun WseiScreenFrame(
             ) {
                 Icon(
                     imageVector = WseiIcons.ChevronLeft,
-                    contentDescription = "Wróć",
+                    contentDescription = stringResource(R.string.common_back),
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -249,6 +251,7 @@ fun WseiScreenScaffold(
 @Composable
 private fun ProfileShortcutButton(shortcut: WseiProfileShortcut) {
     val interactionSource = remember { MutableInteractionSource() }
+    val profileDescription = stringResource(R.string.common_profile_of, shortcut.fullName)
     Box(
         modifier = Modifier
             .padding(end = WseiSpacing.m)
@@ -261,7 +264,7 @@ private fun ProfileShortcutButton(shortcut: WseiProfileShortcut) {
             interactionSource = interactionSource,
             modifier = Modifier
                 .size(44.dp)
-                .semantics { contentDescription = "Profil: ${shortcut.fullName}" }
+                .semantics { contentDescription = profileDescription }
         ) {
             StudentAvatar(
                 base64Photo = shortcut.photoBase64,

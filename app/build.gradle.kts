@@ -52,6 +52,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // In-app language switcher (pl/en/uk): keep all languages in every App Bundle split.
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

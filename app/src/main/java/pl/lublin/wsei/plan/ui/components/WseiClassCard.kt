@@ -41,6 +41,11 @@ import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.WseiCardShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import androidx.compose.ui.res.stringResource
+import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.l10n.labelRes
+import pl.lublin.wsei.plan.l10n.localizedLabel
+import pl.lublin.wsei.plan.l10n.localizedNameOrPlaceholder
 
 enum class ClassRowState { UPCOMING, NEXT, ONGOING, FINISHED }
 
@@ -73,7 +78,7 @@ fun WseiClassCard(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     showContainer: Boolean = true,
-    lecturerLabel: String = event.lecturer.displayNameOrPlaceholder
+    lecturerLabel: String = event.lecturer.localizedNameOrPlaceholder()
 ) {
     val ongoing = state == ClassRowState.ONGOING
     val finished = state == ClassRowState.FINISHED
@@ -105,6 +110,16 @@ fun WseiClassCard(
         ClassRowState.NEXT -> colors.onTertiaryContainer
         else -> colors.onSurface
     }
+    val stateLabel = stringResource(
+        when (state) {
+            ClassRowState.ONGOING -> R.string.class_state_ongoing
+            ClassRowState.NEXT -> R.string.class_state_next
+            ClassRowState.FINISHED -> R.string.class_state_finished
+            ClassRowState.UPCOMING -> R.string.class_state_upcoming
+        }
+    )
+    val classTypeLabel = stringResource(event.classType.labelRes)
+    val roomLabel = event.room.localizedLabel()
     val rowAlpha by animateFloatAsState(
         targetValue = if (finished) 0.55f else 1f,
         animationSpec = WseiMotion.effects(),
@@ -118,12 +133,7 @@ fun WseiClassCard(
         modifier = modifier
             .fillMaxWidth()
             .semantics {
-                stateDescription = when (state) {
-                    ClassRowState.ONGOING -> "Trwa teraz"
-                    ClassRowState.NEXT -> "Następne zajęcia"
-                    ClassRowState.FINISHED -> "Zakończone"
-                    ClassRowState.UPCOMING -> "Zaplanowane"
-                }
+                stateDescription = stateLabel
             }
     ) {
         Column(
@@ -172,8 +182,8 @@ fun WseiClassCard(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     when (state) {
-                        ClassRowState.ONGOING -> StatusLabel("Trwa teraz", colors.primary)
-                        ClassRowState.NEXT -> StatusLabel("Następne", colors.tertiary)
+                        ClassRowState.ONGOING -> StatusLabel(stringResource(R.string.class_badge_ongoing), colors.primary)
+                        ClassRowState.NEXT -> StatusLabel(stringResource(R.string.class_badge_next), colors.tertiary)
                         else -> Unit
                     }
                     Text(
@@ -185,7 +195,7 @@ fun WseiClassCard(
                     )
                     if (compact) {
                         Text(
-                            text = "${event.classType.polishLabel} • ${event.room.displayLabel}",
+                            text = stringResource(R.string.class_card_type_room, classTypeLabel, roomLabel),
                             style = MaterialTheme.typography.labelMedium,
                             color = mutedColor,
                             maxLines = 1,
@@ -201,13 +211,13 @@ fun WseiClassCard(
                             } else {
                                 colors.surfaceContainerHighest
                             }
-                            WseiPill(event.classType.polishLabel, containerColor = chipColor, contentColor = contentColor)
-                            WseiPill(event.deliveryMode.polishBadge, containerColor = chipColor, contentColor = contentColor)
+                            WseiPill(classTypeLabel, containerColor = chipColor, contentColor = contentColor)
+                            WseiPill(stringResource(event.deliveryMode.labelRes), containerColor = chipColor, contentColor = contentColor)
                             if (event.groupCode.isNotBlank()) {
                                 WseiPill(event.groupCode, containerColor = chipColor, contentColor = contentColor)
                             }
                         }
-                        ClassDetailLine(WseiIcons.LocationOn, event.room.displayLabel, mutedColor)
+                        ClassDetailLine(WseiIcons.LocationOn, roomLabel, mutedColor)
                         event.room.addressLabel?.let { address ->
                             ClassDetailLine(WseiIcons.Home, address, mutedColor)
                         }
@@ -222,6 +232,9 @@ fun WseiClassCard(
                     animationSpec = WseiMotion.size(),
                     label = "classProgress"
                 )
+                val elapsed = event.elapsedMinutes(nowEpochMillis)
+                val total = event.totalDurationMinutes
+                val progressDescription = stringResource(R.string.schedule_hero_progress_cd, elapsed, total)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     LinearWavyProgressIndicator(
                         progress = { progress },
@@ -229,14 +242,13 @@ fun WseiClassCard(
                             .fillMaxWidth()
                             .height(14.dp)
                             .semantics {
-                                contentDescription = "Postęp zajęć: ${event.elapsedMinutes(nowEpochMillis)} " +
-                                    "z ${event.totalDurationMinutes} minut"
+                                contentDescription = progressDescription
                             },
                         color = colors.primary,
                         trackColor = contentColor.copy(alpha = 0.18f)
                     )
                     Text(
-                        text = "${event.elapsedMinutes(nowEpochMillis)} z ${event.totalDurationMinutes} min • do ${event.timeSlot.endFormatted}",
+                        text = stringResource(R.string.class_card_progress, elapsed, total, event.timeSlot.endFormatted),
                         style = MaterialTheme.typography.labelMedium,
                         color = mutedColor
                     )

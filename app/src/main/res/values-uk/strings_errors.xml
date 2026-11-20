@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- User-visible error messages: login, network, Virtual Dean's Office API and app updates. -->
+<resources>
+    <!-- General and network -->
+    <string name="error_not_logged_in">Ви не ввійшли в систему.</string>
+    <string name="error_unknown">Сталася невідома помилка.</string>
+    <string name="error_session_expired">Сеанс у Віртуальному деканаті завершився. Увійдіть ще раз.</string>
+    <string name="error_wd_server">Віртуальний деканат повідомив про помилку.</string>
+    <string name="error_wd_http">Віртуальний деканат відповів кодом HTTP %1$d.</string>
+    <string name="error_wd_malformed">Не вдалося прочитати відповідь Віртуального деканату. Спробуйте пізніше.</string>
+    <string name="error_no_internet">Немає підключення до інтернету. Перевірте зʼєднання й спробуйте ще раз.</string>
+    <string name="error_timeout">Віртуальний деканат не відповідає. Спробуйте ще раз за хвилину.</string>
+    <string name="error_connection">Не вдалося підключитися до Віртуального деканату. Перевірте зʼєднання й спробуйте ще раз.</string>
+
+    <!-- Login -->
+    <string name="error_login_generic">Не вдалося ввійти. Перевірте дані та підключення до інтернету.</string>
+    <string name="error_login_invalid_credentials">Неправильний логін або пароль.</string>
+    <string name="error_login_no_data">Сервер не повернув даних для входу. Спробуйте ще раз.</string>
+    <string name="error_login_password_reset_required">Обліковий запис потребує зміни пароля у Віртуальному деканаті.</string>
+    <string name="error_login_two_factor_required">Обліковий запис потребує коду двоетапної перевірки.</string>
+    <string name="error_login_no_token">Сервер не повернув токен доступу. Спробуйте ще раз.</string>
+
+    <!-- Account, payments, attachments -->
+    <string name="status_password_changed">Пароль змінено.</string>
+    <string name="error_password_change">Не вдалося змінити пароль.</string>
+    <string name="status_payment_opening">Відкриваю оплату: %1$s</string>
+    <string name="error_payment_start">Не вдалося розпочати оплату.</string>
+    <string name="error_payment_no_link">Немає посилання на онлайн-оплату BlueMedia.</string>
+    <string name="error_attachment_no_viewer">Немає застосунку, який відкриє файл «%1$s».</string>
+    <string name="error_attachment_download">Не вдалося завантажити вкладення.</string>
+    <string name="error_schedule_refresh">Не вдалося оновити розклад занять.</string>
+
+    <!-- App updates (GitHub releases) -->
+    <string name="update_error_no_release">На GitHub ще немає опублікованого випуску.</string>
+    <string name="update_error_rate_limited">GitHub тимчасово обмежує запити. Спробуйте ще раз за кілька хвилин.</string>
+    <string name="update_error_http">GitHub відповів кодом HTTP %1$d.</string>
+    <string name="update_error_no_connection">Немає зʼєднання з GitHub. Перевірте інтернет і спробуйте ще раз.</string>
+    <string name="update_error_unreadable">Не вдалося прочитати інформацію про випуск.</string>
+    <string name="update_error_no_version">Випуск на GitHub не має номера версії.</string>
+    <string name="update_error_no_apk">До випуску %1$s не додано файл APK. Додайте його до випуску на GitHub.</string>
+    <string name="update_error_bad_url">Неправильна адреса завантаження.</string>
+    <string name="update_error_download_http">Не вдалося завантажити (HTTP %1$d).</string>
+    <string name="update_error_incomplete">Завантажений файл неповний. Спробуйте ще раз.</string>
+    <string name="update_error_save_failed">Не вдалося зберегти завантажений файл.</string>
+    <string name="update_error_interrupted">Завантаження перервано. Перевірте зʼєднання й спробуйте ще раз.</string>
+    <string name="update_error_invalid_apk">Завантажений файл не є коректним APK.</string>
+    <string name="update_error_foreign_apk">Завантажений файл походить з іншого застосунку.</string>
+    <string name="update_error_download_generic">Не вдалося завантажити оновлення. Спробуйте ще раз.</string>
+</resources>

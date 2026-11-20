@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Settings -->
+    <string name="settings_title">Налаштування</string>
+    <string name="settings_hub_supporting">Тема, кольори, мова та приватність</string>
+    <string name="settings_opens_in_browser">Відкривається в браузері</string>
+
+    <string name="settings_section_theme">Тема</string>
+    <string name="settings_theme_light">Світла</string>
+    <string name="settings_theme_dark">Темна</string>
+    <string name="settings_theme_system">Системна</string>
+    <string name="settings_theme_light_description">Завжди світлі кольори</string>
+    <string name="settings_theme_dark_description">Завжди темні кольори</string>
+    <string name="settings_theme_system_description">Світла або темна — як у налаштуваннях телефона</string>
+
+    <string name="settings_section_palette">Палітра кольорів</string>
+    <string name="settings_palette_taal">Taal</string>
+    <string name="settings_palette_dynamic">Динамічна</string>
+    <string name="settings_palette_dynamic_hint">Material You</string>
+    <string name="settings_palette_cobalt">Кобальт</string>
+    <string name="settings_palette_terracotta">Теракота</string>
+    <string name="settings_palette_plum">Слива</string>
+    <string name="settings_palette_ocean">Океан</string>
+    <string name="settings_palette_description">Палітра працює у світлій, темній і системній темах.</string>
+    <string name="settings_palette_dynamic_description">Кольори підбираються за шпалерами телефона (Material You).</string>
+    <string name="settings_palette_dynamic_unsupported">Динамічна палітра (кольори зі шпалер, Material You) потребує Android 12 або новішої версії.</string>
+
+    <string name="settings_section_language">Мова застосунку</string>
+    <string name="settings_language_system">Мова системи</string>
+    <string name="settings_language_system_supporting">Відповідно до налаштувань телефона</string>
+
+    <string name="settings_section_behaviour">Поведінка</string>
+    <string name="settings_live_notification_title">Заняття на заблокованому екрані</string>
+    <string name="settings_live_notification_supporting">Перебіг поточних занять у рядку стану та на заблокованому екрані</string>
+    <string name="settings_hide_data_title">Приховати дані</string>
+    <string name="settings_hide_data_supporting">Приховує оцінки, суми, персональні дані та викладачів (імена й контактні дані)</string>
+
+    <!-- About -->
+    <string name="about_title">Про застосунок</string>
+    <string name="about_hub_supporting">Версія %1$s • ліцензія та вихідний код</string>
+    <string name="about_tagline">Розклад занять, оцінки, фінанси й оголошення з Віртуального деканату Університету WSEI в Любліні</string>
+    <string name="about_version">Версія %1$s</string>
+    <string name="about_min_android">Android 8.0+</string>
+    <string name="about_source_code">Вихідний код</string>
+    <string name="about_releases">Випуски</string>
+    <string name="about_releases_supporting">Історія версій і файли APK</string>
+    <string name="about_project_title">Проєкт</string>
+    <string name="about_author">Автор</string>
+    <string name="about_author_supporting">%1$s на GitHub</string>
+    <string name="about_tech_title">Технології</string>
+    <string name="about_tech_architecture">Clean Architecture, MVVM і кеш за принципом offline-first.</string>
+    <string name="about_licence_title">Ліцензія</string>
+    <string name="about_licence_app">Застосунок</string>
+    <string name="about_licence_mit">MIT</string>
+    <string name="about_licence_copyright">Авторські права</string>
+    <string name="about_licence_font">Шрифт</string>
+    <string name="about_licence_data">Дані</string>
+    <string name="about_licence_data_value">Віртуальний деканат (APR System)</string>
+    <string name="about_disclaimer">Незалежний студентський проєкт, офіційно не повʼязаний з Університетом WSEI чи APR System.</string>
+
+    <string name="about_update_title">Оновлення</string>
+    <string name="about_update_idle">Встановлена версія: %1$s</string>
+    <string name="about_update_checking">Перевірка найновішого випуску на GitHub…</string>
+    <string name="about_update_up_to_date">У вас найновіша версія (%1$s).</string>
+    <string name="about_update_available">Доступна версія %1$s (у вас %2$s).</string>
+    <string name="about_update_downloading">Завантаження версії %1$s… %2$d%%</string>
+    <string name="about_update_ready">Версію %1$s завантажено, її можна встановити.</string>
+    <string name="about_update_error">Не вдалося перевірити оновлення.</string>
+    <string name="about_update_whats_new">Що нового</string>
+    <string name="about_update_download">Завантажити</string>
+    <string name="about_update_cancel">Скасувати</string>
+    <string name="about_update_install">Встановити</string>
+    <string name="about_update_allow_and_install">Дозволити й встановити</string>
+    <string name="about_update_check">Перевірити оновлення</string>
+    <string name="about_update_check_again">Перевірити ще раз</string>
+    <string name="about_update_permission_hint">Android попросить дозвіл на встановлення застосунків із Taal. Після надання дозволу поверніться й торкніться «Встановити».</string>
+
+    <!-- Profile -->
+    <string name="profile_group_number">гр. %1$s</string>
+    <string name="profile_groups_empty">У поточному семестрі немає призначених груп.</string>
+
+    <!-- Subjects -->
+    <string name="subjects_semester_number">Семестр %1$d</string>
+    <string name="subjects_semester_current">%1$s (поточний)</string>
+    <string name="subjects_average_computed">Середня оцінка</string>
+</resources>

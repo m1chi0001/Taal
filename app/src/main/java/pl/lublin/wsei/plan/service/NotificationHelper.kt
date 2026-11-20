@@ -26,6 +26,8 @@ import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.ceil
+import pl.lublin.wsei.plan.data.local.LocalizedStrings
+import pl.lublin.wsei.plan.l10n.labelRes
 
 /**
  * A chronological segment of the student's academic day (`Zajęcia` or `Przerwa`) for the
@@ -82,7 +84,8 @@ sealed class DayTimelineSegment(
  */
 @Singleton
 class NotificationHelper @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val strings: LocalizedStrings
 ) {
     companion object {
         private const val LEGACY_CHANNEL_ID = "wsei_live_class_progress_channel"
@@ -115,10 +118,10 @@ class NotificationHelper @Inject constructor(
         }
         val channel = NotificationChannel(
             LIVE_CLASS_CHANNEL_ID,
-            context.getString(R.string.notif_channel_name),
+            strings.get(R.string.notif_channel_name),
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = context.getString(R.string.notif_channel_description)
+            description = strings.get(R.string.notif_channel_description)
             setShowBadge(false)
             setSound(null, null)
             enableVibration(false)
@@ -152,8 +155,8 @@ class NotificationHelper @Inject constructor(
         return Notification.Builder(context, LIVE_CLASS_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_taal_notification)
             .setColor(palette.accent)
-            .setContentTitle(context.getString(R.string.app_name))
-            .setContentText(context.getString(R.string.notif_loading))
+            .setContentTitle(strings.get(R.string.app_name))
+            .setContentText(strings.get(R.string.notif_loading))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
@@ -266,20 +269,20 @@ class NotificationHelper @Inject constructor(
         val event = state.focused
         val minutes = state.minutesToTarget(now)
         val status = when {
-            state.isOngoing -> context.getString(R.string.notif_status_ongoing, event.timeSlot.endFormatted)
-            minutes <= 0 -> context.getString(R.string.notif_status_starting, event.timeSlot.startFormatted)
-            else -> context.getString(R.string.notif_status_upcoming, formatDuration(minutes), event.timeSlot.startFormatted)
+            state.isOngoing -> strings.get(R.string.notif_status_ongoing, event.timeSlot.endFormatted)
+            minutes <= 0 -> strings.get(R.string.notif_status_starting, event.timeSlot.startFormatted)
+            else -> strings.get(R.string.notif_status_upcoming, formatDuration(minutes), event.timeSlot.startFormatted)
         }
         val lecturer = event.lecturer.fullDisplayName.takeIf { showLecturer && it.isNotBlank() }
-        val details = listOfNotNull(event.classType.polishLabel, roomLabel(event), lecturer).joinToString(SEPARATOR)
+        val details = listOfNotNull(strings.get(event.classType.labelRes), roomLabel(event), lecturer).joinToString(SEPARATOR)
 
         val expandedLines = buildList {
             add(details)
             when {
-                state.isOngoing -> add(context.getString(R.string.notif_remaining, formatDuration(minutes)))
-                state.breakStartMillis != null -> add(context.getString(R.string.notif_break_until, event.timeSlot.startFormatted))
+                state.isOngoing -> add(strings.get(R.string.notif_remaining, formatDuration(minutes)))
+                state.breakStartMillis != null -> add(strings.get(R.string.notif_break_until, event.timeSlot.startFormatted))
             }
-            state.next?.let { add(context.getString(R.string.notif_next, it.subject.name, it.timeSlot.startFormatted)) }
+            state.next?.let { add(strings.get(R.string.notif_next, it.subject.name, it.timeSlot.startFormatted)) }
         }
 
         val isBreak = !state.isOngoing
@@ -376,19 +379,19 @@ class NotificationHelper @Inject constructor(
     }
 
     private fun roomLabel(event: ClassEvent): String = when {
-        event.deliveryMode == DeliveryMode.ELEARNING -> context.getString(R.string.notif_room_elearning)
-        event.deliveryMode == DeliveryMode.REMOTE || event.room.isRemoteTeams -> context.getString(R.string.notif_room_streaming)
-        event.room.number.isBlank() -> context.getString(R.string.notif_room_tbd)
-        else -> context.getString(R.string.notif_room, event.room.number)
+        event.deliveryMode == DeliveryMode.ELEARNING -> strings.get(R.string.notif_room_elearning)
+        event.deliveryMode == DeliveryMode.REMOTE || event.room.isRemoteTeams -> strings.get(R.string.notif_room_streaming)
+        event.room.number.isBlank() -> strings.get(R.string.notif_room_tbd)
+        else -> strings.get(R.string.notif_room, event.room.number)
     }
 
     private fun formatDuration(minutes: Int): String {
         val hours = minutes / 60
         val rest = minutes % 60
         return when {
-            hours == 0 -> context.getString(R.string.notif_duration_min, minutes)
-            rest == 0 -> context.getString(R.string.notif_duration_hours, hours)
-            else -> context.getString(R.string.notif_duration_hours_min, hours, rest)
+            hours == 0 -> strings.get(R.string.notif_duration_min, minutes)
+            rest == 0 -> strings.get(R.string.notif_duration_hours, hours)
+            else -> strings.get(R.string.notif_duration_hours_min, hours, rest)
         }
     }
 

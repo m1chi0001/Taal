@@ -61,6 +61,7 @@ import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import java.util.Locale
+import androidx.compose.ui.res.pluralStringResource
 
 /** Grades of one semester, as returned by the dean's office (newest semester first). */
 private class SemesterGrades(
@@ -109,7 +110,7 @@ fun SubjectsScreen(
     val grades = selected?.grades.orEmpty()
 
     WseiScreenFrame(
-        title = "Przedmioty",
+        title = stringResource(R.string.nav_subjects),
         onRefresh = onRefresh,
         isRefreshing = uiState.isRefreshing
     ) { scrollModifier ->
@@ -158,8 +159,8 @@ fun SubjectsScreen(
                 ) {
                     WseiEmptyState(
                         icon = WseiIcons.School,
-                        title = "Brak przedmiotów",
-                        message = "Oceny pojawią się tu po synchronizacji z Wirtualnym Dziekanatem."
+                        title = stringResource(R.string.subjects_empty_title),
+                        message = stringResource(R.string.subjects_empty_message)
                     )
                 }
             } else {
@@ -168,7 +169,10 @@ fun SubjectsScreen(
                     contentType = "grades_title",
                     span = StaggeredGridItemSpan.FullLine
                 ) {
-                    WseiSectionTitle(text = "Oceny", trailing = "${grades.size} przedm.")
+                    WseiSectionTitle(
+                        text = stringResource(R.string.subjects_grades_title),
+                        trailing = pluralStringResource(R.plurals.subjects_count_short, grades.size, grades.size)
+                    )
                 }
                 items(
                     items = grades,
@@ -250,7 +254,9 @@ private fun SemesterSummaryCard(
     val average = uiState.maskSensitive(
         averageValue?.let { String.format(Locale.US, "%.2f", it) } ?: "—"
     )
-    val averageLabel = if (officialAverage != null) "Średnia" else stringResource(R.string.subjects_average_computed)
+    val averageLabel = stringResource(
+        if (officialAverage != null) R.string.subjects_average else R.string.subjects_average_computed
+    )
     val gradedFraction = if (subjectCount > 0) gradedCount.toFloat() / subjectCount else 0f
     val animatedGraded by animateFloatAsState(
         targetValue = gradedFraction,
@@ -292,10 +298,23 @@ private fun SemesterSummaryCard(
             val statColor = colors.onPrimaryContainer.copy(alpha = 0.1f)
             val statContent = colors.onPrimaryContainer
             WseiStat(average, averageLabel, Modifier.weight(1f), statColor, statContent)
-            WseiStat((semester?.totalEcts ?: 0).toString(), "ECTS", Modifier.weight(1f), statColor, statContent)
-            WseiStat("$gradedCount/$subjectCount", "Ocenione", Modifier.weight(1f), statColor, statContent)
+            WseiStat(
+                (semester?.totalEcts ?: 0).toString(),
+                stringResource(R.string.subjects_ects),
+                Modifier.weight(1f),
+                statColor,
+                statContent
+            )
+            WseiStat(
+                stringResource(R.string.subjects_graded_value, gradedCount, subjectCount),
+                stringResource(R.string.subjects_graded),
+                Modifier.weight(1f),
+                statColor,
+                statContent
+            )
         }
         if (subjectCount > 0) {
+            val gradedDescription = stringResource(R.string.subjects_graded_cd, gradedCount, subjectCount)
             // How far the semester's grading has progressed — counts only, no grade values.
             LinearWavyProgressIndicator(
                 progress = { animatedGraded },
@@ -303,7 +322,7 @@ private fun SemesterSummaryCard(
                     .fillMaxWidth()
                     .height(14.dp)
                     .semantics {
-                        contentDescription = "Ocenione przedmioty: $gradedCount z $subjectCount"
+                        contentDescription = gradedDescription
                     },
                 color = colors.primary,
                 trackColor = colors.onPrimaryContainer.copy(alpha = 0.16f)
@@ -371,7 +390,7 @@ private fun GradeCard(grade: GradeItem, lecturer: String, maskSensitive: Boolean
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    WseiPill("${grade.ects} ECTS", emphasized = true)
+                    WseiPill(stringResource(R.string.subjects_ects_value, grade.ects), emphasized = true)
                     WseiPill(grade.formLabel)
                     if (grade.passingForm.isNotBlank()) WseiPill(grade.passingForm)
                 }
@@ -384,12 +403,20 @@ private fun GradeCard(grade: GradeItem, lecturer: String, maskSensitive: Boolean
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                val details = buildList {
-                    if (grade.partialGrades.isNotEmpty()) {
-                        add("Cząstkowe: " + if (maskSensitive) "••••" else grade.partialGrades.joinToString(", "))
-                    }
-                    if (grade.dateAwarded.isNotBlank()) add("wpis ${grade.dateAwarded}")
-                }.joinToString(" • ")
+                val partialLabel = if (grade.partialGrades.isNotEmpty()) {
+                    stringResource(
+                        R.string.subjects_partial_grades,
+                        if (maskSensitive) "••••" else grade.partialGrades.joinToString(", ")
+                    )
+                } else {
+                    null
+                }
+                val awardedLabel = if (grade.dateAwarded.isNotBlank()) {
+                    stringResource(R.string.subjects_grade_awarded, grade.dateAwarded)
+                } else {
+                    null
+                }
+                val details = listOfNotNull(partialLabel, awardedLabel).joinToString(" • ")
                 if (details.isNotEmpty()) {
                     Text(
                         text = details,

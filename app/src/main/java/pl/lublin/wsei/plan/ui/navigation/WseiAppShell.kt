@@ -1,6 +1,7 @@
 package pl.lublin.wsei.plan.ui.navigation
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -45,9 +46,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
 import kotlinx.datetime.LocalDate
+import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
@@ -80,16 +83,16 @@ import pl.lublin.wsei.plan.ui.theme.WseiSpacing
  * w prawym górnym rogu ekranu albo w nagłówku szyny.
  */
 enum class WseiDestination(
-    val label: String,
-    val shortLabel: String,
-    val contentDescription: String
+    @StringRes val labelRes: Int,
+    @StringRes val shortLabelRes: Int,
+    @StringRes val contentDescriptionRes: Int
 ) {
-    START("Start", "Start", "Ekran startowy"),
-    SCHEDULE("Plan zajęć", "Plan", "Plan zajęć i kalendarz"),
-    SUBJECTS("Przedmioty", "Oceny", "Przedmioty, punkty ECTS i oceny"),
-    FINANCES("Finanse", "Finanse", "Opłaty i stypendia"),
-    MORE("Więcej", "Więcej", "Ogłoszenia, ustawienia i informacje o aplikacji"),
-    PROFILE("Profil", "Profil", "Dane studenta, tok studiów i grupy");
+    START(R.string.nav_start, R.string.nav_start_short, R.string.nav_start_cd),
+    SCHEDULE(R.string.nav_schedule, R.string.nav_schedule_short, R.string.nav_schedule_cd),
+    SUBJECTS(R.string.nav_subjects, R.string.nav_subjects_short, R.string.nav_subjects_cd),
+    FINANCES(R.string.nav_finances, R.string.nav_finances_short, R.string.nav_finances_cd),
+    MORE(R.string.nav_more, R.string.nav_more_short, R.string.nav_more_cd),
+    PROFILE(R.string.nav_profile, R.string.nav_profile_short, R.string.nav_profile_cd);
 
     val iconVector: ImageVector
         get() = when (this) {
@@ -237,14 +240,16 @@ fun WseiAppShell(
                     val useRail = windowLayout.useNavigationRail
                     val railShowsProfile = useRail && isTallWindow
                     val session = scheduleUiState.currentSession
+                    val studentFallbackName = stringResource(R.string.common_student)
                     val profileShortcut = remember(
                         session?.personPictureBase64,
                         session?.fullName,
-                        railShowsProfile
+                        railShowsProfile,
+                        studentFallbackName
                     ) {
                         WseiProfileShortcut(
                             photoBase64 = session?.personPictureBase64,
-                            fullName = session?.fullName ?: "Student",
+                            fullName = session?.fullName ?: studentFallbackName,
                             onOpen = { openProfile() },
                             showInTopBar = !railShowsProfile
                         )
@@ -492,7 +497,7 @@ private fun StatusMessage(message: String?, onDismiss: () -> Unit) {
                 )
                 TextButton(onClick = onDismiss) {
                     Text(
-                        text = "OK",
+                        text = stringResource(R.string.common_ok),
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.inversePrimary
                     )

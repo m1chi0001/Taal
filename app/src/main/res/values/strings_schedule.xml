@@ -48,4 +48,36 @@
         <item quantity="many">%1$d załączników</item>
         <item quantity="other">%1$d załącznika</item>
     </plurals>
+
+    <!-- Plan zajęć: lista dnia i kalendarz -->
+    <string name="schedule_day_off_title">Wolne od zajęć</string>
+    <string name="schedule_day_off_message">Na ten dzień nie ma zajęć. Wybierz inny dzień w kalendarzu.</string>
+    <string name="schedule_calendar_month_year">%1$s %2$d</string>
+    <string name="schedule_calendar_month_view">Widok miesiąca</string>
+    <string name="schedule_calendar_previous_month">Poprzedni miesiąc</string>
+    <string name="schedule_calendar_previous_week">Poprzedni tydzień</string>
+    <string name="schedule_calendar_next_month">Następny miesiąc</string>
+    <string name="schedule_calendar_next_week">Następny tydzień</string>
+    <string name="schedule_calendar_show_week">Tydzień</string>
+    <string name="schedule_calendar_show_month">Miesiąc</string>
+    <plurals name="schedule_day_classes_state">
+        <item quantity="one">%1$d zajęcia</item>
+        <item quantity="few">%1$d zajęcia</item>
+        <item quantity="many">%1$d zajęć</item>
+        <item quantity="other">%1$d zajęcia</item>
+    </plurals>
+    <string name="schedule_day_no_classes_state">Bez zajęć</string>
+    <string name="schedule_day_today_state">Dzisiaj. %1$s</string>
+    <string name="schedule_day_no_classes">Brak zajęć</string>
+    <plurals name="schedule_day_blocks">
+        <item quantity="one">%1$d blok</item>
+        <item quantity="few">%1$d bloki</item>
+        <item quantity="many">%1$d bloków</item>
+        <item quantity="other">%1$d bloku</item>
+    </plurals>
+    <string name="schedule_day_session_with_count">Zjazd • %1$s</string>
+    <string name="schedule_hero_next_details">%1$s • %2$s</string>
+    <string name="schedule_your_day">Twój dzień</string>
+    <string name="schedule_segment_class">Zaj. %1$d</string>
+    <string name="schedule_segment_break">Przerwa</string>
 </resources>

@@ -143,6 +143,14 @@ import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.Locale
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.pluralStringResource
+import pl.lublin.wsei.plan.l10n.fullNameRes
+import pl.lublin.wsei.plan.l10n.labelRes
+import pl.lublin.wsei.plan.l10n.localizedLabel
+import pl.lublin.wsei.plan.l10n.localizedNameOrPlaceholder
+import pl.lublin.wsei.plan.l10n.rememberLocalizedDateFormatter
+import pl.lublin.wsei.plan.l10n.shortNameRes
 
 /**
  * Plan zajęć (Material 3 Expressive):
@@ -245,7 +253,7 @@ fun ScheduleScreen(
     )
 
     WseiScreenFrame(
-        title = "Plan zajęć",
+        title = stringResource(R.string.nav_schedule),
         modifier = modifier.fillMaxSize(),
         onRefresh = onRefreshSchedule,
         isRefreshing = uiState.isRefreshing
@@ -404,7 +412,7 @@ private fun ScheduleControls(
                     nowEpochMillis = uiState.nowEpochMillis,
                     isExpanded = uiState.isHeroExpanded,
                     onToggleExpand = onToggleHeroExpanded,
-                    lecturerLabel = uiState.maskLecturer(shown.lecturer.displayNameOrPlaceholder),
+                    lecturerLabel = uiState.maskLecturer(shown.lecturer.localizedNameOrPlaceholder()),
                     onTriggerLiveNotification = { onSyncLiveNotification(shown) }
                 )
             }
@@ -469,8 +477,8 @@ private fun LazyListScope.dayTimeline(
         item(key = "empty_day", contentType = "empty_day") {
             WseiEmptyState(
                 icon = WseiIcons.CalendarMonth,
-                title = "Wolne od zajęć",
-                message = "Na ten dzień nie ma zajęć. Wybierz inny dzień w kalendarzu.",
+                title = stringResource(R.string.schedule_day_off_title),
+                message = stringResource(R.string.schedule_day_off_message),
                 modifier = itemModifier
             )
         }
@@ -487,7 +495,7 @@ private fun LazyListScope.dayTimeline(
                 event = row.event,
                 nowEpochMillis = now,
                 state = classRowStateOf(row.event, now, activeId, nextId),
-                lecturerLabel = uiState.maskLecturer(row.event.lecturer.displayNameOrPlaceholder),
+                lecturerLabel = uiState.maskLecturer(row.event.lecturer.localizedNameOrPlaceholder()),
                 modifier = itemModifier.animateItem(
                     fadeInSpec = WseiMotion.effects(),
                     placementSpec = WseiMotion.spatial(),
@@ -545,7 +553,7 @@ private fun ScheduleFilterButtonGroup(
                     .semantics { role = Role.RadioButton }
             ) {
                 Text(
-                    text = filter.polishLabel,
+                    text = stringResource(filter.labelRes),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                     maxLines = 1,
@@ -578,8 +586,13 @@ private fun ExpandableCalendarCard(
 ) {
     val weekStart = daysOfCurrentWeek.firstOrNull()?.date
     val weekEnd = daysOfCurrentWeek.lastOrNull()?.date
+    val monthTitle = stringResource(
+        R.string.schedule_calendar_month_year,
+        stringResource(monthNameRes(displayedMonth)),
+        displayedYear
+    )
     val subtitle = when {
-        isExpanded -> "Widok miesiąca"
+        isExpanded -> stringResource(R.string.schedule_calendar_month_view)
         weekStart != null && weekEnd != null -> "${weekStart.dayOfMonth}.${weekStart.monthNumber.twoDigits()} – " +
             "${weekEnd.dayOfMonth}.${weekEnd.monthNumber.twoDigits()}"
         else -> ""
@@ -604,7 +617,7 @@ private fun ExpandableCalendarCard(
                     .padding(start = WseiSpacing.xs)
             ) {
                 AnimatedContent(
-                    targetState = "${polishMonthName(displayedMonth)} $displayedYear",
+                    targetState = monthTitle,
                     transitionSpec = {
                         (fadeIn(WseiMotion.effects()) + slideInHorizontally(WseiMotion.spatial()) { it / 6 }) togetherWith
                             fadeOut(WseiMotion.effects())
@@ -624,14 +637,18 @@ private fun ExpandableCalendarCard(
             FilledTonalIconButton(onClick = onPreviousPeriod, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = WseiIcons.ChevronLeft,
-                    contentDescription = if (isExpanded) "Poprzedni miesiąc" else "Poprzedni tydzień",
+                    contentDescription = stringResource(
+                        if (isExpanded) R.string.schedule_calendar_previous_month else R.string.schedule_calendar_previous_week
+                    ),
                     modifier = Modifier.size(20.dp)
                 )
             }
             FilledTonalIconButton(onClick = onNextPeriod, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = WseiIcons.ChevronRight,
-                    contentDescription = if (isExpanded) "Następny miesiąc" else "Następny tydzień",
+                    contentDescription = stringResource(
+                        if (isExpanded) R.string.schedule_calendar_next_month else R.string.schedule_calendar_next_week
+                    ),
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -642,7 +659,9 @@ private fun ExpandableCalendarCard(
                 modifier = Modifier.height(40.dp)
             ) {
                 Text(
-                    text = if (isExpanded) "Tydzień" else "Miesiąc",
+                    text = stringResource(
+                        if (isExpanded) R.string.schedule_calendar_show_week else R.string.schedule_calendar_show_month
+                    ),
                     style = MaterialTheme.typography.labelLarge
                 )
                 Icon(
@@ -720,6 +739,12 @@ private fun WeekDaysStrip(
                 hasClasses -> MaterialTheme.colorScheme.onSecondaryContainer
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
+            val classesState = if (hasClasses) {
+                pluralStringResource(R.plurals.schedule_day_classes_state, day.events.size, day.events.size)
+            } else {
+                stringResource(R.string.schedule_day_no_classes_state)
+            }
+            val dayState = if (isToday) stringResource(R.string.schedule_day_today_state, classesState) else classesState
             val interactionSource = remember { MutableInteractionSource() }
             Surface(
                 onClick = { onSelectDay(index) },
@@ -734,10 +759,7 @@ private fun WeekDaysStrip(
                     .wseiPressScale(interactionSource, pressedScale = 0.9f)
                     .semantics {
                         this.selected = isSelected
-                        stateDescription = buildString {
-                            if (isToday) append("Dzisiaj. ")
-                            append(if (hasClasses) "${day.events.size} zajęć" else "Bez zajęć")
-                        }
+                        stateDescription = dayState
                     }
             ) {
                 Column(
@@ -745,7 +767,7 @@ private fun WeekDaysStrip(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(text = day.shortDayLabel, style = MaterialTheme.typography.labelMedium)
+                    Text(text = stringResource(day.date.dayOfWeek.shortNameRes), style = MaterialTheme.typography.labelMedium)
                     Text(
                         text = day.date.dayOfMonth.toString(),
                         style = MaterialTheme.typography.titleLarge,
@@ -769,7 +791,16 @@ private fun WeekDaysStrip(
     }
 }
 
-private val PolishWeekdayHeaders = listOf("Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd")
+/** Two-letter weekday headers of the month grid, Monday first. */
+private val WeekdayHeaderRes = listOf(
+    R.string.day_monday_min,
+    R.string.day_tuesday_min,
+    R.string.day_wednesday_min,
+    R.string.day_thursday_min,
+    R.string.day_friday_min,
+    R.string.day_saturday_min,
+    R.string.day_sunday_min
+)
 
 @Composable
 private fun MonthGrid(
@@ -798,9 +829,9 @@ private fun MonthGrid(
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(modifier = Modifier.fillMaxWidth()) {
-            PolishWeekdayHeaders.forEach { label ->
+            WeekdayHeaderRes.forEach { labelRes ->
                 Text(
-                    text = label,
+                    text = stringResource(labelRes),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -856,20 +887,21 @@ private fun MonthGrid(
     }
 }
 
-private fun polishMonthName(monthNumber: Int): String = when (monthNumber) {
-    1 -> "Styczeń"
-    2 -> "Luty"
-    3 -> "Marzec"
-    4 -> "Kwiecień"
-    5 -> "Maj"
-    6 -> "Czerwiec"
-    7 -> "Lipiec"
-    8 -> "Sierpień"
-    9 -> "Wrzesień"
-    10 -> "Październik"
-    11 -> "Listopad"
-    12 -> "Grudzień"
-    else -> "Miesiąc"
+/** Month name in the nominative case ("Listopad"), as used in the calendar title. */
+@StringRes
+private fun monthNameRes(monthNumber: Int): Int = when (monthNumber) {
+    1 -> R.string.month_january
+    2 -> R.string.month_february
+    3 -> R.string.month_march
+    4 -> R.string.month_april
+    5 -> R.string.month_may
+    6 -> R.string.month_june
+    7 -> R.string.month_july
+    8 -> R.string.month_august
+    9 -> R.string.month_september
+    10 -> R.string.month_october
+    11 -> R.string.month_november
+    else -> R.string.month_december
 }
 
 // -----------------------------------------------------------------------------------------
@@ -896,7 +928,7 @@ fun ActiveClassHeroCard(
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     modifier: Modifier = Modifier,
-    lecturerLabel: String = activeClass.lecturer.displayNameOrPlaceholder,
+    lecturerLabel: String = activeClass.lecturer.localizedNameOrPlaceholder(),
     @Suppress("UNUSED_PARAMETER") onTriggerLiveNotification: () -> Unit = {}
 ) {
     val colors = MaterialTheme.colorScheme
@@ -1027,7 +1059,7 @@ private fun HeroHeader(activeClass: ClassEvent, isExpanded: Boolean) {
                 verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
             ) {
                 Text(
-                    text = activeClass.classType.polishLabel,
+                    text = stringResource(activeClass.classType.labelRes),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = colors.primary,
@@ -1148,9 +1180,9 @@ private fun HeroDetails(activeClass: ClassEvent, lecturerLabel: String) {
     val colors = MaterialTheme.colorScheme
     val chipColor = colors.onPrimaryContainer.copy(alpha = 0.1f)
     val location = if (activeClass.deliveryMode == DeliveryMode.ON_SITE) {
-        activeClass.room.displayLabel
+        activeClass.room.localizedLabel()
     } else {
-        activeClass.deliveryMode.polishBadge
+        stringResource(activeClass.deliveryMode.labelRes)
     }
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s),
@@ -1209,7 +1241,11 @@ private fun HeroExpandedContent(
 private fun NextClassPreviewCard(preview: NextClassPreview) {
     val colors = MaterialTheme.colorScheme
     val next = preview.nextEvent
-    val location = if (next.deliveryMode == DeliveryMode.ON_SITE) next.room.displayLabel else next.deliveryMode.polishBadge
+    val location = if (next.deliveryMode == DeliveryMode.ON_SITE) {
+        next.room.localizedLabel()
+    } else {
+        stringResource(next.deliveryMode.labelRes)
+    }
     val breakLabel = if (preview.breakDurationMinutes > 0) {
         stringResource(R.string.schedule_hero_next_break, preview.breakDurationMinutes)
     } else {
@@ -1257,7 +1293,7 @@ private fun NextClassPreviewCard(preview: NextClassPreview) {
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "$breakLabel • $location",
+                    text = stringResource(R.string.schedule_hero_next_details, breakLabel, location),
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant,
                     maxLines = 1,
@@ -1286,7 +1322,7 @@ fun SegmentedDayProgressBarCompose(
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text(
-            text = "Twój dzień",
+            text = stringResource(R.string.schedule_your_day),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold
         )
@@ -1312,7 +1348,11 @@ fun SegmentedDayProgressBarCompose(
                         strokeCap = StrokeCap.Round
                     )
                     Text(
-                        text = segment.label,
+                        text = if (segment.isBreak) {
+                            stringResource(R.string.schedule_segment_break)
+                        } else {
+                            stringResource(R.string.schedule_segment_class, segment.classNumber)
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = if (ongoing) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1,
@@ -1324,8 +1364,9 @@ fun SegmentedDayProgressBarCompose(
     }
 }
 
+/** A class (numbered from 1 within the day) or the break after it. */
 private class DaySegment(
-    val label: String,
+    val classNumber: Int,
     val isBreak: Boolean,
     val startMs: Long,
     val endMs: Long,
@@ -1344,7 +1385,7 @@ private fun buildDaySegments(dayEvents: List<ClassEvent>): List<DaySegment> {
         sorted.forEachIndexed { index, event ->
             add(
                 DaySegment(
-                    label = "Zaj. ${index + 1}",
+                    classNumber = index + 1,
                     isBreak = false,
                     startMs = event.timeSlot.startEpochMillis,
                     endMs = event.timeSlot.endEpochMillis,
@@ -1355,7 +1396,7 @@ private fun buildDaySegments(dayEvents: List<ClassEvent>): List<DaySegment> {
             if (next != null && next.timeSlot.startEpochMillis > event.timeSlot.endEpochMillis) {
                 add(
                     DaySegment(
-                        label = "Przerwa",
+                        classNumber = index + 1,
                         isBreak = true,
                         startMs = event.timeSlot.endEpochMillis,
                         endMs = next.timeSlot.startEpochMillis,
@@ -1371,11 +1412,15 @@ private fun buildDaySegments(dayEvents: List<ClassEvent>): List<DaySegment> {
 private fun DaySectionHeader(selectedDay: AcademicDay?, modifier: Modifier = Modifier) {
     if (selectedDay == null) return
     val count = selectedDay.events.size
-    val countText = when {
-        count == 0 -> "Brak zajęć"
-        count == 1 -> "1 blok"
-        count in 2..4 -> "$count bloki"
-        else -> "$count bloków"
+    val countText = if (count == 0) {
+        stringResource(R.string.schedule_day_no_classes)
+    } else {
+        pluralStringResource(R.plurals.schedule_day_blocks, count, count)
+    }
+    val dateFormatter = rememberLocalizedDateFormatter(DayDateSkeleton)
+    val dateText = remember(selectedDay.date, dateFormatter) {
+        java.time.LocalDate.of(selectedDay.date.year, selectedDay.date.monthNumber, selectedDay.date.dayOfMonth)
+            .format(dateFormatter)
     }
     Row(
         modifier = modifier
@@ -1386,18 +1431,22 @@ private fun DaySectionHeader(selectedDay: AcademicDay?, modifier: Modifier = Mod
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = selectedDay.dayOfWeekLabel,
+                text = stringResource(selectedDay.date.dayOfWeek.fullNameRes),
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.semantics { heading() }
             )
             Text(
-                text = "${selectedDay.date.dayOfMonth} ${polishMonthGenitive(selectedDay.date.monthNumber)} ${selectedDay.date.year}",
+                text = dateText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         WseiPill(
-            text = if (selectedDay.isWeekendExtramuralSession && count > 0) "Zjazd • $countText" else countText,
+            text = if (selectedDay.isWeekendExtramuralSession && count > 0) {
+                stringResource(R.string.schedule_day_session_with_count, countText)
+            } else {
+                countText
+            },
             containerColor = if (count > 0) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
             contentColor = if (count > 0) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
             emphasized = true
@@ -1405,21 +1454,8 @@ private fun DaySectionHeader(selectedDay: AcademicDay?, modifier: Modifier = Mod
     }
 }
 
-private fun polishMonthGenitive(monthNumber: Int): String = when (monthNumber) {
-    1 -> "stycznia"
-    2 -> "lutego"
-    3 -> "marca"
-    4 -> "kwietnia"
-    5 -> "maja"
-    6 -> "czerwca"
-    7 -> "lipca"
-    8 -> "sierpnia"
-    9 -> "września"
-    10 -> "października"
-    11 -> "listopada"
-    12 -> "grudnia"
-    else -> ""
-}
+/** CLDR skeleton of the date under the day name ("20 listopada 2026" / "November 20, 2026"). */
+private const val DayDateSkeleton = "dMMMMy"
 
 // -----------------------------------------------------------------------------------------
 // Synchronizacja z kalendarzem urządzenia

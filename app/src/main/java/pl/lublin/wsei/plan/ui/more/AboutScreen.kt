@@ -356,7 +356,7 @@ private fun AboutLicenceCard() {
             WseiInfoRow(stringResource(R.string.about_licence_app), stringResource(R.string.about_licence_mit))
             WseiInfoRow(stringResource(R.string.about_licence_copyright), "© 2026 $AUTHOR_LOGIN")
             WseiInfoRow(stringResource(R.string.about_licence_font), "Google Sans Flex (OFL)")
-            WseiInfoRow(stringResource(R.string.about_licence_data), "Wirtualny Dziekanat (APR System)")
+            WseiInfoRow(stringResource(R.string.about_licence_data), stringResource(R.string.about_licence_data_value))
         }
     }
 }
