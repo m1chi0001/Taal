@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -45,7 +46,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.domain.model.ClassType
+import pl.lublin.wsei.plan.domain.model.StudentGroupItem
 import pl.lublin.wsei.plan.domain.model.StudentSession
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiTwoPane
@@ -183,6 +186,34 @@ fun ProfileScreen(
     }
 }
 
+/** Title and supporting line of a student group row. */
+private class StudentGroupLabel(val title: String, val supporting: String?)
+
+/**
+ * Exact group data from the dean's office: "Laboratorium · gr. 4" with the raw code
+ * ("Lab4/1/I/N") below. Without a parsed group number the code itself is shown instead —
+ * never a list index or a made-up number.
+ */
+@Composable
+private fun studentGroupLabel(group: StudentGroupItem): StudentGroupLabel {
+    val form = group.formName.trim()
+    // Parsed from groupCode, so it is right even for stale cached data; "" when unknown.
+    val number = group.displayGroupNumber.trim()
+    val code = group.groupCode.trim()
+    return if (number.isNotEmpty()) {
+        val numberLabel = stringResource(R.string.profile_group_number, number)
+        StudentGroupLabel(
+            title = listOf(form, numberLabel).filter { it.isNotEmpty() }.joinToString(" · "),
+            supporting = code.takeIf { it.isNotEmpty() }
+        )
+    } else {
+        StudentGroupLabel(
+            title = listOf(form, code).filter { it.isNotEmpty() }.distinct().joinToString(" · ").ifEmpty { "—" },
+            supporting = null
+        )
+    }
+}
+
 private fun formatAverage(value: Double?, hidden: Boolean): String =
     wseiMasked(String.format(Locale.US, "%.2f", value ?: 0.0), hidden)
 
@@ -223,7 +254,10 @@ private fun LazyListScope.studyItems(
                 WseiInfoRow("Wydział", session?.department ?: "—")
                 WseiInfoRow("Tryb studiów", session?.studyMode ?: "—")
                 WseiInfoRow("Otrzymywany tytuł", session?.obtainedTitle ?: "—")
-                WseiInfoRow("Rok / semestr", "Rok ${session?.academicYear ?: 1} • Semestr ${session?.semesterNumber ?: 1}")
+                WseiInfoRow(
+                    "Rok / semestr",
+                    session?.let { "Rok ${it.academicYear} • Semestr ${it.semesterNumber}" } ?: "—"
+                )
                 WseiInfoRow("Grupa", uiState.primaryStudentGroupLabel)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 WseiInfoRow("Średnia (bieżący sem.)", formatAverage(session?.averageCurrentSemester, hidden))
@@ -234,7 +268,8 @@ private fun LazyListScope.studyItems(
     }
 
     item(key = "student_groups", contentType = "accordion") {
-        val groups = uiState.studentGroups.firstOrNull()?.groups.orEmpty()
+        val semesterGroups = uiState.studentGroups.firstOrNull()
+        val groups = semesterGroups?.groups.orEmpty()
         ProfileAccordion(
             title = "Grupy studenckie",
             badge = "${groups.size}",
@@ -243,19 +278,35 @@ private fun LazyListScope.studyItems(
             onToggle = sections.onToggleGroups,
             modifier = itemModifier
         ) {
-            WseiListGroup(
-                entries = groups.mapIndexed { index, group ->
-                    WseiListEntry(key = "group_${group.id}_$index") { shape ->
-                        WseiListItem(
-                            title = group.groupCode,
-                            supporting = group.formName,
-                            shape = shape,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                            trailing = { WseiPill("Gr. ${group.groupNumber}", emphasized = true) }
-                        )
+            val semesterLabel = semesterGroups?.semesterLabel?.takeIf { it.isNotBlank() }
+            if (semesterLabel != null) {
+                Text(
+                    text = semesterLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            if (groups.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.profile_groups_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                WseiListGroup(
+                    entries = groups.mapIndexed { index, group ->
+                        WseiListEntry(key = "group_${group.id}_$index") { shape ->
+                            val label = studentGroupLabel(group)
+                            WseiListItem(
+                                title = label.title,
+                                supporting = label.supporting,
+                                shape = shape,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                            )
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
@@ -406,7 +457,7 @@ private fun IdentityCard(uiState: ScheduleUiState, modifier: Modifier = Modifier
             val statContent = colors.onPrimaryContainer
             WseiStat(formatAverage(session?.averageCurrentSemester, hidden), "Śr. semestru", Modifier.weight(1f), statColor, statContent)
             WseiStat(formatAverage(session?.averageGrade, hidden), "Śr. studiów", Modifier.weight(1f), statColor, statContent)
-            WseiStat("${session?.semesterNumber ?: 1}", "Semestr", Modifier.weight(1f), statColor, statContent)
+            WseiStat(session?.semesterNumber?.toString() ?: "—", "Semestr", Modifier.weight(1f), statColor, statContent)
         }
     }
 }

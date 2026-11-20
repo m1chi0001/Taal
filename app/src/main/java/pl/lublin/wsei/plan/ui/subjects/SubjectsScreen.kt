@@ -6,6 +6,9 @@
 package pl.lublin.wsei.plan.ui.subjects
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,20 +23,28 @@ import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.domain.model.GradeItem
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiEmptyState
@@ -51,8 +62,25 @@ import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import java.util.Locale
 
+/** Grades of one semester, as returned by the dean's office (newest semester first). */
+private class SemesterGrades(
+    val key: String,
+    val number: Int,
+    val label: String,
+    val grades: List<GradeItem>
+) {
+    val totalEcts: Int = grades.sumOf { it.ects }
+    val gradedCount: Int = grades.count { parseGrade(it.gradeValue) != null }
+
+    /** Plain mean of the numeric grades, null when nothing is graded yet. */
+    val computedAverage: Double? = grades.mapNotNull { parseGrade(it.gradeValue) }
+        .takeIf { it.isNotEmpty() }
+        ?.average()
+}
+
 /**
- * Przedmioty bieżącego semestru: podsumowanie (średnia, ECTS) i lista ocen.
+ * Przedmioty i oceny z podziałem na semestry. Domyślnie pokazany jest bieżący semestr
+ * (wcześniej oceny wszystkich semestrów były zlewane w jedną listę, a ECTS sumowane razem).
  * Na szerszych oknach oceny układają się w siatkę (2–3 kolumny) zamiast rozciągniętych kart.
  */
 @Composable
@@ -61,9 +89,24 @@ fun SubjectsScreen(
     onRefresh: () -> Unit
 ) {
     val columns = LocalWseiWindowLayout.current.gridColumns
-    val grades = uiState.grades
-    val totalEcts = remember(grades) { grades.sumOf { it.ects } }
-    val gradedCount = remember(grades) { grades.count { parseGrade(it.gradeValue) != null } }
+    val semesters = remember(uiState.grades) {
+        uiState.grades
+            .groupBy { "${it.semesterNumber}|${it.semesterLabel}" }
+            .map { (key, items) ->
+                SemesterGrades(
+                    key = key,
+                    number = items.first().semesterNumber,
+                    label = items.first().semesterLabel,
+                    grades = items
+                )
+            }
+            .sortedByDescending { it.number }
+    }
+    val sessionSemester = uiState.currentSession?.semesterNumber
+    val currentSemester = semesters.firstOrNull { it.number == sessionSemester } ?: semesters.firstOrNull()
+    var selectedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val selected = semesters.firstOrNull { it.key == selectedKey } ?: currentSemester
+    val grades = selected?.grades.orEmpty()
 
     WseiScreenFrame(
         title = "Przedmioty",
@@ -87,10 +130,24 @@ fun SubjectsScreen(
             ) {
                 SemesterSummaryCard(
                     uiState = uiState,
-                    totalEcts = totalEcts,
-                    gradedCount = gradedCount,
-                    subjectCount = grades.size
+                    semester = selected,
+                    isCurrent = selected != null && selected === currentSemester
                 )
+            }
+
+            if (semesters.size > 1) {
+                item(
+                    key = "semester_picker",
+                    contentType = "semester_picker",
+                    span = StaggeredGridItemSpan.FullLine
+                ) {
+                    SemesterPicker(
+                        semesters = semesters,
+                        selected = selected,
+                        current = currentSemester,
+                        onSelect = { selectedKey = it.key }
+                    )
+                }
             }
 
             if (grades.isEmpty()) {
@@ -118,9 +175,60 @@ fun SubjectsScreen(
                     key = { it.id },
                     contentType = { "grade_item_card" }
                 ) { grade ->
-                    GradeCard(grade = grade, maskSensitive = uiState.isHideSensitiveData)
+                    GradeCard(
+                        grade = grade,
+                        lecturer = uiState.maskLecturer(grade.lecturerName.trim()),
+                        maskSensitive = uiState.isHideSensitiveData
+                    )
                 }
             }
+        }
+    }
+}
+
+/** Horizontally scrolling semester filter chips; the current semester is marked. */
+@Composable
+private fun SemesterPicker(
+    semesters: List<SemesterGrades>,
+    selected: SemesterGrades?,
+    current: SemesterGrades?,
+    onSelect: (SemesterGrades) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+    ) {
+        semesters.forEach { semester ->
+            val isSelected = semester === selected
+            val label = semester.label.ifBlank { stringResource(R.string.subjects_semester_number, semester.number) }
+            FilterChip(
+                selected = isSelected,
+                onClick = { onSelect(semester) },
+                label = {
+                    Text(
+                        text = if (semester === current) {
+                            stringResource(R.string.subjects_semester_current, label)
+                        } else {
+                            label
+                        },
+                        maxLines = 1
+                    )
+                },
+                leadingIcon = if (isSelected) {
+                    {
+                        Icon(
+                            imageVector = WseiIcons.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                        )
+                    }
+                } else {
+                    null
+                },
+                shape = CircleShape
+            )
         }
     }
 }
@@ -128,15 +236,21 @@ fun SubjectsScreen(
 @Composable
 private fun SemesterSummaryCard(
     uiState: ScheduleUiState,
-    totalEcts: Int,
-    gradedCount: Int,
-    subjectCount: Int
+    semester: SemesterGrades?,
+    isCurrent: Boolean
 ) {
     val session = uiState.currentSession
     val colors = MaterialTheme.colorScheme
+    val subjectCount = semester?.grades?.size ?: 0
+    val gradedCount = semester?.gradedCount ?: 0
+    // The dean's office average is only known for the current semester; older semesters show
+    // the plain mean of their numeric grades.
+    val officialAverage = session?.averageCurrentSemester?.takeIf { isCurrent && it > 0.0 }
+    val averageValue = officialAverage ?: semester?.computedAverage
     val average = uiState.maskSensitive(
-        String.format(Locale.US, "%.2f", session?.averageCurrentSemester ?: 0.0)
+        averageValue?.let { String.format(Locale.US, "%.2f", it) } ?: "—"
     )
+    val averageLabel = if (officialAverage != null) "Średnia" else stringResource(R.string.subjects_average_computed)
     val gradedFraction = if (subjectCount > 0) gradedCount.toFloat() / subjectCount else 0f
     val animatedGraded by animateFloatAsState(
         targetValue = gradedFraction,
@@ -150,17 +264,26 @@ private fun SemesterSummaryCard(
         verticalSpacing = WseiSpacing.l
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)) {
-            Text(
-                text = "Semestr ${session?.semesterNumber ?: 1}",
-                style = MaterialTheme.typography.labelLarge,
-                color = colors.primary
-            )
-            Text(
-                text = session?.fieldOfStudy ?: "Kierunek",
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            val overline = semester?.label?.takeIf { it.isNotBlank() }
+                ?: (semester?.number ?: session?.semesterNumber)?.let {
+                    stringResource(R.string.subjects_semester_number, it)
+                }
+            if (overline != null) {
+                Text(
+                    text = overline,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.primary
+                )
+            }
+            val fieldOfStudy = session?.fieldOfStudy?.takeIf { it.isNotBlank() }
+            if (fieldOfStudy != null) {
+                Text(
+                    text = fieldOfStudy,
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -168,8 +291,8 @@ private fun SemesterSummaryCard(
         ) {
             val statColor = colors.onPrimaryContainer.copy(alpha = 0.1f)
             val statContent = colors.onPrimaryContainer
-            WseiStat(average, "Średnia", Modifier.weight(1f), statColor, statContent)
-            WseiStat(totalEcts.toString(), "ECTS", Modifier.weight(1f), statColor, statContent)
+            WseiStat(average, averageLabel, Modifier.weight(1f), statColor, statContent)
+            WseiStat((semester?.totalEcts ?: 0).toString(), "ECTS", Modifier.weight(1f), statColor, statContent)
             WseiStat("$gradedCount/$subjectCount", "Ocenione", Modifier.weight(1f), statColor, statContent)
         }
         if (subjectCount > 0) {
@@ -206,7 +329,7 @@ private fun gradeColors(raw: String, colors: ColorScheme): Pair<Color, Color> {
 }
 
 @Composable
-private fun GradeCard(grade: GradeItem, maskSensitive: Boolean) {
+private fun GradeCard(grade: GradeItem, lecturer: String, maskSensitive: Boolean) {
     val gradeText = if (maskSensitive) "••" else grade.gradeValue.ifBlank { "—" }
     val (badgeColor, badgeContent) = if (maskSensitive) {
         MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurfaceVariant
@@ -252,27 +375,28 @@ private fun GradeCard(grade: GradeItem, maskSensitive: Boolean) {
                     WseiPill(grade.formLabel)
                     if (grade.passingForm.isNotBlank()) WseiPill(grade.passingForm)
                 }
-                Text(
-                    text = grade.lecturerName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                val details = buildString {
-                    if (grade.partialGrades.isNotEmpty()) {
-                        append("Cząstkowe: ")
-                        append(if (maskSensitive) "••••" else grade.partialGrades.joinToString(", "))
-                        append(" • ")
-                    }
-                    append("wpis ")
-                    append(grade.dateAwarded.ifBlank { "—" })
+                if (lecturer.isNotBlank()) {
+                    Text(
+                        text = lecturer,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-                Text(
-                    text = details,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                val details = buildList {
+                    if (grade.partialGrades.isNotEmpty()) {
+                        add("Cząstkowe: " + if (maskSensitive) "••••" else grade.partialGrades.joinToString(", "))
+                    }
+                    if (grade.dateAwarded.isNotBlank()) add("wpis ${grade.dateAwarded}")
+                }.joinToString(" • ")
+                if (details.isNotEmpty()) {
+                    Text(
+                        text = details,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
