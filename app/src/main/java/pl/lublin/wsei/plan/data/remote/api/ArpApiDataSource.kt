@@ -24,6 +24,7 @@ import pl.lublin.wsei.plan.domain.model.DataSourceOrigin
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
 import pl.lublin.wsei.plan.domain.model.FinancialObligation
 import pl.lublin.wsei.plan.domain.model.GradeItem
+import pl.lublin.wsei.plan.domain.model.GroupCodeParser
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
 import pl.lublin.wsei.plan.domain.model.ScholarshipApplication
 import pl.lublin.wsei.plan.domain.model.ScholarshipPayoutItem
@@ -291,11 +292,14 @@ class ArpApiDataSource @Inject constructor(
                 semesterLabel = sem.name.ifBlank { "Semestr ${sem.number}" },
                 semesterNumber = sem.number,
                 groups = sem.groups.map { grp ->
+                    // The group number is encoded in the code ("Lab4/1/I/N" → 4); `editionName` is the
+                    // group's edition, not its number, and must not be used (it showed "Gr. 1" for lab 4).
+                    val parsed = GroupCodeParser.parse(grp.name, grp.type)
                     StudentGroupItem(
                         id = grp.id,
                         groupCode = grp.name,
                         formName = grp.type.ifBlank { "Grupa" },
-                        groupNumber = grp.editionName.ifBlank { "1" },
+                        groupNumber = parsed.number.orEmpty(),
                         isPlanVisible = grp.isPlanVisible
                     )
                 }

@@ -302,9 +302,22 @@ data class StudentGroupItem(
     val id: Int,
     val groupCode: String, // e.g. "W/1/I/N", "Cw1/1/I/N", "Lab4/1/I/N"
     val formName: String,  // e.g. "Wykład", "Ćwiczenia", "Laboratorium", "Elearning", "Prakt zaw zajęcia", "Tok"
+    /**
+     * Group number parsed from [groupCode] ("4" for "Lab4/1/I/N"), "" when the code carries none.
+     * Snapshots cached by 0.7.4 and older hold the group *edition* or a fake "1" here — UI should
+     * read [displayGroupNumber], which is always recomputed from [groupCode].
+     */
     val groupNumber: String,
     val isPlanVisible: Boolean = true
-)
+) {
+    /** Real group number derived from [groupCode] (also for stale cached snapshots); "" when unknown. */
+    val displayGroupNumber: String
+        get() = GroupCodeParser.parse(groupCode, formName).number.orEmpty()
+
+    /** Kind of classes this group is for, derived from [groupCode] with [formName] as a fallback. */
+    val groupKind: GroupClassKind
+        get() = GroupCodeParser.parse(groupCode, formName).kind
+}
 
 @Immutable
 @Serializable

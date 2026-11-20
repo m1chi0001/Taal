@@ -26,7 +26,6 @@ import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
-import pl.lublin.wsei.plan.data.local.SavedAttachment
 import pl.lublin.wsei.plan.data.repository.toPolishFullName
 import pl.lublin.wsei.plan.data.repository.toPolishShortName
 import pl.lublin.wsei.plan.domain.model.AcademicDay
@@ -650,32 +649,6 @@ class ScheduleViewModel @Inject constructor(
                     announcements = state.announcements.map {
                         if (it.id == announcement.id) it.copy(isRead = true) else it
                     }
-                )
-            }
-        }
-    }
-
-    /**
-     * Pobiera załącznik z dziekanatu i zapisuje go na urządzeniu za pomocą [saveToDevice]
-     * (logika zapisu wymaga kontekstu Androida, więc dostarcza ją Activity).
-     */
-    fun downloadAttachment(
-        attachment: AnnouncementAttachment,
-        saveToDevice: (AnnouncementAttachment) -> Result<SavedAttachment>
-    ) {
-        _uiState.update { it.copy(statusBannerMessage = "Pobieranie: ${attachment.fileName}…") }
-        viewModelScope.launch {
-            val saved = scheduleRepository.downloadAnnouncementAttachment(attachment.id)
-                .mapCatching { downloaded ->
-                    val named = downloaded.copy(fileName = downloaded.fileName.ifBlank { attachment.fileName })
-                    withContext(Dispatchers.IO) { saveToDevice(named).getOrThrow() }
-                }
-            _uiState.update {
-                it.copy(
-                    statusBannerMessage = saved.fold(
-                        onSuccess = { file -> "Zapisano „${file.fileName}” w: ${file.location}" },
-                        onFailure = { err -> err.message ?: "Nie udało się pobrać załącznika." }
-                    )
                 )
             }
         }
