@@ -111,7 +111,7 @@ class WdHtmlDataSource @Inject constructor(
     ): Result<List<ClassEvent>> = resultOf {
         val login = apiSession.savedLogin ?: session.login
         val password = apiSession.savedPassword
-            ?: throw IllegalStateException("Brak zapisanych danych logowania dla trybu awaryjnego.")
+            ?: throw IllegalStateException("No saved credentials for the HTML fallback.")
         val javaFrom = java.time.LocalDate.of(from.year, from.monthNumber, from.dayOfMonth)
         val javaTo = java.time.LocalDate.of(to.year, to.monthNumber, to.dayOfMonth)
 
@@ -119,7 +119,7 @@ class WdHtmlDataSource @Inject constructor(
         if (page == null || isLoginPage(page.document)) {
             login(login, password)
             page = openTimetablePage()
-                ?: throw IOException("Nie znaleziono strony planu zajęć w Wirtualnym Dziekanacie WWW.")
+                ?: throw IOException("Timetable page not found on the Virtual Dean's Office website.")
         }
 
         page = applyDateFilter(page, javaFrom, javaTo) ?: page
@@ -151,14 +151,14 @@ class WdHtmlDataSource @Inject constructor(
         val entry = base.resolve(endpoints.loginPath) ?: base
         val loginPage = get(entry)
         val form = WebFormsFormParser.parseLoginForm(loginPage.document, loginPage.url)
-            ?: throw IOException("Nie znaleziono formularza logowania na ${loginPage.url}.")
+            ?: throw IOException("Login form not found at ${loginPage.url}.")
         if (form.usernameField == null || form.passwordField == null) {
-            throw IOException("Formularz logowania ma nieznaną strukturę (brak pola loginu lub hasła).")
+            throw IOException("Login form has an unknown structure (no login or password field).")
         }
         val result = post(form.actionUrl, form.toLoginBody(login, password))
         if (isLoginPage(result.document)) {
             val message = WebFormsFormParser.extractLoginError(result.document)
-                ?: "Logowanie do Wirtualnego Dziekanatu WWW nie powiodło się."
+                ?: "Login to the Virtual Dean's Office website failed."
             throw IllegalStateException(message)
         }
         timetableUrl = discoverTimetableUrl(result)
@@ -246,7 +246,7 @@ class WdHtmlDataSource @Inject constructor(
 
     private suspend fun execute(request: Request): Page = withContext(Dispatchers.IO) {
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("HTTP ${response.code} z ${request.url}")
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code} from ${request.url}")
             val finalUrl = response.request.url
             val html = response.body?.string().orEmpty()
             Page(finalUrl, Jsoup.parse(html, finalUrl.toString()))

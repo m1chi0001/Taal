@@ -14,8 +14,8 @@ android {
         applicationId = "com.M1chi0001.Taal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "0.7.0"
+        versionCode = 11
+        versionName = "0.7.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -52,8 +52,16 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // In-app language switcher (pl/en/uk): keep all languages in every App Bundle split.
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
+
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -65,6 +73,7 @@ kotlin {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

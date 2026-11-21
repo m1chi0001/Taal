@@ -88,6 +88,9 @@ import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import pl.lublin.wsei.plan.R
 
 /** `ClipDescription.EXTRA_IS_SENSITIVE` (API 33) — keeps the clipboard preview from showing the value. */
 private const val EXTRA_CLIP_IS_SENSITIVE = "android.content.extra.IS_SENSITIVE"
@@ -135,7 +138,7 @@ fun FinancesScreen(
 
     if (windowLayout.supportsTwoPane) {
         WseiScreenFrame(
-            title = "Finanse",
+            title = stringResource(R.string.nav_finances),
             onRefresh = onRefresh,
             isRefreshing = uiState.isRefreshing
         ) { scrollModifier ->
@@ -180,7 +183,7 @@ fun FinancesScreen(
         }
     } else {
         WseiScreenScaffold(
-            title = "Finanse",
+            title = stringResource(R.string.nav_finances),
             onRefresh = onRefresh,
             isRefreshing = uiState.isRefreshing,
             contentPadding = wseiScreenContentPadding()
@@ -209,7 +212,7 @@ fun FinancesScreen(
                 verticalArrangement = Arrangement.spacedBy(WseiSpacing.m)
             ) {
                 Text(
-                    text = "Historia decyzji stypendialnych",
+                    text = stringResource(R.string.finances_scholarship_history_title),
                     style = MaterialTheme.typography.headlineSmall
                 )
                 scholarships.forEachIndexed { index, scholarship ->
@@ -260,8 +263,8 @@ private fun LazyListScope.obligationItems(
         item(key = "finance_empty", contentType = "empty") {
             WseiEmptyState(
                 icon = WseiIcons.AccountBalanceWallet,
-                title = "Brak należności",
-                message = "Nie znaleziono żadnych opłat na Twoim koncie.",
+                title = stringResource(R.string.finances_empty_title),
+                message = stringResource(R.string.finances_empty_message),
                 modifier = itemModifier
             )
         }
@@ -269,7 +272,7 @@ private fun LazyListScope.obligationItems(
     }
     if (unpaid.isNotEmpty()) {
         item(key = "section_unpaid", contentType = "section") {
-            WseiSectionTitle(text = "Do zapłaty", trailing = "${unpaid.size}", modifier = itemModifier)
+            WseiSectionTitle(text = stringResource(R.string.finances_section_unpaid), trailing = "${unpaid.size}", modifier = itemModifier)
         }
         items(items = unpaid, key = { "unpaid_${it.id}" }, contentType = { "obligation" }) { item ->
             ObligationCard(
@@ -282,7 +285,7 @@ private fun LazyListScope.obligationItems(
     }
     if (paid.isNotEmpty()) {
         item(key = "section_paid", contentType = "section") {
-            WseiSectionTitle(text = "Zapłacone", trailing = "${paid.size}", modifier = itemModifier)
+            WseiSectionTitle(text = stringResource(R.string.finances_section_paid), trailing = "${paid.size}", modifier = itemModifier)
         }
         items(items = paid, key = { "paid_${it.id}" }, contentType = { "obligation" }) { item ->
             ObligationCard(
@@ -302,7 +305,7 @@ private fun LazyListScope.scholarshipItems(
     onOpenHistory: () -> Unit
 ) {
     item(key = "section_scholarships", contentType = "section") {
-        WseiSectionTitle(text = "Stypendia", modifier = itemModifier)
+        WseiSectionTitle(text = stringResource(R.string.finances_section_scholarships), modifier = itemModifier)
     }
     val active = scholarships.firstOrNull()
     if (active != null) {
@@ -318,8 +321,8 @@ private fun LazyListScope.scholarshipItems(
         item(key = "empty_scholarships", contentType = "empty") {
             WseiEmptyState(
                 icon = WseiIcons.WorkspacePremium,
-                title = "Brak wniosków",
-                message = "W tym semestrze nie złożono wniosku stypendialnego.",
+                title = stringResource(R.string.finances_scholarships_empty_title),
+                message = stringResource(R.string.finances_scholarships_empty_message),
                 modifier = itemModifier
             )
         }
@@ -357,6 +360,7 @@ private fun BalanceHeroCard(
     }
     val colors = MaterialTheme.colorScheme
     val settled = unpaidCount == 0
+    val accountClipLabel = stringResource(R.string.finances_account_number_clip_label)
     val contentColor = if (settled) colors.onPrimaryContainer else colors.onTertiaryContainer
 
     WseiCard(
@@ -368,7 +372,14 @@ private fun BalanceHeroCard(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)) {
             Text(
-                text = if (settled) "Saldo" else "Do zapłaty • ${polishItemCountLabel(unpaidCount)}",
+                text = if (settled) {
+                    stringResource(R.string.finances_balance)
+                } else {
+                    stringResource(
+                        R.string.finances_to_pay_with_count,
+                        pluralStringResource(R.plurals.finances_items_count, unpaidCount, unpaidCount)
+                    )
+                },
                 style = MaterialTheme.typography.labelLarge
             )
             Text(
@@ -379,7 +390,7 @@ private fun BalanceHeroCard(
             )
             if (settled) {
                 WseiPill(
-                    text = "Wszystko uregulowane",
+                    text = stringResource(R.string.finances_all_settled),
                     icon = WseiIcons.CheckCircle,
                     containerColor = colors.primary,
                     contentColor = colors.onPrimary,
@@ -399,7 +410,7 @@ private fun BalanceHeroCard(
                         verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
                     ) {
                         Text(
-                            text = "Indywidualny numer konta",
+                            text = stringResource(R.string.finances_account_number),
                             style = MaterialTheme.typography.labelMedium,
                             color = contentColor.copy(alpha = 0.8f)
                         )
@@ -414,7 +425,7 @@ private fun BalanceHeroCard(
                     }
                     FilledTonalIconButton(
                         onClick = {
-                            copied = copySensitiveText(context, "Numer konta", accountNumber)
+                            copied = copySensitiveText(context, accountClipLabel, accountNumber)
                         },
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = contentColor,
@@ -431,7 +442,9 @@ private fun BalanceHeroCard(
                         ) { isCopied ->
                             Icon(
                                 imageVector = if (isCopied) WseiIcons.CheckCircle else WseiIcons.ContentCopy,
-                                contentDescription = if (isCopied) "Skopiowano numer konta" else "Kopiuj numer konta",
+                                contentDescription = stringResource(
+                                    if (isCopied) R.string.finances_account_copied_cd else R.string.finances_account_copy_cd
+                                ),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -486,7 +499,7 @@ private fun ObligationCard(
                     )
                     Spacer(modifier = Modifier.width(WseiSpacing.s))
                     Text(
-                        text = "Zapłać online • $amount",
+                        text = stringResource(R.string.finances_pay_online, amount),
                         style = MaterialTheme.typography.labelLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -516,9 +529,9 @@ private fun ObligationCard(
             ) {
                 Text(
                     text = when {
-                        dueThisMonth -> "Termin w tym miesiącu • ${item.dueDateIso}"
-                        item.isPaid -> "Zapłacone • ${item.paymentDateIso ?: item.dueDateIso}"
-                        else -> "Termin ${item.dueDateIso}"
+                        dueThisMonth -> stringResource(R.string.finances_due_this_month, item.dueDateIso)
+                        item.isPaid -> stringResource(R.string.finances_paid_on, item.paymentDateIso ?: item.dueDateIso)
+                        else -> stringResource(R.string.finances_due_on, item.dueDateIso)
                     },
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
@@ -548,16 +561,16 @@ private fun ObligationCard(
                 containerColor = if (dueThisMonth) contentColor.copy(alpha = 0.08f) else colors.surfaceContainerLow
             ) {
                 val m: (String) -> String = { wseiMasked(it, maskSensitive) }
-                WseiInfoRow("Status", item.statusLabel)
-                WseiInfoRow("Termin płatności", item.dueDateIso)
-                item.paymentDateIso?.let { WseiInfoRow("Data wpłaty", it) }
+                WseiInfoRow(stringResource(R.string.finances_status), item.statusLabel)
+                WseiInfoRow(stringResource(R.string.finances_due_date), item.dueDateIso)
+                item.paymentDateIso?.let { WseiInfoRow(stringResource(R.string.finances_payment_date), it) }
                 HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
-                WseiInfoRow("Kwota naliczona", m(item.amountFormatted))
-                WseiInfoRow("Odsetki naliczone", m(item.interestFormatted))
-                WseiInfoRow("Odsetki zapłacone", m(item.accumulatedInterestFormatted))
-                WseiInfoRow("Umorzenie", m(item.amortizationFormatted))
-                WseiInfoRow("Bonifikata", m(item.discountFormatted))
-                WseiInfoRow("Przedawnienie", m(item.expiredFormatted))
+                WseiInfoRow(stringResource(R.string.finances_amount_charged), m(item.amountFormatted))
+                WseiInfoRow(stringResource(R.string.finances_interest_charged), m(item.interestFormatted))
+                WseiInfoRow(stringResource(R.string.finances_interest_paid), m(item.accumulatedInterestFormatted))
+                WseiInfoRow(stringResource(R.string.finances_amortization), m(item.amortizationFormatted))
+                WseiInfoRow(stringResource(R.string.finances_discount), m(item.discountFormatted))
+                WseiInfoRow(stringResource(R.string.finances_expired), m(item.expiredFormatted))
             }
         }
     )
@@ -575,7 +588,7 @@ private fun ScholarshipCard(
     WseiCard(modifier = modifier, containerColor = colors.surfaceContainer) {
         WseiCardHeader(
             title = scholarship.title,
-            overline = "${scholarship.semesterLabel} • ${scholarship.statusString}",
+            overline = stringResource(R.string.finances_scholarship_overline, scholarship.semesterLabel, scholarship.statusString),
             icon = WseiIcons.WorkspacePremium,
             iconContainerColor = if (scholarship.isGranted) colors.primary else colors.secondaryContainer,
             iconContentColor = if (scholarship.isGranted) colors.onPrimary else colors.onSecondaryContainer
@@ -588,16 +601,22 @@ private fun ScholarshipCard(
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            WseiInfoRow("Data wniosku", scholarship.submissionDateIso)
+            WseiInfoRow(stringResource(R.string.finances_scholarship_submitted), scholarship.submissionDateIso)
             // The decision number is a personal administrative identifier.
-            WseiInfoRow("Decyzja", scholarship.decisionNumber?.let { wseiMasked(it, maskSensitive) } ?: "W toku")
-            scholarship.decisionDateIso?.let { WseiInfoRow("Data decyzji", it) }
+            WseiInfoRow(
+                stringResource(R.string.finances_scholarship_decision),
+                scholarship.decisionNumber?.let { wseiMasked(it, maskSensitive) }
+                    ?: stringResource(R.string.finances_scholarship_decision_pending)
+            )
+            scholarship.decisionDateIso?.let {
+                WseiInfoRow(stringResource(R.string.finances_scholarship_decision_date), it)
+            }
             val payouts = if (showAllPayouts) scholarship.payouts else scholarship.payouts.take(3)
             if (payouts.isNotEmpty()) {
                 HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
                 payouts.forEach { payout ->
                     WseiInfoRow(
-                        label = "${payout.dateIso} • ${payout.status}",
+                        label = stringResource(R.string.finances_payout_label, payout.dateIso, payout.status),
                         value = wseiMasked(payout.amountFormatted, maskSensitive)
                     )
                 }
@@ -609,7 +628,7 @@ private fun ScholarshipCard(
                 shape = CircleShape,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Historia decyzji", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.finances_scholarship_history), style = MaterialTheme.typography.labelLarge)
             }
         }
     }

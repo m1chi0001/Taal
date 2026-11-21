@@ -18,6 +18,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
+import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.data.local.LocalizedStrings
 
 /** Wydanie z GitHuba, które da się zainstalować (ma załączony plik APK). */
 data class ReleaseInfo(
@@ -48,7 +50,8 @@ class UpdateException(message: String) : Exception(message)
  */
 @Singleton
 class UpdateManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val strings: LocalizedStrings
 ) {
 
     val currentVersion: String
@@ -66,10 +69,10 @@ class UpdateManager @Inject constructor(
                         parseRelease(body)
                     }
                     HttpURLConnection.HTTP_NOT_FOUND ->
-                        UpdateCheckResult.Failure("Na GitHubie nie ma jeszcze opublikowanego wydania.")
+                        UpdateCheckResult.Failure(strings.get(R.string.update_error_no_release))
                     HttpURLConnection.HTTP_FORBIDDEN, 429 ->
-                        UpdateCheckResult.Failure("GitHub tymczasowo ogranicza zapytania. Spróbuj ponownie za kilka minut.")
-                    else -> UpdateCheckResult.Failure("GitHub odpowiedział kodem HTTP $code.")
+                        UpdateCheckResult.Failure(strings.get(R.string.update_error_rate_limited))
+                    else -> UpdateCheckResult.Failure(strings.get(R.string.update_error_http, code))
                 }
             } finally {
                 connection.disconnect()
@@ -77,16 +80,16 @@ class UpdateManager @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: IOException) {
-            UpdateCheckResult.Failure("Brak połączenia z GitHubem. Sprawdź internet i spróbuj ponownie.")
+            UpdateCheckResult.Failure(strings.get(R.string.update_error_no_connection))
         } catch (e: Exception) {
-            UpdateCheckResult.Failure("Nie udało się odczytać informacji o wydaniu.")
+            UpdateCheckResult.Failure(strings.get(R.string.update_error_unreadable))
         }
     }
 
     private fun parseRelease(body: String): UpdateCheckResult {
         val json = JSONObject(body)
         val tag = json.optString("tag_name")
-        if (tag.isBlank()) return UpdateCheckResult.Failure("Wydanie na GitHubie nie ma numeru wersji.")
+        if (tag.isBlank()) return UpdateCheckResult.Failure(strings.get(R.string.update_error_no_version))
         val remote = tag.removePrefix("v").removePrefix("V")
         if (!isNewer(remote, currentVersion)) return UpdateCheckResult.UpToDate(currentVersion)
 
@@ -103,7 +106,7 @@ class UpdateManager @Inject constructor(
             }
         }
         val apk = chosen ?: return UpdateCheckResult.Failure(
-            "Wydanie $tag nie ma załączonego pliku APK. Dodaj go do wydania na GitHubie."
+            strings.get(R.string.update_error_no_apk, tag)
         )
         return UpdateCheckResult.Available(
             ReleaseInfo(
@@ -121,7 +124,7 @@ class UpdateManager @Inject constructor(
     /** Pobiera APK do `cacheDir/updates`, raportując postęp 0..1, i sprawdza, że to paczka tej aplikacji. */
     suspend fun downloadApk(release: ReleaseInfo, onProgress: (Float) -> Unit): File =
         withContext(Dispatchers.IO) {
-            if (!release.apkUrl.startsWith("https://")) throw UpdateException("Nieprawidłowy adres pobierania.")
+            if (!release.apkUrl.startsWith("https://")) throw UpdateException(strings.get(R.string.update_error_bad_url))
             val dir = File(context.cacheDir, "updates").apply { mkdirs() }
             dir.listFiles()?.forEach { it.delete() }
             val target = File(dir, "Taal-${release.version}.apk")
@@ -130,7 +133,7 @@ class UpdateManager @Inject constructor(
                 val connection = open(release.apkUrl, "application/octet-stream")
                 try {
                     if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                        throw UpdateException("Pobieranie nie powiodło się (HTTP ${connection.responseCode}).")
+                        throw UpdateException(strings.get(R.string.update_error_download_http, connection.responseCode))
                     }
                     val total = connection.contentLengthLong.takeIf { it > 0 } ?: release.apkSize
                     var done = 0L
@@ -147,12 +150,12 @@ class UpdateManager @Inject constructor(
                         }
                     }
                     if (release.apkSize > 0 && done != release.apkSize) {
-                        throw UpdateException("Pobrany plik jest niekompletny. Spróbuj ponownie.")
+                        throw UpdateException(strings.get(R.string.update_error_incomplete))
                     }
                 } finally {
                     connection.disconnect()
                 }
-                if (!partial.renameTo(target)) throw UpdateException("Nie udało się zapisać pobranego pliku.")
+                if (!partial.renameTo(target)) throw UpdateException(strings.get(R.string.update_error_save_failed))
                 verifyApk(target)
                 target
             } catch (e: CancellationException) {
@@ -163,16 +166,16 @@ class UpdateManager @Inject constructor(
                 throw e
             } catch (e: IOException) {
                 partial.delete(); target.delete()
-                throw UpdateException("Przerwano pobieranie. Sprawdź połączenie i spróbuj ponownie.")
+                throw UpdateException(strings.get(R.string.update_error_interrupted))
             }
         }
 
     /** Odrzuca pliki, które nie są paczką Taala. Zgodność podpisu dodatkowo pilnuje sam system przy instalacji. */
     private fun verifyApk(file: File) {
         val info = context.packageManager.getPackageArchiveInfo(file.path, 0)
-            ?: throw UpdateException("Pobrany plik nie jest poprawnym APK.")
+            ?: throw UpdateException(strings.get(R.string.update_error_invalid_apk))
         if (info.packageName != context.packageName) {
-            throw UpdateException("Pobrany plik pochodzi z innej aplikacji.")
+            throw UpdateException(strings.get(R.string.update_error_foreign_apk))
         }
     }
 

@@ -44,6 +44,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
@@ -51,6 +53,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.ui.components.StudentAvatar
 import pl.lublin.wsei.plan.ui.components.WseiProfileShortcut
 import pl.lublin.wsei.plan.ui.components.wseiPressScale
@@ -121,6 +124,7 @@ private fun NavigationPillItem(
         label = "navItemContent"
     )
     val interactionSource = remember { MutableInteractionSource() }
+    val destinationDescription = stringResource(destination.contentDescriptionRes)
 
     Surface(
         onClick = onClick,
@@ -135,7 +139,7 @@ private fun NavigationPillItem(
             .semantics {
                 role = Role.Tab
                 this.selected = selected
-                contentDescription = destination.contentDescription
+                contentDescription = destinationDescription
             }
     ) {
         Row(
@@ -161,11 +165,11 @@ private fun NavigationPillItem(
             }
             AnimatedVisibility(
                 visible = selected,
-                enter = expandHorizontally(animationSpec = WseiMotion.spatial()) + fadeIn(WseiMotion.effects()),
-                exit = shrinkHorizontally(animationSpec = WseiMotion.spatial()) + fadeOut(WseiMotion.effects())
+                enter = expandHorizontally(animationSpec = WseiMotion.fastSpatial()) + fadeIn(WseiMotion.effects()),
+                exit = shrinkHorizontally(animationSpec = WseiMotion.size()) + fadeOut(WseiMotion.fastEffects())
             ) {
                 Text(
-                    text = destination.shortLabel,
+                    text = stringResource(destination.shortLabelRes),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -242,7 +246,11 @@ internal fun WseiNavigationRail(
                         BadgedBox(badge = { Badge() }) {
                             Icon(
                                 imageVector = destination.iconVector,
-                                contentDescription = "Nieprzeczytane ogłoszenia: $unreadAnnouncementsCount"
+                                contentDescription = pluralStringResource(
+                                    R.plurals.nav_unread_announcements_cd,
+                                    unreadAnnouncementsCount,
+                                    unreadAnnouncementsCount
+                                )
                             )
                         }
                     } else {
@@ -251,7 +259,7 @@ internal fun WseiNavigationRail(
                 },
                 label = {
                     Text(
-                        text = if (railExpanded) destination.label else destination.shortLabel,
+                        text = stringResource(if (railExpanded) destination.labelRes else destination.shortLabelRes),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -272,6 +280,8 @@ private fun RailProfileHeader(
 ) {
     val colors = MaterialTheme.colorScheme
     val interactionSource = remember { MutableInteractionSource() }
+    val profileLabel = stringResource(WseiDestination.PROFILE.labelRes)
+    val profileDescription = stringResource(R.string.common_profile_of, shortcut.fullName)
     // Zwinięta szyna ma 96 dp — awatar (48 dp z obwódką) ląduje dokładnie na środku.
     val startPadding by animateDpAsState(
         targetValue = if (expanded) WseiSpacing.xl else WseiSpacing.xxl,
@@ -301,7 +311,7 @@ private fun RailProfileHeader(
             .semantics {
                 role = Role.Tab
                 this.selected = selected
-                contentDescription = "${WseiDestination.PROFILE.label}: ${shortcut.fullName}"
+                contentDescription = profileDescription
             }
     ) {
         Row(
@@ -325,7 +335,7 @@ private fun RailProfileHeader(
                         .widthIn(max = 160.dp)
                 ) {
                     Text(
-                        text = WseiDestination.PROFILE.label,
+                        text = profileLabel,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1

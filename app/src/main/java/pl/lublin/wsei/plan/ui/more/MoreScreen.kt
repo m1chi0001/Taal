@@ -8,13 +8,14 @@ package pl.lublin.wsei.plan.ui.more
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import androidx.annotation.StringRes
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -36,51 +37,60 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.TextAutoSize
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ripple
+import androidx.compose.material3.toPath
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.LifecycleResumeEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import pl.lublin.wsei.plan.data.update.UpdatePhase
-import pl.lublin.wsei.plan.data.update.UpdateViewModel
+import androidx.core.os.LocaleListCompat
+import androidx.graphics.shapes.Morph
+import pl.lublin.wsei.plan.BuildConfig
+import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
+import pl.lublin.wsei.plan.domain.model.AppColorPalette
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiTwoPane
@@ -89,10 +99,7 @@ import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
 import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiChevron
-import pl.lublin.wsei.plan.ui.components.WseiEmptyState
 import pl.lublin.wsei.plan.ui.components.WseiIconBadge
-import pl.lublin.wsei.plan.ui.components.WseiInfoRow
-import pl.lublin.wsei.plan.ui.components.WseiInset
 import pl.lublin.wsei.plan.ui.components.WseiListEntry
 import pl.lublin.wsei.plan.ui.components.WseiListGroup
 import pl.lublin.wsei.plan.ui.components.WseiListItem
@@ -100,25 +107,18 @@ import pl.lublin.wsei.plan.ui.components.WseiPill
 import pl.lublin.wsei.plan.ui.components.WseiScreenFrame
 import pl.lublin.wsei.plan.ui.components.WseiSectionTitle
 import pl.lublin.wsei.plan.ui.components.WseiSwitch
+import pl.lublin.wsei.plan.ui.components.wseiPressScale
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.navigation.MoreSubView
 import pl.lublin.wsei.plan.ui.schedule.AppThemeMode
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
-import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
-import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
+import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
+import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
-
-/** Wersja aplikacji z manifestu — bez ręcznego wpisywania w kodzie. */
-@Composable
-private fun rememberAppVersion(): String {
-    val context = LocalContext.current
-    return remember(context) {
-        runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull() ?: "—"
-    }
-}
+import pl.lublin.wsei.plan.ui.theme.isWseiDarkTheme
+import pl.lublin.wsei.plan.ui.theme.wseiPaletteSwatch
+import androidx.compose.ui.res.pluralStringResource
 
 private const val LINK_VIRTUAL_DEAN = "https://dziekanat.wsei.lublin.pl/"
 private const val LINK_ELEARNING = "https://dl.wsei.pl/"
@@ -126,12 +126,21 @@ private const val LINK_ELEARNING = "https://dl.wsei.pl/"
 /** Minimum width of a hub tile before the grid drops a column. */
 private val HubTileMinWidth = 220.dp
 
+/** Opens [url] in the browser; silently ignored when no browser is installed. */
+internal fun openExternalLink(context: android.content.Context, url: String) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+}
+
 /** Strzałka oznaczająca, że pozycja otwiera zewnętrzną stronę w przeglądarce. */
 @Composable
-private fun WseiExternalLinkMark() {
+internal fun WseiExternalLinkMark() {
     Icon(
         imageVector = WseiIcons.ArrowForward,
-        contentDescription = "Otwiera w przeglądarce",
+        contentDescription = stringResource(R.string.settings_opens_in_browser),
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.size(20.dp)
     )
@@ -154,7 +163,8 @@ fun MoreScreen(
     onSelectThemeMode: (AppThemeMode) -> Unit,
     onToggleLiveNotification: (Boolean) -> Unit,
     onToggleHideSensitiveData: (Boolean) -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onSelectColorPalette: (AppColorPalette) -> Unit = {}
 ) {
     val windowLayout = LocalWseiWindowLayout.current
     val subPage: @Composable (MoreSubView, embedded: Boolean) -> Unit = { subView, embedded ->
@@ -181,6 +191,7 @@ fun MoreScreen(
                 onBack = onBack,
                 embedded = embedded,
                 onSelectThemeMode = onSelectThemeMode,
+                onSelectColorPalette = onSelectColorPalette,
                 onToggleLiveNotification = onToggleLiveNotification,
                 onToggleHideSensitiveData = onToggleHideSensitiveData
             )
@@ -219,6 +230,7 @@ fun MoreScreen(
         AnimatedContent(
             targetState = currentSubView,
             transitionSpec = {
+                // Forward when leaving the hub, backward when returning to it.
                 val forward = targetState != MoreSubView.HUB
                 (fadeIn(WseiMotion.effects()) +
                     slideInHorizontally(WseiMotion.spatial()) { width -> if (forward) width / 8 else -width / 8 }) togetherWith
@@ -235,7 +247,7 @@ fun MoreScreen(
  * powrotu ani drugiego skrótu do profilu (ten jest już w panelu huba).
  */
 @Composable
-private fun MorePage(
+internal fun MorePage(
     title: String,
     onBack: (() -> Unit)?,
     embedded: Boolean,
@@ -277,13 +289,9 @@ private class HubEntry(
     val unreadCount: Int = 0
 )
 
-/** „1 nowe”, „3 nowe”, „5 nowych”, „12 nowych”, „22 nowe”. */
-private fun polishNewCountLabel(count: Int): String {
-    val lastDigit = count % 10
-    val lastTwoDigits = count % 100
-    val word = if (count == 1 || (lastDigit in 2..4 && lastTwoDigits !in 12..14)) "nowe" else "nowych"
-    return "$count $word"
-}
+/** Badge with the number of unread announcements („1 nowe”, „5 nowych”). */
+@Composable
+private fun newCountLabel(count: Int): String = pluralStringResource(R.plurals.more_new_count, count, count)
 
 @Composable
 private fun MoreHub(
@@ -293,19 +301,14 @@ private fun MoreHub(
     forceList: Boolean = false
 ) {
     val unread = uiState.unreadAnnouncementsCount
-    val appVersion = rememberAppVersion()
     val context = LocalContext.current
     val windowLayout = LocalWseiWindowLayout.current
-    val openLink: (String) -> Unit = { url ->
-        runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
-    }
+    val openLink: (String) -> Unit = { url -> openExternalLink(context, url) }
     val sections = listOf(
         HubEntry(
             key = "announcements",
-            title = "Ogłoszenia",
-            supporting = "Wiadomości z dziekanatu i załączniki",
+            title = stringResource(R.string.announcements_title),
+            supporting = stringResource(R.string.more_announcements_supporting),
             icon = WseiIcons.Campaign,
             onClick = { onOpen(MoreSubView.ANNOUNCEMENTS) },
             subView = MoreSubView.ANNOUNCEMENTS,
@@ -313,16 +316,16 @@ private fun MoreHub(
         ),
         HubEntry(
             key = "settings",
-            title = "Ustawienia",
-            supporting = "Motyw, powiadomienia i prywatność",
+            title = stringResource(R.string.settings_title),
+            supporting = stringResource(R.string.settings_hub_supporting),
             icon = WseiIcons.Settings,
             onClick = { onOpen(MoreSubView.SETTINGS) },
             subView = MoreSubView.SETTINGS
         ),
         HubEntry(
             key = "about",
-            title = "O aplikacji",
-            supporting = "Wersja $appVersion • licencje",
+            title = stringResource(R.string.about_title),
+            supporting = stringResource(R.string.about_hub_supporting, BuildConfig.VERSION_NAME),
             icon = WseiIcons.Info,
             onClick = { onOpen(MoreSubView.ABOUT) },
             subView = MoreSubView.ABOUT
@@ -331,14 +334,14 @@ private fun MoreHub(
     val links = listOf(
         HubEntry(
             key = "link_dean",
-            title = "Wirtualny dziekanat",
+            title = stringResource(R.string.more_link_virtual_dean),
             supporting = "dziekanat.wsei.lublin.pl",
             icon = WseiIcons.Badge,
             onClick = { openLink(LINK_VIRTUAL_DEAN) }
         ),
         HubEntry(
             key = "link_elearning",
-            title = "Platforma e-learningowa",
+            title = stringResource(R.string.more_link_elearning),
             supporting = "dl.wsei.pl",
             icon = WseiIcons.School,
             onClick = { openLink(LINK_ELEARNING) }
@@ -347,7 +350,7 @@ private fun MoreHub(
     // Tiles on medium windows; a compact list on phones and in the narrow hub pane.
     val useTiles = !forceList && !windowLayout.isCompact
 
-    WseiScreenFrame(title = "Więcej") { scrollModifier ->
+    WseiScreenFrame(title = stringResource(R.string.nav_more)) { scrollModifier ->
         val itemModifier = Modifier.wseiReadableWidth()
         LazyColumn(
             modifier = Modifier
@@ -364,7 +367,7 @@ private fun MoreHub(
                 }
             }
             item(key = "section_links", contentType = "section") {
-                WseiSectionTitle("Przydatne linki", modifier = itemModifier)
+                WseiSectionTitle(stringResource(R.string.more_useful_links), modifier = itemModifier)
             }
             item(key = "links_list", contentType = "hub_group") {
                 if (useTiles) {
@@ -381,7 +384,7 @@ private fun MoreHub(
 private fun HubTrailing(entry: HubEntry) {
     if (entry.unreadCount > 0) {
         WseiPill(
-            text = polishNewCountLabel(entry.unreadCount),
+            text = newCountLabel(entry.unreadCount),
             containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
             emphasized = true
@@ -520,12 +523,12 @@ private fun MoreDetailPlaceholder(unreadCount: Int, onOpenAnnouncements: () -> U
                 )
             }
             Text(
-                text = "Wybierz sekcję",
+                text = stringResource(R.string.more_pick_section_title),
                 style = MaterialTheme.typography.headlineSmall,
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "Ogłoszenia, ustawienia i informacje o aplikacji otworzą się w tym miejscu.",
+                text = stringResource(R.string.more_pick_section_message),
                 style = MaterialTheme.typography.bodyLarge,
                 color = colors.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -538,154 +541,12 @@ private fun MoreDetailPlaceholder(unreadCount: Int, onOpenAnnouncements: () -> U
                 )
                 Text(
                     text = if (unreadCount > 0) {
-                        "Ogłoszenia • ${polishNewCountLabel(unreadCount)}"
+                        stringResource(R.string.more_announcements_with_count, newCountLabel(unreadCount))
                     } else {
-                        "Pokaż ogłoszenia"
+                        stringResource(R.string.more_show_announcements)
                     },
                     modifier = Modifier.padding(start = WseiSpacing.s)
                 )
-            }
-        }
-    }
-}
-
-// -----------------------------------------------------------------------------------------
-// Ogłoszenia
-// -----------------------------------------------------------------------------------------
-
-@Composable
-private fun AnnouncementsScreen(
-    uiState: ScheduleUiState,
-    onBack: (() -> Unit)?,
-    embedded: Boolean,
-    onMarkRead: (DeanAnnouncement) -> Unit,
-    onDownloadAttachment: (AnnouncementAttachment) -> Unit,
-    onRefresh: () -> Unit
-) {
-    MorePage(
-        title = "Ogłoszenia",
-        onBack = onBack,
-        embedded = embedded,
-        onRefresh = onRefresh,
-        isRefreshing = uiState.isRefreshing
-    ) { itemModifier ->
-        if (uiState.announcements.isEmpty()) {
-            item(key = "announcements_empty", contentType = "empty") {
-                WseiEmptyState(
-                    icon = WseiIcons.Campaign,
-                    title = "Brak ogłoszeń",
-                    message = "Nowe wiadomości z dziekanatu pojawią się tutaj.",
-                    modifier = itemModifier
-                )
-            }
-        }
-        items(
-            items = uiState.announcements,
-            key = { "announcement_${it.id}" },
-            contentType = { "announcement_card" }
-        ) { announcement ->
-            AnnouncementCard(
-                announcement = announcement,
-                onMarkRead = { onMarkRead(announcement) },
-                onDownloadAttachment = onDownloadAttachment,
-                modifier = itemModifier
-            )
-        }
-    }
-}
-
-@Composable
-private fun AnnouncementCard(
-    announcement: DeanAnnouncement,
-    onMarkRead: () -> Unit,
-    onDownloadAttachment: (AnnouncementAttachment) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var expanded by rememberSaveable(announcement.id) { mutableStateOf(false) }
-    val unread = !announcement.isRead
-    val colors = MaterialTheme.colorScheme
-
-    WseiCard(
-        onClick = {
-            expanded = !expanded
-            if (unread) onMarkRead()
-        },
-        containerColor = if (unread) colors.surfaceContainerHigh else colors.surfaceContainer,
-        modifier = modifier.animateContentSize(WseiMotion.size())
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
-        ) {
-            WseiIconBadge(
-                icon = if (announcement.hasAttachment) WseiIcons.AttachFile else WseiIcons.Campaign,
-                shape = if (unread) M3XCookieShape else CircleShape,
-                containerColor = if (unread) colors.primary else colors.surfaceContainerHighest,
-                contentColor = if (unread) colors.onPrimary else colors.onSurfaceVariant
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
-            ) {
-                Text(
-                    text = "${announcement.authorDepartment} • ${announcement.publishedAtIso}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (unread) colors.primary else colors.onSurfaceVariant,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = announcement.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold,
-                    maxLines = if (expanded) Int.MAX_VALUE else 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (unread) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(colors.primary)
-                )
-            }
-        }
-
-        Text(
-            text = if (expanded) announcement.fullText else announcement.bodySnippet,
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.onSurfaceVariant,
-            maxLines = if (expanded) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        AnimatedVisibility(
-            visible = expanded && announcement.attachments.isNotEmpty(),
-            enter = expandVertically(WseiMotion.size()) + fadeIn(WseiMotion.effects()),
-            exit = shrinkVertically(WseiMotion.size()) + fadeOut(WseiMotion.effects())
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
-                announcement.attachments.forEach { attachment ->
-                    FilledTonalButton(
-                        onClick = { onDownloadAttachment(attachment) },
-                        shape = CircleShape
-                    ) {
-                        Icon(
-                            imageVector = WseiIcons.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = attachment.fileName,
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = WseiSpacing.s)
-                        )
-                    }
-                }
             }
         }
     }
@@ -701,12 +562,13 @@ private fun SettingsScreen(
     onBack: (() -> Unit)?,
     embedded: Boolean,
     onSelectThemeMode: (AppThemeMode) -> Unit,
+    onSelectColorPalette: (AppColorPalette) -> Unit,
     onToggleLiveNotification: (Boolean) -> Unit,
     onToggleHideSensitiveData: (Boolean) -> Unit
 ) {
-    MorePage(title = "Ustawienia", onBack = onBack, embedded = embedded) { itemModifier ->
+    MorePage(title = stringResource(R.string.settings_title), onBack = onBack, embedded = embedded) { itemModifier ->
         item(key = "section_theme", contentType = "section") {
-            WseiSectionTitle("Wygląd", modifier = itemModifier)
+            WseiSectionTitle(stringResource(R.string.settings_section_theme), modifier = itemModifier)
         }
         item(key = "theme_options", contentType = "theme_selector") {
             ThemeModeSelector(
@@ -716,8 +578,27 @@ private fun SettingsScreen(
             )
         }
 
+        item(key = "section_palette", contentType = "section") {
+            WseiSectionTitle(stringResource(R.string.settings_section_palette), modifier = itemModifier)
+        }
+        item(key = "palette_options", contentType = "palette_selector") {
+            ColorPaletteSelector(
+                selected = uiState.colorPalette,
+                isDark = isWseiDarkTheme(uiState.themeMode),
+                onSelect = onSelectColorPalette,
+                modifier = itemModifier
+            )
+        }
+
+        item(key = "section_language", contentType = "section") {
+            WseiSectionTitle(stringResource(R.string.settings_section_language), modifier = itemModifier)
+        }
+        item(key = "language_options", contentType = "language_selector") {
+            AppLanguageSelector(modifier = itemModifier)
+        }
+
         item(key = "section_behaviour", contentType = "section") {
-            WseiSectionTitle("Działanie", modifier = itemModifier)
+            WseiSectionTitle(stringResource(R.string.settings_section_behaviour), modifier = itemModifier)
         }
         item(key = "switches", contentType = "switch_group") {
             Column(
@@ -727,8 +608,8 @@ private fun SettingsScreen(
                 SettingsSwitchItem(
                     index = 0,
                     count = 2,
-                    title = "Zajęcia na ekranie blokady",
-                    supporting = "Postęp trwających zajęć w pasku stanu i na ekranie blokady",
+                    title = stringResource(R.string.settings_live_notification_title),
+                    supporting = stringResource(R.string.settings_live_notification_supporting),
                     icon = WseiIcons.NotificationsActive,
                     checked = uiState.isLiveNotificationEnabled,
                     onCheckedChange = onToggleLiveNotification
@@ -736,8 +617,8 @@ private fun SettingsScreen(
                 SettingsSwitchItem(
                     index = 1,
                     count = 2,
-                    title = "Ukryj dane",
-                    supporting = "Maskuje numer albumu, numer konta, kwoty i oceny w miejscach publicznych",
+                    title = stringResource(R.string.settings_hide_data_title),
+                    supporting = stringResource(R.string.settings_hide_data_supporting),
                     icon = if (uiState.isHideSensitiveData) WseiIcons.VisibilityOff else WseiIcons.Visibility,
                     checked = uiState.isHideSensitiveData,
                     onCheckedChange = onToggleHideSensitiveData
@@ -786,23 +667,25 @@ private fun SettingsSwitchItem(
     }
 }
 
-/** Kolejność wyboru motywu w grupie przycisków. */
-private val ThemeModeOrder = listOf(AppThemeMode.LIGHT, AppThemeMode.DARK, AppThemeMode.SYSTEM, AppThemeMode.DYNAMIC)
+// --- Theme mode ---------------------------------------------------------------------------
 
-private val AppThemeMode.shortLabel: String
+/** Kolejność wyboru motywu w grupie przycisków. */
+private val ThemeModeOrder = listOf(AppThemeMode.LIGHT, AppThemeMode.DARK, AppThemeMode.SYSTEM)
+
+@get:StringRes
+private val AppThemeMode.shortLabelRes: Int
     get() = when (this) {
-        AppThemeMode.LIGHT -> "Jasny"
-        AppThemeMode.DARK -> "Ciemny"
-        AppThemeMode.SYSTEM -> "System"
-        AppThemeMode.DYNAMIC -> "Dynamiczny"
+        AppThemeMode.LIGHT -> R.string.settings_theme_light
+        AppThemeMode.DARK -> R.string.settings_theme_dark
+        AppThemeMode.SYSTEM -> R.string.settings_theme_system
     }
 
-private val AppThemeMode.description: String
+@get:StringRes
+private val AppThemeMode.descriptionRes: Int
     get() = when (this) {
-        AppThemeMode.SYSTEM -> "Jasny lub ciemny, tak jak w ustawieniach telefonu"
-        AppThemeMode.LIGHT -> "Zawsze jasne kolory"
-        AppThemeMode.DARK -> "Zawsze ciemne kolory"
-        AppThemeMode.DYNAMIC -> "Kolory dopasowane do tapety (Material You)"
+        AppThemeMode.SYSTEM -> R.string.settings_theme_system_description
+        AppThemeMode.LIGHT -> R.string.settings_theme_light_description
+        AppThemeMode.DARK -> R.string.settings_theme_dark_description
     }
 
 private fun themeSymbol(name: String, pathData: String): ImageVector =
@@ -849,17 +732,22 @@ private val SystemModeIcon: ImageVector by lazy {
     )
 }
 
+/** Material Symbols „check” — the selected palette swatch mark. */
+private val CheckIcon: ImageVector by lazy {
+    themeSymbol("Check", "M9,16.17L4.83,12l-1.42,1.41L9,19L21,7l-1.41,-1.41z")
+}
+
 private val AppThemeMode.icon: ImageVector
     get() = when (this) {
         AppThemeMode.LIGHT -> LightModeIcon
         AppThemeMode.DARK -> DarkModeIcon
         AppThemeMode.SYSTEM -> SystemModeIcon
-        AppThemeMode.DYNAMIC -> WseiIcons.Palette
     }
 
 /**
- * Wybór motywu jako połączona grupa przycisków (M3 Expressive connected button group).
- * Wybrany przycisk morfuje do pigułki, a pod grupą pojawia się opis bieżącego trybu.
+ * Wybór motywu (jasny / ciemny / systemowy) jako połączona grupa przycisków
+ * (M3 Expressive connected button group). Wybrany przycisk morfuje do pigułki, a pod grupą
+ * pojawia się opis bieżącego trybu. Źródło kolorów wybiera się osobno ([ColorPaletteSelector]).
  */
 @Composable
 private fun ThemeModeSelector(
@@ -867,7 +755,6 @@ private fun ThemeModeSelector(
     onSelect: (AppThemeMode) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val dynamicSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val lastIndex = ThemeModeOrder.lastIndex
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -881,14 +768,13 @@ private fun ThemeModeSelector(
             // Explicit scope: the enclosing Column also offers a `Modifier.weight`.
             val groupScope = this
             ThemeModeOrder.forEachIndexed { index, mode ->
-                val enabled = mode != AppThemeMode.DYNAMIC || dynamicSupported
                 customItem(
                     buttonGroupContent = {
                         val interactionSource = remember { MutableInteractionSource() }
+                        val label = stringResource(mode.shortLabelRes)
                         ToggleButton(
                             checked = selected == mode,
                             onCheckedChange = { onSelect(mode) },
-                            enabled = enabled,
                             shapes = when (index) {
                                 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
                                 lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
@@ -916,7 +802,7 @@ private fun ThemeModeSelector(
                                 )
                                 val labelStyle = MaterialTheme.typography.labelLarge
                                 Text(
-                                    text = mode.shortLabel,
+                                    text = label,
                                     style = labelStyle,
                                     maxLines = 1,
                                     autoSize = TextAutoSize.StepBased(
@@ -930,13 +816,12 @@ private fun ThemeModeSelector(
                     },
                     menuContent = { menuState ->
                         DropdownMenuItem(
-                            text = { Text(mode.shortLabel) },
+                            text = { Text(stringResource(mode.shortLabelRes)) },
                             onClick = {
                                 onSelect(mode)
                                 menuState.dismiss()
                             },
-                            leadingIcon = { Icon(imageVector = mode.icon, contentDescription = null) },
-                            enabled = enabled
+                            leadingIcon = { Icon(imageVector = mode.icon, contentDescription = null) }
                         )
                     }
                 )
@@ -948,7 +833,7 @@ private fun ThemeModeSelector(
             label = "themeModeDescription"
         ) { mode ->
             Text(
-                text = mode.description,
+                text = stringResource(mode.descriptionRes),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -956,194 +841,337 @@ private fun ThemeModeSelector(
                     .padding(horizontal = WseiSpacing.xs)
             )
         }
-        if (!dynamicSupported) {
-            Text(
-                text = "Kolory z tapety wymagają Androida 12 lub nowszego.",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = WseiSpacing.xs)
-            )
-        }
     }
 }
 
-// -----------------------------------------------------------------------------------------
-// O aplikacji
-// -----------------------------------------------------------------------------------------
+// --- Colour palette -----------------------------------------------------------------------
 
-/** Karta „Aktualizacje”: sprawdza wydania w GitHubie, pobiera APK i uruchamia instalator. */
+/** Display order of the palettes in the swatch grid. */
+private val PaletteOrder = listOf(
+    AppColorPalette.TAAL,
+    AppColorPalette.DYNAMIC,
+    AppColorPalette.COBALT,
+    AppColorPalette.TERRACOTTA,
+    AppColorPalette.PLUM,
+    AppColorPalette.OCEAN
+)
+
+@get:StringRes
+private val AppColorPalette.labelRes: Int
+    get() = when (this) {
+        AppColorPalette.TAAL -> R.string.settings_palette_taal
+        AppColorPalette.DYNAMIC -> R.string.settings_palette_dynamic
+        AppColorPalette.COBALT -> R.string.settings_palette_cobalt
+        AppColorPalette.TERRACOTTA -> R.string.settings_palette_terracotta
+        AppColorPalette.PLUM -> R.string.settings_palette_plum
+        AppColorPalette.OCEAN -> R.string.settings_palette_ocean
+    }
+
+/** Minimum width of one swatch column before the grid drops a column. */
+private val PaletteChipMinWidth = 96.dp
+
+/** Diameter of a palette swatch. */
+private val PaletteSwatchSize = 60.dp
+
+/**
+ * A [Shape] that renders [morph] at [progress] (0 = start polygon, 1 = end polygon), scaled to
+ * the layout size and centred — the same mapping as `RoundedPolygon.toShape()`.
+ */
+private class MorphShape(private val morph: Morph, private val progress: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val path = morph.toPath(progress = progress)
+        path.transform(Matrix().apply { scale(x = size.width, y = size.height) })
+        path.translate(size.center - path.getBounds().center)
+        return Outline.Generic(path)
+    }
+}
+
+/**
+ * Wybór palety kolorów: siatka okrągłych próbek (kolor główny, drugorzędny i trzeciorzędny).
+ * Działa w każdym trybie motywu. Paleta dynamiczna (Material You) wymaga Androida 12+.
+ */
 @Composable
-private fun UpdateCard(
-    modifier: Modifier = Modifier,
-    viewModel: UpdateViewModel = hiltViewModel()
+private fun ColorPaletteSelector(
+    selected: AppColorPalette,
+    isDark: Boolean,
+    onSelect: (AppColorPalette) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val dynamicSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val colors = MaterialTheme.colorScheme
-    val release = state.release
-    // Re-checked on every resume: the user may have just granted "install unknown apps".
-    var needsInstallPermission by remember { mutableStateOf(viewModel.needsInstallPermission()) }
-    LifecycleResumeEffect(viewModel) {
-        needsInstallPermission = viewModel.needsInstallPermission()
-        onPauseOrDispose { }
-    }
-    val highlighted = state.phase == UpdatePhase.AVAILABLE || state.phase == UpdatePhase.READY
-
-    val statusText = when (state.phase) {
-        UpdatePhase.IDLE -> "Zainstalowana wersja: ${viewModel.currentVersion}"
-        UpdatePhase.CHECKING -> "Sprawdzam najnowsze wydanie na GitHubie…"
-        UpdatePhase.UP_TO_DATE -> "Masz najnowszą wersję (${viewModel.currentVersion})."
-        UpdatePhase.AVAILABLE -> "Dostępna wersja ${release?.version} (masz ${viewModel.currentVersion})."
-        UpdatePhase.DOWNLOADING -> "Pobieranie wersji ${release?.version}… ${(state.progress * 100).toInt()}%"
-        UpdatePhase.READY -> "Wersja ${release?.version} jest pobrana i gotowa do instalacji."
-        UpdatePhase.ERROR -> state.message ?: "Nie udało się sprawdzić aktualizacji."
-    }
-
+    // Swatches are resolved once per palette for the current light/dark appearance.
+    val swatches = PaletteOrder.associateWith { palette -> wseiPaletteSwatch(palette, isDark) }
     WseiCard(
-        modifier = modifier.animateContentSize(WseiMotion.size()),
+        modifier = modifier,
         containerColor = colors.surfaceContainer,
+        contentPadding = PaddingValues(horizontal = WseiSpacing.s, vertical = WseiSpacing.l),
         verticalSpacing = WseiSpacing.m
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val columns = (maxWidth / PaletteChipMinWidth).toInt().coerceIn(3, PaletteOrder.size)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+            ) {
+                PaletteOrder.chunked(columns).forEach { rowPalettes ->
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        rowPalettes.forEach { palette ->
+                            PaletteSwatchChip(
+                                label = stringResource(palette.labelRes),
+                                sublabel = if (palette == AppColorPalette.DYNAMIC) {
+                                    stringResource(R.string.settings_palette_dynamic_hint)
+                                } else {
+                                    null
+                                },
+                                swatch = swatches.getValue(palette),
+                                selected = palette == selected,
+                                enabled = palette != AppColorPalette.DYNAMIC || dynamicSupported,
+                                onClick = { onSelect(palette) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        repeat(columns - rowPalettes.size) { Spacer(modifier = Modifier.weight(1f)) }
+                    }
+                }
+            }
+        }
+        val note = when {
+            !dynamicSupported -> stringResource(R.string.settings_palette_dynamic_unsupported)
+            selected == AppColorPalette.DYNAMIC -> stringResource(R.string.settings_palette_dynamic_description)
+            else -> stringResource(R.string.settings_palette_description)
+        }
+        Text(
+            text = note,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = WseiSpacing.m)
+        )
+    }
+}
+
+/**
+ * Pojedyncza próbka palety. Po wybraniu koło morfuje w ciasteczko (MaterialShapes) na sprężynie,
+ * powiększa się i pokazuje znacznik wyboru; wciśnięcie lekko je „wciska”.
+ */
+@Composable
+private fun PaletteSwatchChip(
+    label: String,
+    sublabel: String?,
+    swatch: List<Color>,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    val interactionSource = remember { MutableInteractionSource() }
+    val morph = remember { Morph(MaterialShapes.Circle, MaterialShapes.Cookie9Sided) }
+    val morphProgress by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = WseiMotion.size(),
+        label = "paletteMorph"
+    )
+    val selectionScale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.86f,
+        animationSpec = WseiMotion.spatial(),
+        label = "paletteScale"
+    )
+    val primary = swatch.getOrElse(0) { colors.primary }
+    val secondary = swatch.getOrElse(1) { colors.secondary }
+    val tertiary = swatch.getOrElse(2) { colors.tertiary }
+
+    Column(
+        modifier = modifier
+            .clip(WseiInsetShape)
+            .selectable(
+                selected = selected,
+                interactionSource = interactionSource,
+                indication = ripple(),
+                enabled = enabled,
+                role = Role.RadioButton,
+                onClick = onClick
+            )
+            .alpha(if (enabled) 1f else 0.38f)
+            .padding(vertical = WseiSpacing.s, horizontal = WseiSpacing.xs),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(PaletteSwatchSize)
+                .wseiPressScale(interactionSource, pressedScale = 0.9f)
+                .graphicsLayer {
+                    // Read in the layer phase: the morph and scale animate without recomposition.
+                    scaleX = selectionScale
+                    scaleY = selectionScale
+                    shape = MorphShape(morph, morphProgress)
+                    clip = true
+                },
+            contentAlignment = Alignment.Center
         ) {
-            if (state.phase == UpdatePhase.CHECKING) {
-                LoadingIndicator(
-                    modifier = Modifier.size(44.dp),
-                    color = colors.primary
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .background(primary)
                 )
-            } else {
-                WseiIconBadge(
-                    icon = WseiIcons.Download,
-                    shape = CircleShape,
-                    containerColor = if (highlighted) colors.primary else colors.secondaryContainer,
-                    contentColor = if (highlighted) colors.onPrimary else colors.onSecondaryContainer,
-                    size = 44.dp,
-                    iconSize = 22.dp
-                )
+                Row(modifier = Modifier.weight(1f)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(1f)
+                            .background(secondary)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(1f)
+                            .background(tertiary)
+                    )
+                }
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Aktualizacje",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (state.phase == UpdatePhase.ERROR) colors.error else colors.onSurfaceVariant
-                )
+            // Fully qualified: inside Box-in-Column the ColumnScope overload would be picked.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = selected,
+                enter = scaleIn(WseiMotion.fastSpatial()) + fadeIn(WseiMotion.effects()),
+                exit = scaleOut(WseiMotion.fastSpatial()) + fadeOut(WseiMotion.effects())
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(colors.surface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = CheckIcon,
+                        contentDescription = null,
+                        tint = colors.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
-
-        if (state.phase == UpdatePhase.DOWNLOADING) {
-            LinearWavyProgressIndicator(
-                progress = { state.progress },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        val notes = release?.notes?.takeIf { it.isNotBlank() }
-        if (notes != null && highlighted) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) colors.primary else colors.onSurface,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (sublabel != null) {
             Text(
-                text = "Co nowego",
-                style = MaterialTheme.typography.labelLarge,
-                color = colors.primary
-            )
-            Text(
-                text = notes.replace(Regex("[#*`]+"), "").trim(),
-                style = MaterialTheme.typography.bodySmall,
+                text = sublabel,
+                style = MaterialTheme.typography.labelSmall,
                 color = colors.onSurfaceVariant,
-                maxLines = 8,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
 
-        Row(horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
-            when (state.phase) {
-                UpdatePhase.AVAILABLE -> Button(onClick = viewModel::download) { Text("Pobierz") }
-                UpdatePhase.DOWNLOADING -> OutlinedButton(onClick = viewModel::cancelDownload) { Text("Anuluj") }
-                UpdatePhase.READY -> Button(onClick = {
-                    viewModel.installIntent()?.let { runCatching { context.startActivity(it) } }
-                }) {
-                    Text(if (needsInstallPermission) "Zezwól i zainstaluj" else "Zainstaluj")
+// --- App language -------------------------------------------------------------------------
+
+/** Per-app language options; [tag] null means "follow the system language". */
+private enum class AppLanguage(val tag: String?, @StringRes val labelRes: Int, val code: String?) {
+    SYSTEM(null, R.string.settings_language_system, null),
+    POLISH("pl", R.string.settings_language_polish, "PL"),
+    ENGLISH("en", R.string.settings_language_english, "EN"),
+    UKRAINIAN("uk", R.string.settings_language_ukrainian, "UK")
+}
+
+/** Language currently set through AppCompat's per-app locales (empty list = system). */
+private fun currentAppLanguage(): AppLanguage {
+    val locales = AppCompatDelegate.getApplicationLocales()
+    if (locales.isEmpty()) return AppLanguage.SYSTEM
+    val language = locales.get(0)?.language
+    return AppLanguage.entries.firstOrNull { it.tag == language } ?: AppLanguage.SYSTEM
+}
+
+/**
+ * Język aplikacji (per-app language, AppCompat). Zmiana stosuje nowe zasoby od razu —
+ * AppCompat odtwarza aktywność; na Androidzie 13+ wybór jest widoczny także w ustawieniach systemu.
+ */
+@Composable
+private fun AppLanguageSelector(modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    var selected by remember { mutableStateOf(currentAppLanguage()) }
+    val options = AppLanguage.entries
+    Column(
+        modifier = modifier.selectableGroup(),
+        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
+    ) {
+        options.forEachIndexed { index, language ->
+            val isSelected = language == selected
+            val supporting: (@Composable () -> Unit)? = if (language == AppLanguage.SYSTEM) {
+                { Text(stringResource(R.string.settings_language_system_supporting)) }
+            } else {
+                null
+            }
+            val select = {
+                if (selected != language) {
+                    selected = language
+                    val locales = language.tag
+                        ?.let { LocaleListCompat.forLanguageTags(it) }
+                        ?: LocaleListCompat.getEmptyLocaleList()
+                    AppCompatDelegate.setApplicationLocales(locales)
                 }
-                UpdatePhase.CHECKING -> Unit
-                else -> FilledTonalButton(onClick = viewModel::checkForUpdate) { Text("Sprawdź aktualizacje") }
             }
-            if (highlighted) {
-                OutlinedButton(onClick = viewModel::checkForUpdate) { Text("Sprawdź ponownie") }
+            SegmentedListItem(
+                selected = isSelected,
+                onClick = select,
+                shapes = ListItemDefaults.segmentedShapes(index = index, count = options.size),
+                colors = ListItemDefaults.segmentedColors(
+                    containerColor = colors.surfaceContainer,
+                    selectedContainerColor = colors.secondaryContainer,
+                    selectedContentColor = colors.onSecondaryContainer,
+                    selectedSupportingContentColor = colors.onSecondaryContainer
+                ),
+                leadingContent = { LanguageBadge(language = language, selected = isSelected) },
+                supportingContent = supporting,
+                // The whole row selects; the radio button only mirrors the state.
+                trailingContent = { RadioButton(selected = isSelected, onClick = null) }
+            ) {
+                Text(stringResource(language.labelRes))
             }
-        }
-
-        if (state.phase == UpdatePhase.READY && needsInstallPermission) {
-            Text(
-                text = "Android poprosi o zgodę na instalowanie aplikacji z Taala. Po jej nadaniu wróć i dotknij „Zainstaluj”.",
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.onSurfaceVariant
-            )
         }
     }
 }
 
 @Composable
-private fun AboutScreen(onBack: (() -> Unit)?, embedded: Boolean) {
-    val appVersion = rememberAppVersion()
-    MorePage(title = "O aplikacji", onBack = onBack, embedded = embedded) { itemModifier ->
-        item(key = "about_hero", contentType = "hero") {
-            WseiCard(
-                modifier = itemModifier,
-                shape = WseiHeroShape,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                verticalSpacing = WseiSpacing.l
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)
-                ) {
-                    WseiIconBadge(
-                        icon = WseiIcons.TaalVolcano,
-                        shape = M3XCookieShape,
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        size = 72.dp,
-                        iconSize = 36.dp
-                    )
-                    Column {
-                        Text(text = "Taal", style = MaterialTheme.typography.headlineMedium)
-                        Text(
-                            text = "Wersja $appVersion",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                        )
-                    }
-                }
-                Text(
-                    text = "Aplikacja dla studentów Uniwersytetu WSEI w Lublinie. Pokazuje plan zajęć, oceny i opłaty z Wirtualnego Dziekanatu.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-        item(key = "about_update", contentType = "update") { UpdateCard(modifier = itemModifier) }
-        item(key = "about_credits", contentType = "credits") {
-            WseiInset(
-                modifier = itemModifier,
-                containerColor = MaterialTheme.colorScheme.surfaceContainer
-            ) {
-                WseiInfoRow("Dane", "Wirtualny Dziekanat (APR System)")
-                WseiInfoRow("Czcionka", "Google Sans Flex (OFL)")
-                WseiInfoRow("Wygląd", "Material 3 Expressive")
-                WseiInfoRow("Licencja", "MIT")
-            }
-        }
-        item(key = "about_disclaimer", contentType = "disclaimer") {
+private fun LanguageBadge(language: AppLanguage, selected: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    val code = language.code
+    if (code == null) {
+        WseiIconBadge(
+            icon = WseiIcons.Settings,
+            containerColor = if (selected) colors.primary else colors.secondaryContainer,
+            contentColor = if (selected) colors.onPrimary else colors.onSecondaryContainer,
+            size = 40.dp,
+            iconSize = 20.dp
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(M3XSquircleShape)
+                .background(if (selected) colors.primary else colors.secondaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
             Text(
-                text = "Niezależny projekt studencki, niepowiązany oficjalnie z Uniwersytetem WSEI ani z APR System.",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = itemModifier.padding(horizontal = WseiSpacing.xs)
+                text = code,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (selected) colors.onPrimary else colors.onSecondaryContainer
             )
         }
     }

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Schedule: "Now" card -->
+    <string name="schedule_hero_status_live">Now</string>
+    <string name="schedule_hero_time_range">%1$s – %2$s</string>
+    <string name="schedule_hero_remaining_value">%1$d min</string>
+    <string name="schedule_hero_remaining_label">until the class ends</string>
+    <string name="schedule_hero_elapsed">%1$d of %2$d min</string>
+    <string name="schedule_hero_ends_at">ends at %1$s</string>
+    <string name="schedule_hero_state">Class in progress: %1$s, %2$d min left</string>
+    <string name="schedule_hero_progress_cd">Class progress: %1$d of %2$d minutes</string>
+    <string name="schedule_hero_expand_cd">Show today\'s plan and upcoming classes</string>
+    <string name="schedule_hero_collapse_cd">Collapse class details</string>
+    <string name="schedule_hero_next_title">Next at %1$s</string>
+    <string name="schedule_hero_next_break">%1$d min break</string>
+    <string name="schedule_hero_next_no_break">No break</string>
+
+    <!-- Sync with the device calendar -->
+    <string name="calendar_sync_action">Sync with calendar</string>
+    <string name="calendar_sync_picker_title">Choose a calendar</string>
+    <string name="calendar_sync_picker_message">Your classes will be added to the selected calendar. Later syncs update them without creating duplicates.</string>
+    <string name="calendar_sync_hidden_lecturer_note">“Hide data” is on — lecturers won\'t be saved in the calendar.</string>
+    <string name="calendar_sync_loading">Loading calendars…</string>
+    <string name="calendar_sync_empty">No calendar that accepts new events was found. Add an account with a calendar (e.g. Google) in your phone settings and try again.</string>
+    <string name="calendar_sync_primary">Primary</string>
+    <string name="calendar_sync_confirm">Sync</string>
+    <string name="calendar_sync_cancel">Cancel</string>
+    <string name="calendar_sync_close">Close</string>
+    <string name="calendar_sync_in_progress">Syncing your schedule with the calendar…</string>
+    <string name="calendar_sync_done_title">Schedule synced</string>
+    <string name="calendar_sync_done_message">Added: %1$d, updated: %2$d, removed: %3$d.</string>
+    <string name="calendar_sync_done_no_changes">Your calendar was already up to date — nothing needed to change.</string>
+    <string name="calendar_sync_failed_title">Sync failed</string>
+    <string name="calendar_sync_failed_generic">Please try again in a moment.</string>
+    <string name="calendar_permission_title">Calendar access</string>
+    <string name="calendar_permission_denied">Taal needs access to your calendar to save your classes in it. Without this permission, syncing isn\'t possible.</string>
+    <string name="calendar_permission_permanently_denied">Calendar access is blocked. Turn on the “Calendar” permission in the app settings to sync your schedule.</string>
+    <string name="calendar_permission_retry">Try again</string>
+    <string name="calendar_permission_open_settings">Open settings</string>
+
+    <!-- Announcements: attachments -->
+    <string name="announcements_attachments_title">Attachments</string>
+    <string name="announcements_attachment_open_cd">Open attachment %1$s</string>
+    <string name="announcements_attachment_opening">Downloading and opening the attachment…</string>
+    <plurals name="announcements_attachments_count">
+        <item quantity="one">%1$d attachment</item>
+        <item quantity="other">%1$d attachments</item>
+    </plurals>
+
+    <!-- Schedule: day list and calendar -->
+    <string name="schedule_day_off_title">No classes</string>
+    <string name="schedule_day_off_message">There are no classes on this day. Pick another day in the calendar.</string>
+    <string name="schedule_calendar_month_year">%1$s %2$d</string>
+    <string name="schedule_calendar_month_view">Month view</string>
+    <string name="schedule_calendar_previous_month">Previous month</string>
+    <string name="schedule_calendar_previous_week">Previous week</string>
+    <string name="schedule_calendar_next_month">Next month</string>
+    <string name="schedule_calendar_next_week">Next week</string>
+    <string name="schedule_calendar_show_week">Week</string>
+    <string name="schedule_calendar_show_month">Month</string>
+    <plurals name="schedule_day_classes_state">
+        <item quantity="one">%1$d class</item>
+        <item quantity="other">%1$d classes</item>
+    </plurals>
+    <string name="schedule_day_no_classes_state">No classes</string>
+    <string name="schedule_day_today_state">Today. %1$s</string>
+    <string name="schedule_day_no_classes">No classes</string>
+    <plurals name="schedule_day_blocks">
+        <item quantity="one">%1$d block</item>
+        <item quantity="other">%1$d blocks</item>
+    </plurals>
+    <string name="schedule_day_session_with_count">Weekend • %1$s</string>
+    <string name="schedule_hero_next_details">%1$s • %2$s</string>
+    <string name="schedule_your_day">Your day</string>
+    <string name="schedule_segment_class">Class %1$d</string>
+    <string name="schedule_segment_break">Break</string>
+</resources>

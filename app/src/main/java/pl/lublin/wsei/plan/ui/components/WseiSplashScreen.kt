@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
+import androidx.compose.ui.res.stringResource
+import pl.lublin.wsei.plan.R
 
 /**
  * Ekran startowy podczas odtwarzania zaszyfrowanej sesji — zalogowany użytkownik nie zobaczy
@@ -86,7 +88,7 @@ fun WseiSplashScreen(modifier: Modifier = Modifier) {
                 )
             }
             Text(
-                text = "Taal",
+                text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.displayMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )

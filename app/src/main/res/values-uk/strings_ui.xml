@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared UI strings: common labels, navigation, domain labels, welcome, login, home, subjects, finances, profile and the More tab. -->
+<resources>
+    <!-- Common -->
+    <string name="common_ok">OK</string>
+    <string name="common_student">Студент</string>
+    <string name="common_profile_of">Профіль: %1$s</string>
+
+    <!-- Navigation -->
+    <string name="nav_start">Головна</string>
+    <string name="nav_start_short">Головна</string>
+    <string name="nav_start_cd">Головний екран</string>
+    <string name="nav_schedule">Розклад занять</string>
+    <string name="nav_schedule_short">Розклад</string>
+    <string name="nav_schedule_cd">Розклад занять і календар</string>
+    <string name="nav_subjects">Предмети</string>
+    <string name="nav_subjects_short">Оцінки</string>
+    <string name="nav_subjects_cd">Предмети, кредити ECTS та оцінки</string>
+    <string name="nav_finances">Фінанси</string>
+    <string name="nav_finances_short">Фінанси</string>
+    <string name="nav_finances_cd">Оплати та стипендії</string>
+    <string name="nav_more">Більше</string>
+    <string name="nav_more_short">Більше</string>
+    <string name="nav_more_cd">Оголошення, налаштування та інформація про застосунок</string>
+    <string name="nav_profile">Профіль</string>
+    <string name="nav_profile_short">Профіль</string>
+    <string name="nav_profile_cd">Дані студента, хід навчання та групи</string>
+    <plurals name="nav_unread_announcements_cd">
+        <item quantity="one">%1$d непрочитане оголошення</item>
+        <item quantity="few">%1$d непрочитані оголошення</item>
+        <item quantity="many">%1$d непрочитаних оголошень</item>
+        <item quantity="other">%1$d непрочитаного оголошення</item>
+    </plurals>
+    <string name="common_back">Назад</string>
+    <string name="common_expand">Розгорнути</string>
+    <string name="common_collapse">Згорнути</string>
+    <string name="common_photo_of">Фото: %1$s</string>
+
+    <!-- Class forms, delivery modes, schedule variants -->
+    <string name="class_type_lecture">Лекція</string>
+    <string name="class_type_lab">Лабораторна робота</string>
+    <string name="class_type_exercise">Практичне заняття</string>
+    <string name="class_type_project">Проєкт</string>
+    <string name="class_type_elearning">E-learning</string>
+    <string name="class_type_practice">Професійні практичні заняття</string>
+    <string name="class_type_seminar">Семінар</string>
+    <string name="class_type_exam">Іспит / залік</string>
+    <string name="delivery_mode_on_site">Очно</string>
+    <string name="delivery_mode_remote">Трансляція</string>
+    <string name="delivery_mode_elearning">E-learning</string>
+    <string name="schedule_filter_my_plan">Мій розклад</string>
+    <string name="schedule_filter_group_plan">Розклад групи</string>
+
+    <!-- Rooms and lecturers -->
+    <string name="room_number">Аудиторія %1$s</string>
+    <string name="room_tbd">Аудиторію уточнюють</string>
+    <string name="room_streaming_remote">Трансляція (дистанційне заняття)</string>
+    <string name="room_elearning">E-learning</string>
+    <string name="lecturer_missing">Викладача не вказано</string>
+
+    <!-- Days of the week -->
+    <string name="day_monday">Понеділок</string>
+    <string name="day_tuesday">Вівторок</string>
+    <string name="day_wednesday">Середа</string>
+    <string name="day_thursday">Четвер</string>
+    <string name="day_friday">Пʼятниця</string>
+    <string name="day_saturday">Субота</string>
+    <string name="day_sunday">Неділя</string>
+    <string name="day_monday_short">Пн</string>
+    <string name="day_tuesday_short">Вт</string>
+    <string name="day_wednesday_short">Ср</string>
+    <string name="day_thursday_short">Чт</string>
+    <string name="day_friday_short">Пт</string>
+    <string name="day_saturday_short">Сб</string>
+    <string name="day_sunday_short">Нд</string>
+
+    <!-- Class card -->
+    <string name="class_state_ongoing">Триває зараз</string>
+    <string name="class_state_next">Наступне заняття</string>
+    <string name="class_state_finished">Завершено</string>
+    <string name="class_state_upcoming">Заплановано</string>
+    <string name="class_badge_ongoing">Триває зараз</string>
+    <string name="class_badge_next">Наступне</string>
+    <string name="class_card_type_room">%1$s • %2$s</string>
+    <string name="class_card_progress">%1$d з %2$d хв • до %3$s</string>
+    <string name="day_monday_min">Пн</string>
+    <string name="day_tuesday_min">Вт</string>
+    <string name="day_wednesday_min">Ср</string>
+    <string name="day_thursday_min">Чт</string>
+    <string name="day_friday_min">Пт</string>
+    <string name="day_saturday_min">Сб</string>
+    <string name="day_sunday_min">Нд</string>
+
+    <!-- Months (nominative, calendar title) -->
+    <string name="month_january">Січень</string>
+    <string name="month_february">Лютий</string>
+    <string name="month_march">Березень</string>
+    <string name="month_april">Квітень</string>
+    <string name="month_may">Травень</string>
+    <string name="month_june">Червень</string>
+    <string name="month_july">Липень</string>
+    <string name="month_august">Серпень</string>
+    <string name="month_september">Вересень</string>
+    <string name="month_october">Жовтень</string>
+    <string name="month_november">Листопад</string>
+    <string name="month_december">Грудень</string>
+
+    <!-- Welcome -->
+    <string name="welcome_tagline">Розклад занять, оцінки й оплати з Віртуального деканату WSEI — в одному місці.</string>
+    <string name="welcome_point_schedule">Розклад на сьогодні й на весь тиждень</string>
+    <string name="welcome_point_grades">Оцінки, середній бал і кредити ECTS</string>
+    <string name="welcome_point_finances">Оплати, номер рахунку та стипендії</string>
+    <string name="welcome_continue">Почнімо</string>
+
+    <!-- Login -->
+    <string name="login_title">Увійти</string>
+    <string name="login_subtitle">Використовуйте дані для входу у Віртуальний деканат WSEI.</string>
+    <string name="login_username_label">Номер залікової книжки або e-mail</string>
+    <string name="login_password_label">Пароль</string>
+    <string name="login_show_password">Показати пароль</string>
+    <string name="login_hide_password">Приховати пароль</string>
+    <string name="login_remember_me">Запамʼятати мене</string>
+    <string name="login_remember_me_supporting">Дані шифруються в Android Keystore.</string>
+    <string name="login_in_progress">Вхід…</string>
+    <string name="login_submit">Увійти</string>
+    <string name="login_debug_account">Тестовий обліковий запис (debug)</string>
+    <string name="login_validation_empty">Введіть номер залікової книжки та пароль.</string>
+
+    <!-- Home -->
+    <string name="home_greeting_morning">Доброго ранку, %1$s</string>
+    <string name="home_greeting_day">Привіт, %1$s</string>
+    <string name="home_greeting_evening">Добрий вечір, %1$s</string>
+    <string name="home_greeting_fallback_name">студенте</string>
+    <string name="home_album_number">Залікова %1$s</string>
+    <string name="home_today">Сьогодні</string>
+    <string name="home_today_overline">%1$s • %2$s</string>
+    <string name="home_next_session_overline">Найближчий день занять • %1$s</string>
+    <plurals name="home_classes_short">
+        <item quantity="one">%1$d зан.</item>
+        <item quantity="few">%1$d зан.</item>
+        <item quantity="many">%1$d зан.</item>
+        <item quantity="other">%1$d зан.</item>
+    </plurals>
+    <string name="home_no_classes">Занять не заплановано. Відпочиньте!</string>
+    <plurals name="home_more_in_schedule">
+        <item quantity="one">+ ще %1$d у розкладі</item>
+        <item quantity="few">+ ще %1$d у розкладі</item>
+        <item quantity="many">+ ще %1$d у розкладі</item>
+        <item quantity="other">+ ще %1$d у розкладі</item>
+    </plurals>
+    <plurals name="home_week_classes">
+        <item quantity="one">%1$d зан. цього тижня</item>
+        <item quantity="few">%1$d зан. цього тижня</item>
+        <item quantity="many">%1$d зан. цього тижня</item>
+        <item quantity="other">%1$d зан. цього тижня</item>
+    </plurals>
+    <string name="home_week_free">Вільний тиждень</string>
+    <string name="home_shortcut_grades">Оцінки</string>
+    <string name="home_average_value">Середній бал %1$s</string>
+    <plurals name="home_unpaid_count">
+        <item quantity="one">%1$d до сплати</item>
+        <item quantity="few">%1$d до сплати</item>
+        <item quantity="many">%1$d до сплати</item>
+        <item quantity="other">%1$d до сплати</item>
+    </plurals>
+    <string name="home_all_paid">Усе сплачено</string>
+    <plurals name="home_unread_count">
+        <item quantity="one">%1$d непрочитане</item>
+        <item quantity="few">%1$d непрочитані</item>
+        <item quantity="many">%1$d непрочитаних</item>
+        <item quantity="other">%1$d непрочитаного</item>
+    </plurals>
+    <string name="home_no_new_announcements">Нових немає</string>
+    <string name="home_payment_due_this_month">Термін цього місяця</string>
+    <string name="home_payment_next">Найближча оплата</string>
+    <string name="home_payment_due_date">Термін: %1$s</string>
+    <string name="home_payment_none_supporting">Заборгованостей за поточний період немає.</string>
+
+    <!-- Subjects -->
+    <string name="subjects_empty_title">Немає предметів</string>
+    <string name="subjects_empty_message">Оцінки зʼявляться тут після синхронізації з Віртуальним деканатом.</string>
+    <string name="subjects_grades_title">Оцінки</string>
+    <plurals name="subjects_count_short">
+        <item quantity="one">%1$d предм.</item>
+        <item quantity="few">%1$d предм.</item>
+        <item quantity="many">%1$d предм.</item>
+        <item quantity="other">%1$d предм.</item>
+    </plurals>
+    <string name="subjects_average">Середній бал</string>
+    <string name="subjects_ects">ECTS</string>
+    <string name="subjects_ects_value">%1$d ECTS</string>
+    <string name="subjects_graded">Оцінено</string>
+    <string name="subjects_graded_value">%1$d/%2$d</string>
+    <string name="subjects_graded_cd">Оцінені предмети: %1$d з %2$d</string>
+    <string name="subjects_partial_grades">Поточні: %1$s</string>
+    <string name="subjects_grade_awarded">внесено %1$s</string>
+
+    <!-- Finances -->
+    <string name="finances_scholarship_history_title">Історія рішень щодо стипендій</string>
+    <string name="finances_empty_title">Немає нарахувань</string>
+    <string name="finances_empty_message">На вашому рахунку не знайдено жодних оплат.</string>
+    <string name="finances_section_unpaid">До сплати</string>
+    <string name="finances_section_paid">Сплачено</string>
+    <string name="finances_section_scholarships">Стипендії</string>
+    <string name="finances_scholarships_empty_title">Немає заяв</string>
+    <string name="finances_scholarships_empty_message">Цього семестру заяву на стипендію не подано.</string>
+    <string name="finances_balance">Баланс</string>
+    <string name="finances_to_pay_with_count">До сплати • %1$s</string>
+    <plurals name="finances_items_count">
+        <item quantity="one">%1$d позиція</item>
+        <item quantity="few">%1$d позиції</item>
+        <item quantity="many">%1$d позицій</item>
+        <item quantity="other">%1$d позиції</item>
+    </plurals>
+    <string name="finances_all_settled">Усе сплачено</string>
+    <string name="finances_account_number">Індивідуальний номер рахунку</string>
+    <string name="finances_account_number_clip_label">Номер рахунку</string>
+    <string name="finances_account_copy_cd">Копіювати номер рахунку</string>
+    <string name="finances_account_copied_cd">Номер рахунку скопійовано</string>
+    <string name="finances_pay_online">Оплатити онлайн • %1$s</string>
+    <string name="finances_due_this_month">Термін цього місяця • %1$s</string>
+    <string name="finances_paid_on">Сплачено • %1$s</string>
+    <string name="finances_due_on">Термін %1$s</string>
+    <string name="finances_status">Статус</string>
+    <string name="finances_due_date">Термін оплати</string>
+    <string name="finances_payment_date">Дата оплати</string>
+    <string name="finances_amount_charged">Нарахована сума</string>
+    <string name="finances_interest_charged">Нараховані відсотки</string>
+    <string name="finances_interest_paid">Сплачені відсотки</string>
+    <string name="finances_amortization">Списання</string>
+    <string name="finances_discount">Знижка</string>
+    <string name="finances_expired">Позовна давність</string>
+    <string name="finances_scholarship_overline">%1$s • %2$s</string>
+    <string name="finances_scholarship_submitted">Дата заяви</string>
+    <string name="finances_scholarship_decision">Рішення</string>
+    <string name="finances_scholarship_decision_pending">На розгляді</string>
+    <string name="finances_scholarship_decision_date">Дата рішення</string>
+    <string name="finances_payout_label">%1$s • %2$s</string>
+    <string name="finances_scholarship_history">Історія рішень</string>
+
+    <!-- Profile -->
+    <string name="profile_section_studies">Навчання</string>
+    <string name="profile_course_of_study">Хід навчання</string>
+    <string name="profile_field_of_study">Спеціальність</string>
+    <string name="profile_specialization">Спеціалізація</string>
+    <string name="profile_specialization_general">Загальна</string>
+    <string name="profile_department">Факультет</string>
+    <string name="profile_study_mode">Форма навчання</string>
+    <string name="profile_obtained_title">Ступінь, що присвоюється</string>
+    <string name="profile_year_semester">Курс / семестр</string>
+    <string name="profile_year_semester_value">Курс %1$d • Семестр %2$d</string>
+    <string name="profile_group">Група</string>
+    <string name="profile_no_group">Немає групи</string>
+    <string name="profile_average_current">Середній бал (поточний сем.)</string>
+    <string name="profile_average_previous">Середній бал (попередній сем.)</string>
+    <string name="profile_average_overall">Середній бал за навчання</string>
+    <string name="profile_student_groups">Студентські групи</string>
+    <string name="profile_study_plan">Навчальний план</string>
+    <string name="profile_plan_subject_title">%1$d. %2$s</string>
+    <string name="profile_plan_subject_supporting">%1$s • %2$s • %3$d год</string>
+    <string name="profile_section_account">Обліковий запис</string>
+    <string name="profile_change_password">Змінити пароль</string>
+    <string name="profile_change_password_supporting">Пароль до Віртуального деканату</string>
+    <string name="profile_logout">Вийти</string>
+    <string name="profile_logout_supporting">Завершити сеанс на цьому пристрої</string>
+    <string name="profile_status_default">Навчається</string>
+    <string name="profile_stat_semester_average">Сер. за семестр</string>
+    <string name="profile_stat_overall_average">Сер. за навчання</string>
+    <string name="profile_stat_semester">Семестр</string>
+    <string name="profile_current_password">Поточний пароль</string>
+    <string name="profile_new_password">Новий пароль</string>
+    <string name="profile_show_passwords">Показати паролі</string>
+    <string name="profile_hide_passwords">Приховати паролі</string>
+    <string name="profile_save_password">Зберегти новий пароль</string>
+
+    <!-- Announcements -->
+    <string name="announcements_title">Оголошення</string>
+    <string name="announcements_empty_title">Немає оголошень</string>
+    <string name="announcements_empty_message">Нові повідомлення з деканату зʼявлятимуться тут.</string>
+    <string name="announcements_meta">%1$s • %2$s</string>
+
+    <!-- More -->
+    <string name="more_announcements_supporting">Повідомлення з деканату та вкладення</string>
+    <string name="more_link_virtual_dean">Віртуальний деканат</string>
+    <string name="more_link_elearning">Платформа e-learning</string>
+    <string name="more_useful_links">Корисні посилання</string>
+    <string name="more_pick_section_title">Виберіть розділ</string>
+    <string name="more_pick_section_message">Оголошення, налаштування та інформація про застосунок відкриватимуться тут.</string>
+    <string name="more_announcements_with_count">Оголошення • %1$s</string>
+    <string name="more_show_announcements">Показати оголошення</string>
+    <plurals name="more_new_count">
+        <item quantity="one">%1$d нове</item>
+        <item quantity="few">%1$d нові</item>
+        <item quantity="many">%1$d нових</item>
+        <item quantity="other">%1$d нового</item>
+    </plurals>
+</resources>

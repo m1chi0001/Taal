@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings of the data layer: calendar sync, attachments and the Live Notification. -->
+<resources>
+    <!-- Calendar sync -->
+    <string name="calendar_unnamed">Kalendarz bez nazwy</string>
+    <string name="calendar_event_title">%1$s (%2$s)</string>
+    <string name="calendar_event_lecturer">Prowadzący: %1$s</string>
+    <string name="calendar_event_group">Grupa: %1$s</string>
+    <string name="calendar_event_mode">Tryb: %1$s</string>
+    <string name="calendar_event_alert">Uwaga: %1$s</string>
+    <string name="calendar_event_footer">Dodane przez Taal</string>
+    <string name="calendar_error_permission">Brak dostępu do kalendarza. Zezwól aplikacji Taal na odczyt i zapis kalendarza w ustawieniach systemu.</string>
+    <string name="calendar_error_unavailable">Wybrany kalendarz jest niedostępny albo tylko do odczytu. Wybierz inny kalendarz.</string>
+    <string name="calendar_error_generic">Nie udało się zsynchronizować planu z kalendarzem. Spróbuj ponownie.</string>
+
+    <!-- Announcement attachments -->
+    <string name="data_attachment_empty">Załącznik jest pusty.</string>
+    <string name="data_attachment_corrupt">Nie udało się odczytać pobranego załącznika.</string>
+
+    <!-- Live Notification -->
+    <string name="notif_channel_name">Zajęcia na żywo</string>
+    <string name="notif_channel_description">Postęp trwających zajęć na ekranie blokady i w pasku stanu.</string>
+    <string name="notif_loading">Wczytuję plan zajęć…</string>
+    <string name="notif_status_ongoing">Trwa teraz · do %1$s</string>
+    <string name="notif_status_upcoming">Za %1$s · o %2$s</string>
+    <string name="notif_status_starting">Zaczyna się · o %1$s</string>
+    <string name="notif_break_until">Przerwa do %1$s</string>
+    <string name="notif_remaining">Zostało %1$s</string>
+    <string name="notif_next">Następnie: %1$s o %2$s</string>
+    <string name="notif_duration_min">%1$d min</string>
+    <string name="notif_duration_hours">%1$d godz.</string>
+    <string name="notif_duration_hours_min">%1$d godz. %2$d min</string>
+    <string name="notif_room">Sala %1$s</string>
+    <string name="notif_room_tbd">Sala do ustalenia</string>
+    <string name="notif_room_streaming">Streaming</string>
+    <string name="notif_room_elearning">E-learning</string>
+</resources>

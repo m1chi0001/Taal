@@ -6,14 +6,16 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
+import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.RectF
-import android.graphics.Typeface
 import android.graphics.drawable.Icon
+import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import androidx.annotation.ColorRes
+import androidx.annotation.RequiresApi
 import dagger.hilt.android.qualifiers.ApplicationContext
 import pl.lublin.wsei.plan.MainActivity
 import pl.lublin.wsei.plan.R
@@ -23,23 +25,22 @@ import pl.lublin.wsei.plan.domain.model.NextClassPreview
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.ceil
+import pl.lublin.wsei.plan.data.local.LocalizedStrings
+import pl.lublin.wsei.plan.l10n.labelRes
 
 /**
- * Represents a chronological segment of the student's academic day
- * (`Zajęcia` or `Przerwa`) for the segmented Live Notification progress bar.
+ * A chronological segment of the student's academic day (`Zajęcia` or `Przerwa`) for the
+ * segmented Live Notification progress bar.
  */
 sealed class DayTimelineSegment(
     val startMillis: Long,
-    val endMillis: Long,
-    val shortLabel: String
+    val endMillis: Long
 ) {
     val durationMinutes: Int
         get() = ((endMillis - startMillis) / 60_000L).toInt().coerceAtLeast(1)
 
-    /**
-     * Visual weight on the segmented progress bar so short 5–10 min breaks remain clearly visible
-     * as distinct grey pill segments (matching Koleo's transfer segments).
-     */
+    /** Visual weight on the bar, so short 5–10 min breaks stay visible as separate segments. */
     val visualLengthUnits: Int
         get() = when (this) {
             is ClassSegment -> durationMinutes.coerceAtLeast(20)
@@ -54,58 +55,53 @@ sealed class DayTimelineSegment(
 
     fun isOngoing(nowMillis: Long): Boolean = nowMillis in startMillis until endMillis
 
-    class ClassSegment(
-        val indexInDay: Int,
-        val event: ClassEvent
-    ) : DayTimelineSegment(
+    class ClassSegment(val event: ClassEvent) : DayTimelineSegment(
         startMillis = event.timeSlot.startEpochMillis,
-        endMillis = event.timeSlot.endEpochMillis,
-        shortLabel = "Zaj. $indexInDay"
+        endMillis = event.timeSlot.endEpochMillis
     )
 
-    class BreakSegment(
-        startMillis: Long,
-        endMillis: Long,
-        val nextEvent: ClassEvent
-    ) : DayTimelineSegment(
-        startMillis = startMillis,
-        endMillis = endMillis,
-        shortLabel = "Przerwa"
-    )
+    class BreakSegment(startMillis: Long, endMillis: Long, val nextEvent: ClassEvent) :
+        DayTimelineSegment(startMillis = startMillis, endMillis = endMillis)
 }
 
 /**
- * Builds Android 16 Progress-Centric Live Notifications (`Notification.ProgressStyle`)
- * modeled 1:1 on the Koleo Travel Mode notification layout:
+ * Builds the Live Notification of the current class day, in a Material 3 Expressive hierarchy that
+ * uses only standard templates (custom RemoteViews would disqualify the Android 16 "Live Update"
+ * promotion):
  *
- * - **Left Icon**: Circular Taal volcano badge (`R.drawable.ic_taal_notification` + blue accent `#0077FF`).
- * - **Header (`SubText`)**: `Forma zajęć • do HH:mm` (w przerwie: `Start o HH:mm`)
- * - **Title (`ContentTitle`)**: nazwa przedmiotu (w przerwie: `Przerwa • x min`)
- * - **Subtitle (`ContentText`)**: `Sala / Streaming • Prowadzący` (w przerwie: `Następne: przedmiot • sala`)
- * - **Status bar chip**: ile minut zostało do końca zajęć / przerwy.
- * - **Right Icon (`LargeIcon`)**: biała ikona przedmiotu na kolorowej kafelce (zielona – zajęcia, szara – przerwa).
- * - **Full-Width Progress Bar (`Notification.ProgressStyle`)**:
- *   - Multi-segment bar (`Zajęcia` = Blue `#0077FF`, `Przerwa` = Grey `#8A9199`, `Trwające zajęcia` = Green `#38A832`)
- *   - Circular white-ringed blue chevron tracker thumb (`setProgressTrackerIcon`) at the current time position.
- * - **Bottom Action Pills**: `"Szczegóły"` and `"Plan zajęć"`.
+ * - **Header** (`subText` + count-down chronometer): status — „Trwa teraz · do 12:55” or
+ *   „Za 12 min · o 13:05” — and a live countdown to the end / start.
+ * - **Title**: subject of the current (or next) class.
+ * - **Text**: class type · room · lecturer (lecturer omitted when „Ukryj dane” is on, and always on
+ *   the lock-screen public version).
+ * - **Large icon**: subject badge on an accent (class) or neutral (break) rounded tile.
+ * - **Progress**: Android 16+ `Notification.ProgressStyle` with the whole day as segments
+ *   (classes / breaks, current class in the accent colour); older versions get the standard
+ *   progress bar of the current class or break plus an expanded `BigTextStyle`.
+ *
+ * Colours come from `res/values(-night)/colors_notification.xml`, resolved against the **system**
+ * night mode (the shade follows the system, not the in-app theme), so contrast is right in both.
  */
 @Singleton
 class NotificationHelper @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val strings: LocalizedStrings
 ) {
     companion object {
-        private const val TAG = "TaalLiveNotif"
         private const val LEGACY_CHANNEL_ID = "wsei_live_class_progress_channel"
         private const val LEGACY_CHANNEL_ID_V3 = "wsei_live_day_progress_lockscreen_v3"
         const val LIVE_CLASS_CHANNEL_ID = "taal_live_progress_style_v4"
         const val LIVE_CLASS_NOTIFICATION_ID = 4010
+
+        // Same keys as Notification.EXTRA_REQUEST_PROMOTED_ONGOING / EXTRA_SHORT_CRITICAL_TEXT (API 36);
+        // set as extras so they are present on every version (some OEM shells read them earlier).
         private const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
         private const val EXTRA_SHORT_CRITICAL_TEXT = "android.shortCriticalText"
 
-        // Koleo-matching segment palette
-        private const val COLOR_CLASS_BLUE = 0xFF0077FF.toInt()
-        private const val COLOR_BREAK_GREY = 0xFF8A9199.toInt()
-        private const val COLOR_ACTIVE_GREEN = 0xFF38A832.toInt()
+        private const val SEPARATOR = " · "
+        private const val PROGRESS_MAX = 1000
+        private const val BADGE_SIZE_PX = 128
+        private const val TRACKER_SIZE_PX = 64
     }
 
     private val notificationManager: NotificationManager =
@@ -120,32 +116,27 @@ class NotificationHelper @Inject constructor(
             notificationManager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
             notificationManager.deleteNotificationChannel(LEGACY_CHANNEL_ID_V3)
         }
-
         val channel = NotificationChannel(
             LIVE_CLASS_CHANNEL_ID,
-            "Zajęcia na żywo",
+            strings.get(R.string.notif_channel_name),
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description =
-                "Postęp trwających zajęć na ekranie blokady i w pasku stanu."
-            setShowBadge(true)
+            description = strings.get(R.string.notif_channel_description)
+            setShowBadge(false)
             setSound(null, null)
             enableVibration(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
+        // Re-creating an existing channel only updates its name/description (user settings are kept).
         notificationManager.createNotificationChannel(channel)
     }
 
-    /**
-     * Builds the chronological sequence of `Zajęcia – Przerwa – Zajęcia` segments for the day.
-     */
+    /** Builds the chronological `Zajęcia – Przerwa – Zajęcia` segments of the day. */
     fun buildDaySegments(dayEvents: List<ClassEvent>): List<DayTimelineSegment> {
         val sorted = dayEvents.sortedBy { it.timeSlot.startEpochMillis }
-        if (sorted.isEmpty()) return emptyList()
-
         val segments = mutableListOf<DayTimelineSegment>()
         sorted.forEachIndexed { idx, event ->
-            segments += DayTimelineSegment.ClassSegment(indexInDay = idx + 1, event = event)
+            segments += DayTimelineSegment.ClassSegment(event)
             val next = sorted.getOrNull(idx + 1)
             if (next != null && next.timeSlot.startEpochMillis > event.timeSlot.endEpochMillis) {
                 segments += DayTimelineSegment.BreakSegment(
@@ -158,340 +149,53 @@ class NotificationHelper @Inject constructor(
         return segments
     }
 
-    /**
-     * Constructs the real-time ongoing Live Notification using Android 16's native `Notification.ProgressStyle`
-     * (matching Koleo's layout) with Lock Screen visibility.
-     */
-    /** Minimalne powiadomienie wymagane do natychmiastowego `startForeground()` zanim wczytamy dane zajęć. */
+    /** Minimal notification for the immediate `startForeground()`, before the class data is loaded. */
     fun buildPlaceholderNotification(): Notification {
+        val palette = Palette.resolve(context)
         return Notification.Builder(context, LIVE_CLASS_CHANNEL_ID)
-            .setSmallIcon(pl.lublin.wsei.plan.R.drawable.ic_taal_notification)
-            .setContentTitle("Taal")
-            .setContentText("Wczytuję plan zajęć…")
+            .setSmallIcon(R.drawable.ic_taal_notification)
+            .setColor(palette.accent)
+            .setContentTitle(strings.get(R.string.app_name))
+            .setContentText(strings.get(R.string.notif_loading))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setContentIntent(contentIntent(null))
             .build()
     }
 
+    /**
+     * @param activeClass class the service tracks (ongoing, or the next one during a break).
+     * @param hideLecturer true when „Ukryj dane” is on — lecturer names are left out entirely.
+     */
     fun buildLiveClassNotification(
         activeClass: ClassEvent,
         nextClassPreview: NextClassPreview?,
         dayEvents: List<ClassEvent> = listOf(activeClass),
-        nowEpochMillis: Long = System.currentTimeMillis()
+        nowEpochMillis: Long = System.currentTimeMillis(),
+        hideLecturer: Boolean = false
     ): Notification {
-        val allDayEvents = if (dayEvents.isEmpty()) {
-            listOf(activeClass)
-        } else {
-            dayEvents.sortedBy { it.timeSlot.startEpochMillis }
-        }
-        val segments = buildDaySegments(allDayEvents)
-        val activeSegment = segments.firstOrNull { it.isOngoing(nowEpochMillis) }
-            ?: segments.firstOrNull { it is DayTimelineSegment.ClassSegment && it.event.id == activeClass.id }
-            ?: segments.firstOrNull()
+        val palette = Palette.resolve(context)
+        val day = dayEvents.ifEmpty { listOf(activeClass) }.sortedBy { it.timeSlot.startEpochMillis }
+        val state = LiveState.of(day, activeClass, nextClassPreview, nowEpochMillis)
 
-        val isBreakState = activeSegment is DayTimelineSegment.BreakSegment
-        val focusedEvent = when (activeSegment) {
-            is DayTimelineSegment.ClassSegment -> activeSegment.event
-            is DayTimelineSegment.BreakSegment -> activeSegment.nextEvent
-            null -> activeClass
-        }
-
-        // 1. Czas zajęć (x min z y min) + o której koniec zajęć
-        val (elapsedMinutes, totalMinutes, endFormatted, remainingMinutes) =
-            if (isBreakState && activeSegment is DayTimelineSegment.BreakSegment) {
-                val totalBrk = activeSegment.durationMinutes
-                val elapsedBrk = (((nowEpochMillis - activeSegment.startMillis).coerceAtLeast(0L)) / 60_000L)
-                    .toInt()
-                    .coerceAtMost(totalBrk)
-                val remBrk = (totalBrk - elapsedBrk).coerceAtLeast(0)
-                Quadruple(elapsedBrk, totalBrk, focusedEvent.timeSlot.startFormatted, remBrk)
-            } else {
-                val totalCls = focusedEvent.totalDurationMinutes
-                val elapsedCls = focusedEvent.elapsedMinutes(nowEpochMillis)
-                val remCls = focusedEvent.remainingMinutes(nowEpochMillis)
-                Quadruple(elapsedCls, totalCls, focusedEvent.timeSlot.endFormatted, remCls)
-            }
-
-        // 2. Układ powiadomienia (bez powtórzeń tych samych informacji w tytule, treści, nagłówku i przyciskach):
-        //    - tytuł:      przedmiot (w przerwie: „Przerwa • x min”)
-        //    - treść:      sala • prowadzący (w przerwie: następne zajęcia + sala)
-        //    - nagłówek:   forma zajęć • godzina końca (w przerwie: godzina startu następnych)
-        //    - chip na pasku stanu: ile minut zostało
-        val roomLabel = when {
-            focusedEvent.deliveryMode == DeliveryMode.ELEARNING -> "E-learning"
-            focusedEvent.deliveryMode == DeliveryMode.REMOTE || focusedEvent.room.isRemoteTeams -> "Streaming"
-            else -> "Sala ${focusedEvent.room.number}"
-        }
-        val lecturerLabel = focusedEvent.lecturer.fullDisplayName.takeIf { it.isNotBlank() }
-
-        val titleText = if (isBreakState) {
-            "Przerwa • $remainingMinutes min"
-        } else {
-            focusedEvent.subject.name
-        }
-        val subtitleText = if (isBreakState) {
-            "Następne: ${focusedEvent.subject.name} • $roomLabel"
-        } else {
-            listOfNotNull(roomLabel, lecturerLabel).joinToString(" • ")
-        }
-        val headerSubText = if (isBreakState) {
-            "Start o $endFormatted"
-        } else {
-            "${focusedEvent.classType.polishLabel} • do $endFormatted"
-        }
-
-        // 4. Right-side clean white monochrome Material Icon matching the subject (transparent container, Koleo style)
-        val rightSubjectIconBitmap = WseiIcons.renderSubjectBadgeBitmap(
-            subjectName = focusedEvent.subject.name,
-            classType = focusedEvent.classType,
-            sizePx = 128,
-            // Kolorowa „kafelka” zamiast białej ikony na przezroczystym tle, która ginęła na jasnym tle powiadomień.
-            containerColorArgb = if (isBreakState) COLOR_BREAK_GREY else COLOR_ACTIVE_GREEN,
-            iconColorArgb = 0xFFFFFFFF.toInt()
-        )
-        val rightSubjectIcon = Icon.createWithBitmap(rightSubjectIconBitmap)
-
-        // 5. PendingIntents for notification tap & bottom pill buttons (Koleo style)
-        val openDetailsIntent = PendingIntent.getActivity(
-            context,
-            focusedEvent.id.hashCode(),
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("focused_event_id", focusedEvent.id)
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val openScheduleIntent = PendingIntent.getActivity(
-            context,
-            focusedEvent.id.hashCode() + 1,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("open_tab", "schedule")
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val totalVisualUnits = segments.sumOf { it.visualLengthUnits }.coerceAtLeast(1)
-        val currentProgressUnits = computeVisualProgressUnits(segments, nowEpochMillis)
-
-        val promotedExtras = Bundle().apply {
-            putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
-            putString(
-                EXTRA_SHORT_CRITICAL_TEXT,
-                if (isBreakState) "Przerwa • ${remainingMinutes} min" else "$remainingMinutes min"
-            )
-        }
-
-        val leftActionTitle = "Szczegóły"
-        val rightActionTitle = "Plan zajęć"
-
-        val publicVersion = buildPlatformNotification(
-            titleText = titleText,
-            subtitleText = subtitleText,
-            headerSubText = headerSubText,
-            rightSubjectIcon = rightSubjectIcon,
-            segments = segments,
-            activeSegment = activeSegment,
-            totalVisualUnits = totalVisualUnits,
-            currentProgressUnits = currentProgressUnits,
-            openDetailsIntent = openDetailsIntent,
-            openScheduleIntent = openScheduleIntent,
-            leftActionTitle = leftActionTitle,
-            rightActionTitle = rightActionTitle,
-            promotedExtras = promotedExtras,
-            publicNotification = null
-        )
-
-        return buildPlatformNotification(
-            titleText = titleText,
-            subtitleText = subtitleText,
-            headerSubText = headerSubText,
-            rightSubjectIcon = rightSubjectIcon,
-            segments = segments,
-            activeSegment = activeSegment,
-            totalVisualUnits = totalVisualUnits,
-            currentProgressUnits = currentProgressUnits,
-            openDetailsIntent = openDetailsIntent,
-            openScheduleIntent = openScheduleIntent,
-            leftActionTitle = leftActionTitle,
-            rightActionTitle = rightActionTitle,
-            promotedExtras = promotedExtras,
-            publicNotification = publicVersion
-        )
-    }
-
-    private fun buildPlatformNotification(
-        titleText: String,
-        subtitleText: String,
-        headerSubText: String,
-        rightSubjectIcon: Icon,
-        segments: List<DayTimelineSegment>,
-        activeSegment: DayTimelineSegment?,
-        totalVisualUnits: Int,
-        currentProgressUnits: Int,
-        openDetailsIntent: PendingIntent,
-        openScheduleIntent: PendingIntent,
-        leftActionTitle: String,
-        rightActionTitle: String,
-        promotedExtras: Bundle,
-        publicNotification: Notification?
-    ): Notification {
-        val builder = Notification.Builder(context, LIVE_CLASS_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_taal_notification)
-            .setColor(COLOR_CLASS_BLUE)
-            .setContentTitle(titleText)
-            .setContentText(subtitleText)
-            .setSubText(headerSubText)
-            .setLargeIcon(rightSubjectIcon)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setCategory(Notification.CATEGORY_PROGRESS)
-            .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .setContentIntent(openDetailsIntent)
-            .addExtras(promotedExtras)
-            .addAction(
-                Notification.Action.Builder(
-                    null,
-                    leftActionTitle,
-                    openDetailsIntent
-                ).build()
-            )
-            .addAction(
-                Notification.Action.Builder(
-                    null,
-                    rightActionTitle,
-                    openScheduleIntent
-                ).build()
-            )
-
-        if (publicNotification != null) {
-            builder.setPublicVersion(publicNotification)
-        }
-
-        // Apply Android 16 native Notification.ProgressStyle (exact Koleo segmented bar + tracker icon)
-        val appliedNativeProgressStyle = applyAndroid16ProgressStyle(
-            builder = builder,
-            segments = segments,
-            activeSegment = activeSegment,
-            currentProgressUnits = currentProgressUnits
-        )
-
-        if (!appliedNativeProgressStyle) {
-            builder.setProgress(totalVisualUnits, currentProgressUnits, false)
-        }
-
-        return builder.build()
-    }
-
-    /**
-     * Invokes Android 16 (`API 36+`) `android.app.Notification$ProgressStyle` directly on [builder]:
-     * - Creates `Notification.ProgressStyle.Segment(visualLengthUnits)` for every class and break in the day
-     * - Colors classes Blue (`#0077FF`), breaks Grey (`#8A9199`), and the currently active class Green (`#38A832`)
-     * - Sets `setStyledByProgress(false)` so all segments retain their distinct colors across the full bar
-     * - Attaches the circular white+blue chevron tracker thumb via `setProgressTrackerIcon`
-     */
-    private fun applyAndroid16ProgressStyle(
-        builder: Notification.Builder,
-        segments: List<DayTimelineSegment>,
-        activeSegment: DayTimelineSegment?,
-        currentProgressUnits: Int
-    ): Boolean = runCatching {
-        val progressStyleClass = Class.forName("android.app.Notification\$ProgressStyle")
-        val segmentClass = Class.forName("android.app.Notification\$ProgressStyle\$Segment")
-
-        val progressStyle = progressStyleClass.getDeclaredConstructor().newInstance()
-        val segmentConstructor = segmentClass.getDeclaredConstructor(Int::class.javaPrimitiveType)
-        val setSegmentColor = segmentClass.getMethod("setColor", Int::class.javaPrimitiveType)
-
-        val platformSegments = ArrayList<Any>(segments.size)
-        for (seg in segments) {
-            val segInstance = segmentConstructor.newInstance(seg.visualLengthUnits)
-            val segColor = when {
-                seg is DayTimelineSegment.BreakSegment -> COLOR_BREAK_GREY
-                seg === activeSegment -> COLOR_ACTIVE_GREEN
-                else -> COLOR_CLASS_BLUE
-            }
-            setSegmentColor.invoke(segInstance, segColor)
-            platformSegments.add(segInstance)
-        }
-
-        runCatching {
-            progressStyleClass
-                .getMethod("setStyledByProgress", Boolean::class.javaPrimitiveType)
-                .invoke(progressStyle, false)
-        }
-
-        progressStyleClass
-            .getMethod("setProgressSegments", List::class.java)
-            .invoke(progressStyle, platformSegments)
-
-        progressStyleClass
-            .getMethod("setProgress", Int::class.javaPrimitiveType)
-            .invoke(progressStyle, currentProgressUnits)
-
-        val trackerBitmap = WseiIcons.renderProgressTrackerThumbBitmap(
-            sizePx = 72,
-            circleColorArgb = COLOR_CLASS_BLUE
-        )
-        val trackerIcon = Icon.createWithBitmap(trackerBitmap)
-        progressStyleClass
-            .getMethod("setProgressTrackerIcon", Icon::class.java)
-            .invoke(progressStyle, trackerIcon)
-
-        // Enable Android 16 promoted ongoing live notification if method exists on Builder
-        runCatching {
-            Notification.Builder::class.java
-                .getMethod("setRequestPromotedOngoing", Boolean::class.javaPrimitiveType)
-                .invoke(builder, true)
-        }
-
-        builder.setStyle(progressStyle as Notification.Style)
-        true
-    }.onFailure { err ->
-        Log.w(TAG, "Fallback to standard progress bar: ${err.message}")
-    }.getOrDefault(false)
-
-    private fun computeVisualProgressUnits(
-        segments: List<DayTimelineSegment>,
-        nowMillis: Long
-    ): Int {
-        if (segments.isEmpty()) return 0
-        var accumulated = 0
-        for (seg in segments) {
-            when {
-                nowMillis >= seg.endMillis -> {
-                    accumulated += seg.visualLengthUnits
-                }
-                nowMillis > seg.startMillis -> {
-                    val fraction = seg.progressAt(nowMillis)
-                    accumulated += (seg.visualLengthUnits * fraction).toInt()
-                    return accumulated
-                }
-                else -> {
-                    return accumulated
-                }
-            }
-        }
-        return accumulated
-    }
-
-    fun publishLiveNotification(notification: Notification) {
-        notificationManager.notify(LIVE_CLASS_NOTIFICATION_ID, notification)
+        val publicVersion = buildNotification(state, day, palette, nowEpochMillis, showLecturer = false, publicVersion = null)
+        return buildNotification(state, day, palette, nowEpochMillis, showLecturer = !hideLecturer, publicVersion = publicVersion)
     }
 
     fun notifyLiveClassUpdate(
         activeClass: ClassEvent,
         nextClassPreview: NextClassPreview?,
         dayEvents: List<ClassEvent>,
-        nowEpochMillis: Long = System.currentTimeMillis()
+        nowEpochMillis: Long = System.currentTimeMillis(),
+        hideLecturer: Boolean = false
     ) {
-        val notification = buildLiveClassNotification(
-            activeClass = activeClass,
-            nextClassPreview = nextClassPreview,
-            dayEvents = dayEvents,
-            nowEpochMillis = nowEpochMillis
+        publishLiveNotification(
+            buildLiveClassNotification(activeClass, nextClassPreview, dayEvents, nowEpochMillis, hideLecturer)
         )
+    }
+
+    fun publishLiveNotification(notification: Notification) {
         notificationManager.notify(LIVE_CLASS_NOTIFICATION_ID, notification)
     }
 
@@ -499,76 +203,233 @@ class NotificationHelper @Inject constructor(
         notificationManager.cancel(LIVE_CLASS_NOTIFICATION_ID)
     }
 
-    fun cancelLiveClassNotification() {
-        notificationManager.cancel(LIVE_CLASS_NOTIFICATION_ID)
+    fun cancelLiveClassNotification() = cancelLiveNotification()
+
+    // ---------------------------------------------------------------------------------------------
+
+    /** What the notification shows at a given moment. */
+    private class LiveState(
+        /** Class shown in the title: the ongoing one, or the next one during a break / before the first. */
+        val focused: ClassEvent,
+        val isOngoing: Boolean,
+        /** End of the previous class when in a break between classes, null otherwise. */
+        val breakStartMillis: Long?,
+        /** Class after [focused] (only while [isOngoing]). */
+        val next: ClassEvent?
+    ) {
+        val targetMillis: Long
+            get() = if (isOngoing) focused.timeSlot.endEpochMillis else focused.timeSlot.startEpochMillis
+
+        fun minutesToTarget(now: Long): Int =
+            ceil((targetMillis - now).coerceAtLeast(0L) / 60_000.0).toInt()
+
+        /** Progress of the current class or break, null before the first class of the day. */
+        fun segmentProgress(now: Long): Float? = when {
+            isOngoing -> focused.progressFraction(now)
+            breakStartMillis != null -> {
+                val total = (focused.timeSlot.startEpochMillis - breakStartMillis).coerceAtLeast(1L)
+                ((now - breakStartMillis).toFloat() / total).coerceIn(0f, 1f)
+            }
+            else -> null
+        }
+
+        companion object {
+            fun of(day: List<ClassEvent>, active: ClassEvent, preview: NextClassPreview?, now: Long): LiveState {
+                val focused = day.firstOrNull { it.isOngoing(now) }
+                    ?: day.firstOrNull { it.timeSlot.startEpochMillis > now }
+                    ?: active
+                val isOngoing = focused.isOngoing(now)
+                val breakStart = if (isOngoing) {
+                    null
+                } else {
+                    day.filter { it.timeSlot.endEpochMillis <= now && it.timeSlot.endEpochMillis <= focused.timeSlot.startEpochMillis }
+                        .maxOfOrNull { it.timeSlot.endEpochMillis }
+                }
+                val next = if (!isOngoing) {
+                    null
+                } else {
+                    preview?.nextEvent?.takeIf { it.id != focused.id && it.timeSlot.startEpochMillis >= focused.timeSlot.endEpochMillis }
+                        ?: day.firstOrNull {
+                            it.id != focused.id && it.timeSlot.startEpochMillis >= focused.timeSlot.endEpochMillis
+                        }
+                }
+                return LiveState(focused, isOngoing, breakStart, next)
+            }
+        }
     }
 
-    /**
-     * Kept for in-app preview compatibility if needed.
-     */
-    fun renderFullWidthDayProgressBitmap(
-        segments: List<DayTimelineSegment>,
-        nowMillis: Long,
-        widthPx: Int = 960,
-        heightPx: Int = 52,
-        showLabels: Boolean = false
-    ): Bitmap {
-        val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+    private fun buildNotification(
+        state: LiveState,
+        day: List<ClassEvent>,
+        palette: Palette,
+        now: Long,
+        showLecturer: Boolean,
+        publicVersion: Notification?
+    ): Notification {
+        val event = state.focused
+        val minutes = state.minutesToTarget(now)
+        val status = when {
+            state.isOngoing -> strings.get(R.string.notif_status_ongoing, event.timeSlot.endFormatted)
+            minutes <= 0 -> strings.get(R.string.notif_status_starting, event.timeSlot.startFormatted)
+            else -> strings.get(R.string.notif_status_upcoming, formatDuration(minutes), event.timeSlot.startFormatted)
+        }
+        val lecturer = event.lecturer.fullDisplayName.takeIf { showLecturer && it.isNotBlank() }
+        val details = listOfNotNull(strings.get(event.classType.labelRes), roomLabel(event), lecturer).joinToString(SEPARATOR)
+
+        val expandedLines = buildList {
+            add(details)
+            when {
+                state.isOngoing -> add(strings.get(R.string.notif_remaining, formatDuration(minutes)))
+                state.breakStartMillis != null -> add(strings.get(R.string.notif_break_until, event.timeSlot.startFormatted))
+            }
+            state.next?.let { add(strings.get(R.string.notif_next, it.subject.name, it.timeSlot.startFormatted)) }
+        }
+
+        val isBreak = !state.isOngoing
+        val badge = WseiIcons.renderSubjectBadgeBitmap(
+            subjectName = event.subject.name,
+            classType = event.classType,
+            sizePx = BADGE_SIZE_PX,
+            containerColorArgb = if (isBreak) palette.breakSegment else palette.accent,
+            iconColorArgb = if (isBreak) 0xFFFFFFFF.toInt() else palette.onAccent
+        )
+
+        val builder = Notification.Builder(context, LIVE_CLASS_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_taal_notification)
+            .setColor(palette.accent)
+            .setContentTitle(event.subject.name)
+            .setContentText(details)
+            .setSubText(status)
+            .setLargeIcon(Icon.createWithBitmap(badge))
+            .setShowWhen(true)
+            .setWhen(state.targetMillis)
+            .setUsesChronometer(true)
+            .setChronometerCountDown(true)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_PROGRESS)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setContentIntent(contentIntent(event.id))
+            .addExtras(
+                Bundle().apply {
+                    putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
+                    putString(EXTRA_SHORT_CRITICAL_TEXT, formatDuration(minutes.coerceAtLeast(1)))
+                }
+            )
+        publicVersion?.let(builder::setPublicVersion)
+
+        if (Build.VERSION.SDK_INT >= 36) {
+            builder.setStyle(dayProgressStyle(day, now, palette))
+        } else {
+            builder.setStyle(Notification.BigTextStyle().bigText(expandedLines.joinToString("\n")))
+            state.segmentProgress(now)?.let { fraction ->
+                builder.setProgress(PROGRESS_MAX, (fraction * PROGRESS_MAX).toInt(), false)
+            }
+        }
+        return builder.build()
+    }
+
+    /** Android 16 segmented bar of the whole day: classes, breaks (neutral) and the current class (accent). */
+    @RequiresApi(36)
+    private fun dayProgressStyle(day: List<ClassEvent>, now: Long, palette: Palette): Notification.ProgressStyle {
+        val segments = buildDaySegments(day)
+        val platformSegments = segments.map { seg ->
+            Notification.ProgressStyle.Segment(seg.visualLengthUnits).apply {
+                setColor(
+                    when {
+                        seg is DayTimelineSegment.BreakSegment -> palette.breakSegment
+                        seg.isOngoing(now) -> palette.accent
+                        else -> palette.classSegment
+                    }
+                )
+            }
+        }
+        return Notification.ProgressStyle().apply {
+            // Part of the day already passed is drawn solid, the rest faded.
+            setStyledByProgress(true)
+            setProgressSegments(platformSegments)
+            setProgress(visualProgressUnits(segments, now))
+            setProgressTrackerIcon(Icon.createWithBitmap(renderTrackerThumb(palette)))
+        }
+    }
+
+    private fun visualProgressUnits(segments: List<DayTimelineSegment>, now: Long): Int {
+        var accumulated = 0
+        for (seg in segments) {
+            when {
+                now >= seg.endMillis -> accumulated += seg.visualLengthUnits
+                now > seg.startMillis -> return accumulated + (seg.visualLengthUnits * seg.progressAt(now)).toInt()
+                else -> return accumulated
+            }
+        }
+        return accumulated
+    }
+
+    /** Round tracker thumb: accent dot with a ring in the shade's surface colour. */
+    private fun renderTrackerThumb(palette: Palette): Bitmap {
+        val bmp = Bitmap.createBitmap(TRACKER_SIZE_PX, TRACKER_SIZE_PX, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        if (segments.isEmpty()) return bmp
-
-        val gapPx = 10f
-        val horizontalPad = 18f
-        val usableWidth = (widthPx - 2 * horizontalPad - gapPx * (segments.size - 1).coerceAtLeast(0)).coerceAtLeast(100f)
-        val totalWeight = segments.sumOf { it.visualLengthUnits }.toFloat().coerceAtLeast(1f)
-        val barTop = heightPx * 0.25f
-        val barHeight = heightPx * 0.42f
-        val barBottom = barTop + barHeight
-        val cornerRadius = barHeight / 2f
-
-        var curX = horizontalPad
-        var thumbX: Float? = null
-
-        segments.forEach { seg ->
-            val segW = (usableWidth * (seg.visualLengthUnits / totalWeight)).coerceAtLeast(18f)
-            val rect = RectF(curX, barTop, curX + segW, barBottom)
-            val isOngoing = seg.isOngoing(nowMillis)
-
-            paint.style = Paint.Style.FILL
-            paint.color = when {
-                seg is DayTimelineSegment.BreakSegment -> COLOR_BREAK_GREY
-                isOngoing -> COLOR_ACTIVE_GREEN
-                else -> COLOR_CLASS_BLUE
-            }
-            canvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
-
-            if (isOngoing) {
-                val frac = seg.progressAt(nowMillis)
-                thumbX = (curX + segW * frac).coerceIn(curX + cornerRadius, curX + segW - cornerRadius)
-            }
-            curX += segW + gapPx
-        }
-
-        thumbX?.let { cx ->
-            val cy = (barTop + barBottom) / 2f
-            paint.style = Paint.Style.FILL
-            paint.color = 0xFFFFFFFF.toInt()
-            canvas.drawCircle(cx, cy, barHeight * 0.72f, paint)
-            paint.color = COLOR_CLASS_BLUE
-            canvas.drawCircle(cx, cy, barHeight * 0.52f, paint)
-        }
-
-        if (showLabels) {
-            paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val center = TRACKER_SIZE_PX / 2f
+        paint.color = palette.trackerRing
+        canvas.drawCircle(center, center, TRACKER_SIZE_PX * 0.48f, paint)
+        paint.color = palette.accent
+        canvas.drawCircle(center, center, TRACKER_SIZE_PX * 0.34f, paint)
         return bmp
     }
 
-    private data class Quadruple<A, B, C, D>(
-        val first: A,
-        val second: B,
-        val third: C,
-        val fourth: D
+    private fun roomLabel(event: ClassEvent): String = when {
+        event.deliveryMode == DeliveryMode.ELEARNING -> strings.get(R.string.notif_room_elearning)
+        event.deliveryMode == DeliveryMode.REMOTE || event.room.isRemoteTeams -> strings.get(R.string.notif_room_streaming)
+        event.room.number.isBlank() -> strings.get(R.string.notif_room_tbd)
+        else -> strings.get(R.string.notif_room, event.room.number)
+    }
+
+    private fun formatDuration(minutes: Int): String {
+        val hours = minutes / 60
+        val rest = minutes % 60
+        return when {
+            hours == 0 -> strings.get(R.string.notif_duration_min, minutes)
+            rest == 0 -> strings.get(R.string.notif_duration_hours, hours)
+            else -> strings.get(R.string.notif_duration_hours_min, hours, rest)
+        }
+    }
+
+    private fun contentIntent(eventId: String?): PendingIntent = PendingIntent.getActivity(
+        context,
+        0,
+        Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("open_tab", "schedule")
+            if (eventId != null) putExtra("focused_event_id", eventId)
+        },
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
+
+    /** Notification colours resolved for the system (shade) light/dark mode. */
+    private class Palette(
+        val accent: Int,
+        val onAccent: Int,
+        val classSegment: Int,
+        val breakSegment: Int,
+        val trackerRing: Int
+    ) {
+        companion object {
+            fun resolve(context: Context): Palette {
+                val systemNight = Resources.getSystem().configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+                val config = Configuration(context.resources.configuration).apply {
+                    uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or systemNight
+                }
+                val themed = context.createConfigurationContext(config)
+                fun color(@ColorRes id: Int) = themed.getColor(id)
+                return Palette(
+                    accent = color(R.color.notif_accent),
+                    onAccent = color(R.color.notif_on_accent),
+                    classSegment = color(R.color.notif_segment_class),
+                    breakSegment = color(R.color.notif_segment_break),
+                    trackerRing = color(R.color.notif_tracker_ring)
+                )
+            }
+        }
+    }
 }

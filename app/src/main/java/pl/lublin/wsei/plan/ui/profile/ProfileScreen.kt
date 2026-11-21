@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -45,7 +46,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.domain.model.ClassType
+import pl.lublin.wsei.plan.domain.model.StudentGroupItem
 import pl.lublin.wsei.plan.domain.model.StudentSession
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiTwoPane
@@ -123,7 +126,7 @@ fun ProfileScreen(
 
     if (windowLayout.supportsTwoPane) {
         WseiScreenFrame(
-            title = "Profil",
+            title = stringResource(R.string.nav_profile),
             onBack = onBack,
             onRefresh = onRefresh,
             isRefreshing = uiState.isRefreshing
@@ -169,7 +172,7 @@ fun ProfileScreen(
         }
     } else {
         WseiScreenScaffold(
-            title = "Profil",
+            title = stringResource(R.string.nav_profile),
             onBack = onBack,
             onRefresh = onRefresh,
             isRefreshing = uiState.isRefreshing,
@@ -180,6 +183,34 @@ fun ProfileScreen(
             studyItems(uiState, sections, itemModifier)
             accountItems(uiState.currentSession, sections, onLogout, submitPassword, itemModifier)
         }
+    }
+}
+
+/** Title and supporting line of a student group row. */
+private class StudentGroupLabel(val title: String, val supporting: String?)
+
+/**
+ * Exact group data from the dean's office: "Laboratorium · gr. 4" with the raw code
+ * ("Lab4/1/I/N") below. Without a parsed group number the code itself is shown instead —
+ * never a list index or a made-up number.
+ */
+@Composable
+private fun studentGroupLabel(group: StudentGroupItem): StudentGroupLabel {
+    val form = group.formName.trim()
+    // Parsed from groupCode, so it is right even for stale cached data; "" when unknown.
+    val number = group.displayGroupNumber.trim()
+    val code = group.groupCode.trim()
+    return if (number.isNotEmpty()) {
+        val numberLabel = stringResource(R.string.profile_group_number, number)
+        StudentGroupLabel(
+            title = listOf(form, numberLabel).filter { it.isNotEmpty() }.joinToString(" · "),
+            supporting = code.takeIf { it.isNotEmpty() }
+        )
+    } else {
+        StudentGroupLabel(
+            title = listOf(form, code).filter { it.isNotEmpty() }.distinct().joinToString(" · ").ifEmpty { "—" },
+            supporting = null
+        )
     }
 }
 
@@ -205,12 +236,12 @@ private fun LazyListScope.studyItems(
     val hidden = uiState.isHideSensitiveData
 
     item(key = "section_studies", contentType = "section") {
-        WseiSectionTitle("Studia", modifier = itemModifier)
+        WseiSectionTitle(stringResource(R.string.profile_section_studies), modifier = itemModifier)
     }
 
     item(key = "course_of_study", contentType = "accordion") {
         ProfileAccordion(
-            title = "Tok studiów",
+            title = stringResource(R.string.profile_course_of_study),
             badge = session?.courseOfStudyCode ?: "—",
             icon = WseiIcons.School,
             expanded = sections.isCourseExpanded,
@@ -218,44 +249,73 @@ private fun LazyListScope.studyItems(
             modifier = itemModifier
         ) {
             WseiInset {
-                WseiInfoRow("Kierunek", session?.fieldOfStudy ?: "—")
-                WseiInfoRow("Specjalność", session?.specialization?.ifBlank { "Ogólna" } ?: "Ogólna")
-                WseiInfoRow("Wydział", session?.department ?: "—")
-                WseiInfoRow("Tryb studiów", session?.studyMode ?: "—")
-                WseiInfoRow("Otrzymywany tytuł", session?.obtainedTitle ?: "—")
-                WseiInfoRow("Rok / semestr", "Rok ${session?.academicYear ?: 1} • Semestr ${session?.semesterNumber ?: 1}")
-                WseiInfoRow("Grupa", uiState.primaryStudentGroupLabel)
+                WseiInfoRow(stringResource(R.string.profile_field_of_study), session?.fieldOfStudy ?: "—")
+                WseiInfoRow(
+                    stringResource(R.string.profile_specialization),
+                    session?.specialization?.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.profile_specialization_general)
+                )
+                WseiInfoRow(stringResource(R.string.profile_department), session?.department ?: "—")
+                WseiInfoRow(stringResource(R.string.profile_study_mode), session?.studyMode ?: "—")
+                WseiInfoRow(stringResource(R.string.profile_obtained_title), session?.obtainedTitle ?: "—")
+                WseiInfoRow(
+                    stringResource(R.string.profile_year_semester),
+                    session?.let {
+                        stringResource(R.string.profile_year_semester_value, it.academicYear, it.semesterNumber)
+                    } ?: "—"
+                )
+                WseiInfoRow(
+                    stringResource(R.string.profile_group),
+                    uiState.primaryStudentGroupLabel ?: stringResource(R.string.profile_no_group)
+                )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                WseiInfoRow("Średnia (bieżący sem.)", formatAverage(session?.averageCurrentSemester, hidden))
-                WseiInfoRow("Średnia (poprzedni sem.)", formatAverage(session?.averagePreviousSemester, hidden))
-                WseiInfoRow("Średnia ze studiów", formatAverage(session?.averageGrade, hidden))
+                WseiInfoRow(stringResource(R.string.profile_average_current), formatAverage(session?.averageCurrentSemester, hidden))
+                WseiInfoRow(stringResource(R.string.profile_average_previous), formatAverage(session?.averagePreviousSemester, hidden))
+                WseiInfoRow(stringResource(R.string.profile_average_overall), formatAverage(session?.averageGrade, hidden))
             }
         }
     }
 
     item(key = "student_groups", contentType = "accordion") {
-        val groups = uiState.studentGroups.firstOrNull()?.groups.orEmpty()
+        val semesterGroups = uiState.studentGroups.firstOrNull()
+        val groups = semesterGroups?.groups.orEmpty()
         ProfileAccordion(
-            title = "Grupy studenckie",
+            title = stringResource(R.string.profile_student_groups),
             badge = "${groups.size}",
             icon = WseiIcons.Groups,
             expanded = sections.isGroupsExpanded,
             onToggle = sections.onToggleGroups,
             modifier = itemModifier
         ) {
-            WseiListGroup(
-                entries = groups.mapIndexed { index, group ->
-                    WseiListEntry(key = "group_${group.id}_$index") { shape ->
-                        WseiListItem(
-                            title = group.groupCode,
-                            supporting = group.formName,
-                            shape = shape,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                            trailing = { WseiPill("Gr. ${group.groupNumber}", emphasized = true) }
-                        )
+            val semesterLabel = semesterGroups?.semesterLabel?.takeIf { it.isNotBlank() }
+            if (semesterLabel != null) {
+                Text(
+                    text = semesterLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            if (groups.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.profile_groups_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                WseiListGroup(
+                    entries = groups.mapIndexed { index, group ->
+                        WseiListEntry(key = "group_${group.id}_$index") { shape ->
+                            val label = studentGroupLabel(group)
+                            WseiListItem(
+                                title = label.title,
+                                supporting = label.supporting,
+                                shape = shape,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                            )
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 
@@ -265,8 +325,8 @@ private fun LazyListScope.studyItems(
         }
         val totalPlanEcts = remember(planSubjects) { planSubjects.sumOf { it.ects.toDouble() } }
         ProfileAccordion(
-            title = "Plan studiów",
-            badge = "${totalPlanEcts.toInt()} ECTS",
+            title = stringResource(R.string.profile_study_plan),
+            badge = stringResource(R.string.subjects_ects_value, totalPlanEcts.toInt()),
             icon = WseiIcons.AutoAwesome,
             expanded = sections.isPlanExpanded,
             onToggle = sections.onTogglePlan,
@@ -276,12 +336,17 @@ private fun LazyListScope.studyItems(
                 entries = planSubjects.mapIndexed { index, subject ->
                     WseiListEntry(key = "plan_${subject.id}_$index") { shape ->
                         WseiListItem(
-                            title = "${subject.subjectNumber}. ${subject.subjectName}",
-                            supporting = "${subject.form} • ${subject.passingForm} • ${subject.hours} godz.",
+                            title = stringResource(R.string.profile_plan_subject_title, subject.subjectNumber, subject.subjectName),
+                            supporting = stringResource(
+                                R.string.profile_plan_subject_supporting,
+                                subject.form,
+                                subject.passingForm,
+                                subject.hours
+                            ),
                             icon = WseiIcons.forSubject(subject.subjectName, ClassType.fromRawCode(subject.form)),
                             shape = shape,
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                            trailing = { WseiPill("${subject.ects.toInt()} ECTS") }
+                            trailing = { WseiPill(stringResource(R.string.subjects_ects_value, subject.ects.toInt())) }
                         )
                     }
                 }
@@ -299,7 +364,7 @@ private fun LazyListScope.accountItems(
 ) {
     val canChangePassword = session?.allowPasswordChanges != false
     item(key = "section_account", contentType = "section") {
-        WseiSectionTitle("Konto", modifier = itemModifier)
+        WseiSectionTitle(stringResource(R.string.profile_section_account), modifier = itemModifier)
     }
     item(key = "account_actions", contentType = "account") {
         val count = if (canChangePassword) 2 else 1
@@ -309,8 +374,8 @@ private fun LazyListScope.accountItems(
         ) {
             if (canChangePassword) {
                 WseiListItem(
-                    title = "Zmień hasło",
-                    supporting = "Hasło do Wirtualnego Dziekanatu",
+                    title = stringResource(R.string.profile_change_password),
+                    supporting = stringResource(R.string.profile_change_password_supporting),
                     icon = WseiIcons.Lock,
                     shape = wseiGroupItemShape(0, count),
                     selected = sections.showPasswordForm,
@@ -325,8 +390,8 @@ private fun LazyListScope.accountItems(
                 }
             }
             WseiListItem(
-                title = "Wyloguj się",
-                supporting = "Zakończ sesję na tym urządzeniu",
+                title = stringResource(R.string.profile_logout),
+                supporting = stringResource(R.string.profile_logout_supporting),
                 icon = WseiIcons.Logout,
                 iconContainerColor = MaterialTheme.colorScheme.errorContainer,
                 iconContentColor = MaterialTheme.colorScheme.onErrorContainer,
@@ -362,12 +427,12 @@ private fun IdentityCard(uiState: ScheduleUiState, modifier: Modifier = Modifier
         ) {
             StudentAvatar(
                 base64Photo = session?.personPictureBase64,
-                fullName = session?.fullName ?: "Student",
+                fullName = session?.fullName ?: stringResource(R.string.common_student),
                 size = 112.dp,
                 shape = M3XCookie12Shape
             )
             Text(
-                text = session?.fullName ?: "Student",
+                text = session?.fullName ?: stringResource(R.string.common_student),
                 style = MaterialTheme.typography.headlineSmall,
                 textAlign = TextAlign.Center
             )
@@ -388,14 +453,14 @@ private fun IdentityCard(uiState: ScheduleUiState, modifier: Modifier = Modifier
                 verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
             ) {
                 WseiPill(
-                    text = "Album $displayAlbum",
+                    text = stringResource(R.string.home_album_number, displayAlbum),
                     icon = WseiIcons.Badge,
                     containerColor = colors.primary,
                     contentColor = colors.onPrimary,
                     emphasized = true
                 )
                 WseiPill(
-                    text = session?.statusName ?: "Studiuje",
+                    text = session?.statusName ?: stringResource(R.string.profile_status_default),
                     containerColor = colors.onPrimaryContainer.copy(alpha = 0.1f),
                     contentColor = colors.onPrimaryContainer
                 )
@@ -404,9 +469,27 @@ private fun IdentityCard(uiState: ScheduleUiState, modifier: Modifier = Modifier
         Row(horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
             val statColor = colors.onPrimaryContainer.copy(alpha = 0.1f)
             val statContent = colors.onPrimaryContainer
-            WseiStat(formatAverage(session?.averageCurrentSemester, hidden), "Śr. semestru", Modifier.weight(1f), statColor, statContent)
-            WseiStat(formatAverage(session?.averageGrade, hidden), "Śr. studiów", Modifier.weight(1f), statColor, statContent)
-            WseiStat("${session?.semesterNumber ?: 1}", "Semestr", Modifier.weight(1f), statColor, statContent)
+            WseiStat(
+                formatAverage(session?.averageCurrentSemester, hidden),
+                stringResource(R.string.profile_stat_semester_average),
+                Modifier.weight(1f),
+                statColor,
+                statContent
+            )
+            WseiStat(
+                formatAverage(session?.averageGrade, hidden),
+                stringResource(R.string.profile_stat_overall_average),
+                Modifier.weight(1f),
+                statColor,
+                statContent
+            )
+            WseiStat(
+                session?.semesterNumber?.toString() ?: "—",
+                stringResource(R.string.profile_stat_semester),
+                Modifier.weight(1f),
+                statColor,
+                statContent
+            )
         }
     }
 }
@@ -462,7 +545,7 @@ private fun PasswordChangeForm(onSubmit: (String, String) -> Unit) {
         OutlinedTextField(
             value = oldPass,
             onValueChange = { oldPass = it },
-            label = { Text("Obecne hasło") },
+            label = { Text(stringResource(R.string.profile_current_password)) },
             visualTransformation = transformation,
             keyboardOptions = passwordKeyboard,
             singleLine = true,
@@ -472,7 +555,7 @@ private fun PasswordChangeForm(onSubmit: (String, String) -> Unit) {
         OutlinedTextField(
             value = newPass,
             onValueChange = { newPass = it },
-            label = { Text("Nowe hasło") },
+            label = { Text(stringResource(R.string.profile_new_password)) },
             visualTransformation = transformation,
             keyboardOptions = passwordKeyboard,
             singleLine = true,
@@ -481,7 +564,9 @@ private fun PasswordChangeForm(onSubmit: (String, String) -> Unit) {
                 IconButton(onClick = { showPasswords = !showPasswords }) {
                     Icon(
                         imageVector = if (showPasswords) WseiIcons.VisibilityOff else WseiIcons.Visibility,
-                        contentDescription = if (showPasswords) "Ukryj hasła" else "Pokaż hasła"
+                        contentDescription = stringResource(
+                            if (showPasswords) R.string.profile_hide_passwords else R.string.profile_show_passwords
+                        )
                     )
                 }
             },
@@ -500,7 +585,7 @@ private fun PasswordChangeForm(onSubmit: (String, String) -> Unit) {
                 .padding(top = WseiSpacing.xs)
                 .heightIn(min = 52.dp)
         ) {
-            Text("Zapisz nowe hasło", fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.profile_save_password), fontWeight = FontWeight.SemiBold)
         }
     }
 }

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Ustawienia -->
+    <string name="settings_title">Ustawienia</string>
+    <string name="settings_hub_supporting">Motyw, kolory, język i prywatność</string>
+    <string name="settings_opens_in_browser">Otwiera w przeglądarce</string>
+
+    <string name="settings_section_theme">Motyw</string>
+    <string name="settings_theme_light">Jasny</string>
+    <string name="settings_theme_dark">Ciemny</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light_description">Zawsze jasne kolory</string>
+    <string name="settings_theme_dark_description">Zawsze ciemne kolory</string>
+    <string name="settings_theme_system_description">Jasny lub ciemny, tak jak w ustawieniach telefonu</string>
+
+    <string name="settings_section_palette">Paleta kolorów</string>
+    <string name="settings_palette_taal">Taal</string>
+    <string name="settings_palette_dynamic">Dynamiczny</string>
+    <string name="settings_palette_dynamic_hint">Material You</string>
+    <string name="settings_palette_cobalt">Kobalt</string>
+    <string name="settings_palette_terracotta">Terakota</string>
+    <string name="settings_palette_plum">Śliwka</string>
+    <string name="settings_palette_ocean">Ocean</string>
+    <string name="settings_palette_description">Paleta działa w motywie jasnym, ciemnym i systemowym.</string>
+    <string name="settings_palette_dynamic_description">Kolory dobierane są z tapety telefonu (Material You).</string>
+    <string name="settings_palette_dynamic_unsupported">Paleta dynamiczna (kolory z tapety, Material You) wymaga Androida 12 lub nowszego.</string>
+
+    <string name="settings_section_language">Język aplikacji</string>
+    <string name="settings_language_system">Język systemu</string>
+    <string name="settings_language_system_supporting">Zgodnie z ustawieniami telefonu</string>
+    <!-- Language names are always shown in their own language. -->
+    <string name="settings_language_polish" translatable="false">Polski</string>
+    <string name="settings_language_english" translatable="false">English</string>
+    <string name="settings_language_ukrainian" translatable="false">Українська</string>
+
+    <string name="settings_section_behaviour">Działanie</string>
+    <string name="settings_live_notification_title">Zajęcia na ekranie blokady</string>
+    <string name="settings_live_notification_supporting">Postęp trwających zajęć w pasku stanu i na ekranie blokady</string>
+    <string name="settings_hide_data_title">Ukryj dane</string>
+    <string name="settings_hide_data_supporting">Ukrywa oceny, kwoty, dane osobowe oraz prowadzących zajęcia (nazwiska i dane kontaktowe)</string>
+
+    <!-- O aplikacji -->
+    <string name="about_title">O aplikacji</string>
+    <string name="about_hub_supporting">Wersja %1$s • licencja i kod źródłowy</string>
+    <string name="about_tagline">Plan zajęć, oceny, finanse i ogłoszenia z Wirtualnego Dziekanatu Uniwersytetu WSEI w Lublinie</string>
+    <string name="about_version">Wersja %1$s</string>
+    <string name="about_min_android">Android 8.0+</string>
+    <string name="about_source_code">Kod źródłowy</string>
+    <string name="about_releases">Wydania</string>
+    <string name="about_releases_supporting">Historia wersji i pliki APK</string>
+    <string name="about_project_title">Projekt</string>
+    <string name="about_author">Autor</string>
+    <string name="about_author_supporting">%1$s na GitHubie</string>
+    <string name="about_tech_title">Technologie</string>
+    <string name="about_tech_architecture">Clean Architecture, MVVM i pamięć podręczna offline-first.</string>
+    <string name="about_licence_title">Licencja</string>
+    <string name="about_licence_app">Aplikacja</string>
+    <string name="about_licence_mit">MIT</string>
+    <string name="about_licence_copyright">Prawa autorskie</string>
+    <string name="about_licence_font">Czcionka</string>
+    <string name="about_licence_data">Dane</string>
+    <string name="about_licence_data_value">Wirtualny Dziekanat (APR System)</string>
+    <string name="about_disclaimer">Niezależny projekt studencki, niepowiązany oficjalnie z Uniwersytetem WSEI ani z APR System.</string>
+
+    <string name="about_update_title">Aktualizacje</string>
+    <string name="about_update_idle">Zainstalowana wersja: %1$s</string>
+    <string name="about_update_checking">Sprawdzam najnowsze wydanie na GitHubie…</string>
+    <string name="about_update_up_to_date">Masz najnowszą wersję (%1$s).</string>
+    <string name="about_update_available">Dostępna wersja %1$s (masz %2$s).</string>
+    <string name="about_update_downloading">Pobieranie wersji %1$s… %2$d%%</string>
+    <string name="about_update_ready">Wersja %1$s jest pobrana i gotowa do instalacji.</string>
+    <string name="about_update_error">Nie udało się sprawdzić aktualizacji.</string>
+    <string name="about_update_whats_new">Co nowego</string>
+    <string name="about_update_download">Pobierz</string>
+    <string name="about_update_cancel">Anuluj</string>
+    <string name="about_update_install">Zainstaluj</string>
+    <string name="about_update_allow_and_install">Zezwól i zainstaluj</string>
+    <string name="about_update_check">Sprawdź aktualizacje</string>
+    <string name="about_update_check_again">Sprawdź ponownie</string>
+    <string name="about_update_permission_hint">Android poprosi o zgodę na instalowanie aplikacji z Taala. Po jej nadaniu wróć i dotknij „Zainstaluj”.</string>
+
+    <!-- Profil -->
+    <string name="profile_group_number">gr. %1$s</string>
+    <string name="profile_groups_empty">Brak przypisanych grup w bieżącym semestrze.</string>
+
+    <!-- Przedmioty -->
+    <string name="subjects_semester_number">Semestr %1$d</string>
+    <string name="subjects_semester_current">%1$s (bieżący)</string>
+    <string name="subjects_average_computed">Średnia ocen</string>
+</resources>

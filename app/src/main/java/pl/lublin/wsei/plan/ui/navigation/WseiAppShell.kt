@@ -1,11 +1,10 @@
 package pl.lublin.wsei.plan.ui.navigation
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -47,14 +46,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
 import kotlinx.datetime.LocalDate
+import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
 import pl.lublin.wsei.plan.domain.model.FinancialObligation
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
+import pl.lublin.wsei.plan.domain.model.AppColorPalette
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiWidthClass
 import pl.lublin.wsei.plan.ui.adaptive.rememberWseiWindowLayout
@@ -81,16 +83,16 @@ import pl.lublin.wsei.plan.ui.theme.WseiSpacing
  * w prawym górnym rogu ekranu albo w nagłówku szyny.
  */
 enum class WseiDestination(
-    val label: String,
-    val shortLabel: String,
-    val contentDescription: String
+    @StringRes val labelRes: Int,
+    @StringRes val shortLabelRes: Int,
+    @StringRes val contentDescriptionRes: Int
 ) {
-    START("Start", "Start", "Ekran startowy"),
-    SCHEDULE("Plan zajęć", "Plan", "Plan zajęć i kalendarz"),
-    SUBJECTS("Przedmioty", "Oceny", "Przedmioty, punkty ECTS i oceny"),
-    FINANCES("Finanse", "Finanse", "Opłaty i stypendia"),
-    MORE("Więcej", "Więcej", "Ogłoszenia, ustawienia i informacje o aplikacji"),
-    PROFILE("Profil", "Profil", "Dane studenta, tok studiów i grupy");
+    START(R.string.nav_start, R.string.nav_start_short, R.string.nav_start_cd),
+    SCHEDULE(R.string.nav_schedule, R.string.nav_schedule_short, R.string.nav_schedule_cd),
+    SUBJECTS(R.string.nav_subjects, R.string.nav_subjects_short, R.string.nav_subjects_cd),
+    FINANCES(R.string.nav_finances, R.string.nav_finances_short, R.string.nav_finances_cd),
+    MORE(R.string.nav_more, R.string.nav_more_short, R.string.nav_more_cd),
+    PROFILE(R.string.nav_profile, R.string.nav_profile_short, R.string.nav_profile_cd);
 
     val iconVector: ImageVector
         get() = when (this) {
@@ -131,6 +133,10 @@ fun WseiAppShell(
     onDownloadAttachment: (AnnouncementAttachment) -> Unit,
     onDismissStatusBanner: () -> Unit,
     onSelectThemeMode: (AppThemeMode) -> Unit,
+    onSelectColorPalette: (AppColorPalette) -> Unit,
+    onLoadDeviceCalendars: () -> Unit,
+    onSyncToCalendar: (Long) -> Unit,
+    onDismissCalendarSyncStatus: () -> Unit,
     onToggleLiveNotification: (Boolean) -> Unit,
     onToggleHideSensitiveData: (Boolean) -> Unit,
     modifier: Modifier = Modifier
@@ -210,7 +216,7 @@ fun WseiAppShell(
             targetState = phase,
             transitionSpec = {
                 (fadeIn(WseiMotion.effects()) + scaleIn(WseiMotion.spatial(), initialScale = 0.96f)) togetherWith
-                    fadeOut(WseiMotion.effects())
+                    fadeOut(WseiMotion.fastEffects())
             },
             modifier = modifier.fillMaxSize(),
             label = "authPhaseTransition"
@@ -234,14 +240,16 @@ fun WseiAppShell(
                     val useRail = windowLayout.useNavigationRail
                     val railShowsProfile = useRail && isTallWindow
                     val session = scheduleUiState.currentSession
+                    val studentFallbackName = stringResource(R.string.common_student)
                     val profileShortcut = remember(
                         session?.personPictureBase64,
                         session?.fullName,
-                        railShowsProfile
+                        railShowsProfile,
+                        studentFallbackName
                     ) {
                         WseiProfileShortcut(
                             photoBase64 = session?.personPictureBase64,
-                            fullName = session?.fullName ?: "Student",
+                            fullName = session?.fullName ?: studentFallbackName,
                             onOpen = { openProfile() },
                             showInTopBar = !railShowsProfile
                         )
@@ -283,9 +291,11 @@ fun WseiAppShell(
                                 AnimatedContent(
                                     targetState = currentDestination,
                                     transitionSpec = {
-                                        (fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
-                                            slideInVertically(WseiMotion.spatial()) { it / 24 }) togetherWith
-                                            fadeOut(spring(stiffness = Spring.StiffnessHigh))
+                                        // Quick cross-fade with a short spring lift; the old tab
+                                        // leaves almost instantly so the two never overlap visibly.
+                                        (fadeIn(WseiMotion.effects()) +
+                                            slideInVertically(WseiMotion.fastSpatial()) { it / 32 }) togetherWith
+                                            fadeOut(WseiMotion.fastEffects())
                                     },
                                     modifier = Modifier.fillMaxSize(),
                                     label = "destinationTransition"
@@ -314,6 +324,10 @@ fun WseiAppShell(
                                             onMarkAnnouncementRead = onMarkAnnouncementRead,
                                             onDownloadAttachment = onDownloadAttachment,
                                             onSelectThemeMode = onSelectThemeMode,
+                                            onSelectColorPalette = onSelectColorPalette,
+                                            onLoadDeviceCalendars = onLoadDeviceCalendars,
+                                            onSyncToCalendar = onSyncToCalendar,
+                                            onDismissCalendarSyncStatus = onDismissCalendarSyncStatus,
                                             onToggleLiveNotification = onToggleLiveNotification,
                                             onToggleHideSensitiveData = onToggleHideSensitiveData
                                         )
@@ -339,8 +353,8 @@ fun WseiAppShell(
                                     )
                                     AnimatedVisibility(
                                         visible = !useRail && currentDestination != WseiDestination.PROFILE,
-                                        enter = slideInVertically(WseiMotion.spatial()) { it * 2 } + fadeIn(),
-                                        exit = slideOutVertically(WseiMotion.size()) { it * 2 } + fadeOut()
+                                        enter = slideInVertically(WseiMotion.spatial()) { it * 2 } + fadeIn(WseiMotion.effects()),
+                                        exit = slideOutVertically(WseiMotion.size()) { it * 2 } + fadeOut(WseiMotion.fastEffects())
                                     ) {
                                         WseiFloatingNavigationBar(
                                             currentDestination = currentDestination,
@@ -382,6 +396,10 @@ private fun DestinationContent(
     onMarkAnnouncementRead: (DeanAnnouncement) -> Unit,
     onDownloadAttachment: (AnnouncementAttachment) -> Unit,
     onSelectThemeMode: (AppThemeMode) -> Unit,
+    onSelectColorPalette: (AppColorPalette) -> Unit,
+    onLoadDeviceCalendars: () -> Unit,
+    onSyncToCalendar: (Long) -> Unit,
+    onDismissCalendarSyncStatus: () -> Unit,
     onToggleLiveNotification: (Boolean) -> Unit,
     onToggleHideSensitiveData: (Boolean) -> Unit
 ) {
@@ -404,7 +422,10 @@ private fun DestinationContent(
             onSelectScheduleFilter = onSelectScheduleFilter,
             onToggleHeroExpanded = onToggleHeroExpanded,
             onSyncLiveNotification = onSyncLiveNotification,
-            onRefreshSchedule = onRefresh
+            onRefreshSchedule = onRefresh,
+            onLoadDeviceCalendars = onLoadDeviceCalendars,
+            onSyncToCalendar = onSyncToCalendar,
+            onDismissCalendarSyncStatus = onDismissCalendarSyncStatus
         )
         WseiDestination.SUBJECTS -> SubjectsScreen(
             uiState = uiState,
@@ -422,6 +443,7 @@ private fun DestinationContent(
             onMarkAnnouncementRead = onMarkAnnouncementRead,
             onDownloadAttachment = onDownloadAttachment,
             onSelectThemeMode = onSelectThemeMode,
+            onSelectColorPalette = onSelectColorPalette,
             onToggleLiveNotification = onToggleLiveNotification,
             onToggleHideSensitiveData = onToggleHideSensitiveData,
             onRefresh = onRefresh
@@ -450,8 +472,8 @@ private fun StatusMessage(message: String?, onDismiss: () -> Unit) {
 
     AnimatedVisibility(
         visible = message != null,
-        enter = slideInVertically(WseiMotion.spatial()) { it } + fadeIn(),
-        exit = slideOutVertically(WseiMotion.size()) { it } + fadeOut()
+        enter = slideInVertically(WseiMotion.spatial()) { it } + fadeIn(WseiMotion.effects()),
+        exit = slideOutVertically(WseiMotion.size()) { it } + fadeOut(WseiMotion.fastEffects())
     ) {
         Surface(
             shape = MaterialTheme.shapes.large,
@@ -475,7 +497,7 @@ private fun StatusMessage(message: String?, onDismiss: () -> Unit) {
                 )
                 TextButton(onClick = onDismiss) {
                     Text(
-                        text = "OK",
+                        text = stringResource(R.string.common_ok),
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.inversePrimary
                     )

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Live Notification palette for the dark notification shade (see values/colors_notification.xml). -->
+<resources>
+    <color name="notif_accent">#FF5CDBBC</color>
+    <color name="notif_on_accent">#FF00382D</color>
+    <color name="notif_segment_class">#FFA7CCE0</color>
+    <color name="notif_segment_break">#FF65706B</color>
+    <color name="notif_tracker_ring">#FF1A1F1D</color>
+</resources>

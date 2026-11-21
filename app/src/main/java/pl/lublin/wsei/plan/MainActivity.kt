@@ -4,7 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,14 +20,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
-import pl.lublin.wsei.plan.data.local.AttachmentSaver
 import pl.lublin.wsei.plan.service.LiveClassNotificationService
 import pl.lublin.wsei.plan.ui.navigation.WseiAppShell
 import pl.lublin.wsei.plan.ui.schedule.ScheduleViewModel
 import pl.lublin.wsei.plan.ui.theme.WseiExpressiveTheme
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     private val scheduleViewModel: ScheduleViewModel by viewModels()
 
@@ -59,7 +58,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            WseiExpressiveTheme(themeMode = uiState.themeMode) {
+            WseiExpressiveTheme(themeMode = uiState.themeMode, colorPalette = uiState.colorPalette) {
                 // Powiadomienie działa dla zalogowanego studenta, gdy funkcja jest włączona i mamy zgodę.
                 // Zatrzymujemy je dopiero, gdy nie ma już zajęć do śledzenia (także po wylogowaniu).
                 LaunchedEffect(
@@ -107,13 +106,13 @@ class MainActivity : ComponentActivity() {
                     onRefreshSchedule = scheduleViewModel::refreshSchedule,
                     onInitiateOnlinePayment = scheduleViewModel::initiateOnlinePayment,
                     onMarkAnnouncementRead = scheduleViewModel::markAnnouncementRead,
-                    onDownloadAttachment = { attachment ->
-                        scheduleViewModel.downloadAttachment(attachment) { downloaded ->
-                            AttachmentSaver.save(applicationContext, downloaded)
-                        }
-                    },
+                    onDownloadAttachment = scheduleViewModel::openAttachment,
                     onDismissStatusBanner = scheduleViewModel::dismissStatusBanner,
                     onSelectThemeMode = scheduleViewModel::selectThemeMode,
+                    onSelectColorPalette = scheduleViewModel::selectColorPalette,
+                    onLoadDeviceCalendars = scheduleViewModel::loadDeviceCalendars,
+                    onSyncToCalendar = scheduleViewModel::syncScheduleToCalendar,
+                    onDismissCalendarSyncStatus = scheduleViewModel::dismissCalendarSyncStatus,
                     onToggleLiveNotification = scheduleViewModel::setLiveNotificationEnabled,
                     onToggleHideSensitiveData = scheduleViewModel::setHideSensitiveData
                 )

@@ -54,11 +54,17 @@ import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.l10n.appLocale
+import pl.lublin.wsei.plan.l10n.capitalizeFirst
+import pl.lublin.wsei.plan.l10n.localizedNameOrPlaceholder
+import pl.lublin.wsei.plan.l10n.rememberLocalizedDateFormatter
 
-private val PolishLocale = Locale("pl", "PL")
-private val DayHeaderFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM", PolishLocale)
+/** CLDR skeleton of the day headers ("piątek, 20 listopada" / "Friday, November 20"). */
+private const val DayHeaderSkeleton = "EEEEdMMMM"
 
 /**
  * Ekran Start: powitanie, plan na dziś, szybkie skróty i najbliższa opłata.
@@ -74,20 +80,21 @@ fun HomeScreen(
     onRefresh: () -> Unit
 ) {
     val session = uiState.currentSession
-    val firstName = session?.firstName?.takeIf { it.isNotBlank() } ?: "Studencie"
+    val firstName = session?.firstName?.takeIf { it.isNotBlank() }
+        ?: stringResource(R.string.home_greeting_fallback_name)
     // Keyed on the current hour (from the per-minute ticker), so the greeting changes from
     // "Dzień dobry" to "Cześć" while the app stays open.
     val hour = remember(uiState.nowEpochMillis) {
         Instant.ofEpochMilli(uiState.nowEpochMillis).atZone(ZoneId.systemDefault()).hour
     }
-    val greeting = remember(firstName, hour) {
-        val salutation = when (hour) {
-            in 5..10 -> "Dzień dobry"
-            in 18..23, in 0..4 -> "Dobry wieczór"
-            else -> "Cześć"
-        }
-        "$salutation, $firstName"
-    }
+    val greeting = stringResource(
+        when (hour) {
+            in 5..10 -> R.string.home_greeting_morning
+            in 18..23, in 0..4 -> R.string.home_greeting_evening
+            else -> R.string.home_greeting_day
+        },
+        firstName
+    )
 
     val windowLayout = LocalWseiWindowLayout.current
     // The ticker in the ViewModel updates `nowEpochMillis` every minute, so "today" follows
@@ -173,8 +180,10 @@ private fun HomeIntro(
     modifier: Modifier = Modifier
 ) {
     val session = uiState.currentSession
-    val today = remember(todayIso) {
-        LocalDate.parse(todayIso).format(DayHeaderFormatter).replaceFirstChar { it.uppercase() }
+    val locale = appLocale()
+    val dayHeaderFormatter = rememberLocalizedDateFormatter(DayHeaderSkeleton)
+    val today = remember(todayIso, dayHeaderFormatter) {
+        LocalDate.parse(todayIso).format(dayHeaderFormatter).capitalizeFirst(locale)
     }
     Column(
         modifier = modifier.padding(horizontal = WseiSpacing.xs),
@@ -187,14 +196,14 @@ private fun HomeIntro(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
             WseiPill(
-                text = "Semestr ${session?.semesterNumber ?: 1}",
+                text = stringResource(R.string.subjects_semester_number, session?.semesterNumber ?: 1),
                 icon = WseiIcons.School,
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 emphasized = true
             )
             WseiPill(
-                text = "Album ${uiState.maskSensitive(session?.albumNumber ?: "—")}",
+                text = stringResource(R.string.home_album_number, uiState.maskSensitive(session?.albumNumber ?: "—")),
                 icon = WseiIcons.Badge
             )
         }
@@ -229,11 +238,14 @@ private fun TodayScheduleCard(
     val now = uiState.nowEpochMillis
     val displayedDateIso = dayEvents.firstOrNull()?.dateIso ?: todayIso
     val isToday = displayedDateIso == todayIso
-    val dateLabel = remember(displayedDateIso) {
-        runCatching { LocalDate.parse(displayedDateIso).format(DayHeaderFormatter) }
+    val locale = appLocale()
+    val dayHeaderFormatter = rememberLocalizedDateFormatter(DayHeaderSkeleton)
+    val dateLabel = remember(displayedDateIso, dayHeaderFormatter) {
+        runCatching { LocalDate.parse(displayedDateIso).format(dayHeaderFormatter) }
             .getOrDefault(displayedDateIso)
-            .replaceFirstChar { it.uppercase() }
+            .capitalizeFirst(locale)
     }
+    val classCount = pluralStringResource(R.plurals.home_classes_short, dayEvents.size, dayEvents.size)
 
     val remaining = remember(dayEvents, now) { dayEvents.filter { it.timeSlot.endEpochMillis > now } }
     val source = remaining.ifEmpty { dayEvents }
@@ -250,11 +262,11 @@ private fun TodayScheduleCard(
         verticalSpacing = WseiSpacing.s
     ) {
         WseiCardHeader(
-            title = if (isToday) "Dzisiaj" else dateLabel,
+            title = if (isToday) stringResource(R.string.home_today) else dateLabel,
             overline = when {
-                dayEvents.isEmpty() -> "Plan zajęć"
-                isToday -> "$dateLabel • ${dayEvents.size} zaj."
-                else -> "Najbliższy zjazd • ${dayEvents.size} zaj."
+                dayEvents.isEmpty() -> stringResource(R.string.nav_schedule)
+                isToday -> stringResource(R.string.home_today_overline, dateLabel, classCount)
+                else -> stringResource(R.string.home_next_session_overline, classCount)
             },
             icon = WseiIcons.CalendarMonth,
             iconContainerColor = MaterialTheme.colorScheme.primary,
@@ -264,7 +276,7 @@ private fun TodayScheduleCard(
 
         if (visible.isEmpty()) {
             Text(
-                text = "Brak zaplanowanych zajęć. Odpocznij!",
+                text = stringResource(R.string.home_no_classes),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = WseiSpacing.s)
@@ -276,12 +288,13 @@ private fun TodayScheduleCard(
                     nowEpochMillis = now,
                     state = classRowStateOf(event, now, activeId, nextId),
                     compact = true,
-                    showContainer = false
+                    showContainer = false,
+                    lecturerLabel = uiState.maskLecturer(event.lecturer.localizedNameOrPlaceholder())
                 )
             }
             if (hiddenCount > 0) {
                 Text(
-                    text = "+ $hiddenCount więcej w planie",
+                    text = pluralStringResource(R.plurals.home_more_in_schedule, hiddenCount, hiddenCount),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(start = WseiSpacing.s, top = WseiSpacing.xs)
@@ -344,8 +357,12 @@ private fun QuickShortcutsGrid(
 
     val shortcuts = listOf(
         Shortcut(
-            title = "Plan zajęć",
-            value = if (weekClasses > 0) "$weekClasses zaj. w tym tyg." else "Wolny tydzień",
+            title = stringResource(R.string.nav_schedule),
+            value = if (weekClasses > 0) {
+                pluralStringResource(R.plurals.home_week_classes, weekClasses, weekClasses)
+            } else {
+                stringResource(R.string.home_week_free)
+            },
             icon = WseiIcons.CalendarMonth,
             iconShape = M3XCookieShape,
             containerColor = colors.primaryContainer,
@@ -355,8 +372,11 @@ private fun QuickShortcutsGrid(
             onClick = onOpenSchedule
         ),
         Shortcut(
-            title = "Oceny",
-            value = "Średnia ${uiState.maskSensitive(String.format(Locale.US, "%.2f", session?.averageCurrentSemester ?: 0.0))}",
+            title = stringResource(R.string.home_shortcut_grades),
+            value = stringResource(
+                R.string.home_average_value,
+                uiState.maskSensitive(String.format(Locale.US, "%.2f", session?.averageCurrentSemester ?: 0.0))
+            ),
             icon = WseiIcons.School,
             iconShape = M3XCloverShape,
             containerColor = colors.secondaryContainer,
@@ -366,8 +386,12 @@ private fun QuickShortcutsGrid(
             onClick = onOpenSubjects
         ),
         Shortcut(
-            title = "Finanse",
-            value = if (unpaidCount > 0) "$unpaidCount do zapłaty" else "Wszystko opłacone",
+            title = stringResource(R.string.nav_finances),
+            value = if (unpaidCount > 0) {
+                pluralStringResource(R.plurals.home_unpaid_count, unpaidCount, unpaidCount)
+            } else {
+                stringResource(R.string.home_all_paid)
+            },
             icon = WseiIcons.AccountBalanceWallet,
             iconShape = M3XSunnyShape,
             containerColor = colors.tertiaryContainer,
@@ -377,8 +401,12 @@ private fun QuickShortcutsGrid(
             onClick = onOpenFinances
         ),
         Shortcut(
-            title = "Ogłoszenia",
-            value = if (unread > 0) "$unread nieprzeczytane" else "Brak nowych",
+            title = stringResource(R.string.announcements_title),
+            value = if (unread > 0) {
+                pluralStringResource(R.plurals.home_unread_count, unread, unread)
+            } else {
+                stringResource(R.string.home_no_new_announcements)
+            },
             icon = WseiIcons.Campaign,
             iconShape = M3XCookieShape,
             containerColor = if (unread > 0) colors.errorContainer else colors.surfaceContainerHigh,
@@ -500,11 +528,11 @@ private fun NextPaymentCard(
     ) {
         WseiCardHeader(
             title = when {
-                nextUnpaid == null -> "Wszystko opłacone"
-                urgent -> "Termin w tym miesiącu"
-                else -> "Najbliższa opłata"
+                nextUnpaid == null -> stringResource(R.string.home_all_paid)
+                urgent -> stringResource(R.string.home_payment_due_this_month)
+                else -> stringResource(R.string.home_payment_next)
             },
-            overline = "Finanse",
+            overline = stringResource(R.string.nav_finances),
             overlineColor = if (urgent) colors.error else colors.primary,
             icon = if (nextUnpaid == null) WseiIcons.CheckCircle else WseiIcons.AccountBalanceWallet,
             iconContainerColor = if (urgent) colors.error else colors.secondaryContainer,
@@ -529,7 +557,7 @@ private fun NextPaymentCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "Termin: ${nextUnpaid.dueDateIso}",
+                        text = stringResource(R.string.home_payment_due_date, nextUnpaid.dueDateIso),
                         style = MaterialTheme.typography.bodyMedium,
                         color = contentColor.copy(alpha = 0.75f)
                     )
@@ -542,7 +570,7 @@ private fun NextPaymentCard(
             }
         } else {
             Text(
-                text = "Brak zaległości w bieżącym okresie.",
+                text = stringResource(R.string.home_payment_none_supporting),
                 style = MaterialTheme.typography.bodyMedium,
                 color = contentColor.copy(alpha = 0.75f)
             )

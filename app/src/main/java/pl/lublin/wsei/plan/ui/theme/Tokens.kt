@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MotionScheme
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -80,17 +81,74 @@ fun wseiGroupItemShape(
 }
 
 /**
- * Sprężyny w duchu `MotionScheme.expressive()`:
+ * Sprężyny w duchu `MotionScheme.expressive()`, ale szybsze — interfejs ma reagować „od razu”,
+ * zachowując sprężysty charakter M3 Expressive (bez tween/linear):
  * - [spatial] — ruch i zmiana kształtu, z lekkim odbiciem,
- * - [fastSpatial] — reakcje na dotyk (wciśnięcie, morfing rogów),
+ * - [fastSpatial] — reakcje na dotyk (wciśnięcie, morfing rogów, rozwinięcie pigułki),
  * - [size] — zmiana rozmiaru bez odbicia (bez migania przy rozwijaniu kart),
- * - [effects] — kolor i przezroczystość, bez odbicia.
+ * - [effects] — kolor i przezroczystość, bez odbicia,
+ * - [fastEffects] — znikanie elementów, które ustępują miejsca nowej treści.
  */
 object WseiMotion {
-    fun <T> spatial(): FiniteAnimationSpec<T> = spring(dampingRatio = 0.8f, stiffness = 380f)
-    fun <T> fastSpatial(): FiniteAnimationSpec<T> = spring(dampingRatio = 0.6f, stiffness = 800f)
+    /** Default spatial spring: ~1.8× stiffer than expressive's 380, same 0.8 damping. */
+    const val SpatialStiffness: Float = 700f
+    const val SpatialDamping: Float = 0.8f
+
+    /** Touch feedback spring: ~1.75× stiffer than expressive's fast spatial (800). */
+    const val FastSpatialStiffness: Float = 1400f
+    const val FastSpatialDamping: Float = 0.7f
+
+    /** Size changes: between `StiffnessMedium` and `StiffnessMediumLow`, never bouncy. */
+    const val SizeStiffness: Float = 1000f
+
+    /** Colour/alpha: "medium-high" stiffness (Compose has no such constant; 2× `StiffnessMedium`). */
+    const val EffectsStiffness: Float = 3000f
+
+    fun <T> spatial(): FiniteAnimationSpec<T> =
+        spring(dampingRatio = SpatialDamping, stiffness = SpatialStiffness)
+
+    fun <T> fastSpatial(): FiniteAnimationSpec<T> =
+        spring(dampingRatio = FastSpatialDamping, stiffness = FastSpatialStiffness)
+
     fun <T> size(): FiniteAnimationSpec<T> =
-        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = SizeStiffness)
+
     fun <T> effects(): FiniteAnimationSpec<T> =
-        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = EffectsStiffness)
+
+    fun <T> fastEffects(): FiniteAnimationSpec<T> =
+        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+}
+
+/**
+ * Snappier variant of [MotionScheme.expressive] used by the app theme, so Material components
+ * (button-group morphs, toggle buttons, loading indicators, top app bars) move at the same pace
+ * as [WseiMotion]. Spatial springs keep expressive's damping (the characteristic overshoot) with
+ * higher stiffness; effects springs are already fast and are delegated to expressive unchanged.
+ */
+@Suppress("UNCHECKED_CAST")
+object WseiMotionScheme : MotionScheme {
+    private val expressive: MotionScheme = MotionScheme.expressive()
+
+    private val defaultSpatial = spring<Any?>(
+        dampingRatio = WseiMotion.SpatialDamping,
+        stiffness = WseiMotion.SpatialStiffness
+    )
+    private val fastSpatial = spring<Any?>(
+        dampingRatio = 0.6f,
+        stiffness = WseiMotion.FastSpatialStiffness
+    )
+    private val slowSpatial = spring<Any?>(dampingRatio = 0.8f, stiffness = 380f)
+
+    override fun <T> defaultSpatialSpec(): FiniteAnimationSpec<T> = defaultSpatial as FiniteAnimationSpec<T>
+
+    override fun <T> fastSpatialSpec(): FiniteAnimationSpec<T> = fastSpatial as FiniteAnimationSpec<T>
+
+    override fun <T> slowSpatialSpec(): FiniteAnimationSpec<T> = slowSpatial as FiniteAnimationSpec<T>
+
+    override fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> = expressive.defaultEffectsSpec()
+
+    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = expressive.fastEffectsSpec()
+
+    override fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> = expressive.slowEffectsSpec()
 }

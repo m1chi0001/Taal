@@ -23,12 +23,18 @@ import kotlinx.serialization.json.jsonObject
  */
 sealed class AprApiException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
-/** HTTP 401, ABP `unAuthorizedRequest`, or a 302 to the login page. Automatic re-auth already failed. */
+/**
+ * HTTP 401, ABP `unAuthorizedRequest`, or a 302 to the login page. Automatic re-auth already failed.
+ * The message is diagnostic only; the UI shows a localized text for this type (see `describeError`).
+ */
 class AprSessionExpiredException(
-    message: String = "Sesja w Wirtualnym Dziekanacie wygasła. Zaloguj się ponownie."
+    message: String = "Virtual Dean's Office session expired."
 ) : AprApiException(message)
 
-/** ABP returned `success: false` with an `error` object (validation, business rule, 500). */
+/**
+ * ABP returned `success: false` with an `error` object (validation, business rule, 500).
+ * [message] is the server's own text, or blank when the server gave none.
+ */
 class AprServerException(
     val errorCode: Int?,
     message: String,
@@ -57,17 +63,17 @@ object AbpEnvelope {
         location != null && LOGIN_REDIRECT_HINT.containsMatchIn(location)
 
     fun unwrap(json: Json, rawBody: String): JsonElement {
-        val text = rawBody.trim().removePrefix("﻿")
+        val text = rawBody.trim().removePrefix("\uFEFF")
         if (text.isEmpty()) return JsonNull
         if (text.startsWith("<")) {
             throw AprMalformedResponseException(
-                "Serwer zwrócił stronę HTML zamiast JSON (możliwa zmiana API lub przekierowanie do logowania)."
+                "Server returned an HTML page instead of JSON (API change or redirect to login)."
             )
         }
         val element = try {
             json.parseToJsonElement(text)
         } catch (e: SerializationException) {
-            throw AprMalformedResponseException("Nieprawidłowa odpowiedź JSON z Wirtualnego Dziekanatu.", e)
+            throw AprMalformedResponseException("Invalid JSON response from the Virtual Dean's Office.", e)
         }
         val obj = element as? JsonObject ?: return element
         val looksLikeEnvelope = "__abp" in obj ||
@@ -80,8 +86,7 @@ object AbpEnvelope {
         val success = (obj["success"] as? JsonPrimitive)?.booleanOrNull ?: true
         if (!success) {
             val error = obj["error"]?.takeIf { it is JsonObject }?.jsonObject
-            val message = (error?.get("message") as? JsonPrimitive)?.contentOrNull
-                ?: "Wirtualny Dziekanat zgłosił błąd."
+            val message = (error?.get("message") as? JsonPrimitive)?.contentOrNull.orEmpty()
             val details = (error?.get("details") as? JsonPrimitive)?.contentOrNull
             val code = (error?.get("code") as? JsonPrimitive)?.intOrNull
             throw AprServerException(code, message, details)
@@ -96,12 +101,12 @@ object AbpEnvelope {
             json.decodeFromJsonElement(deserializer, result)
         } catch (e: SerializationException) {
             throw AprMalformedResponseException(
-                "Nie udało się odczytać danych (${deserializer.descriptor.serialName}): ${e.message}",
+                "Could not decode ${deserializer.descriptor.serialName}: ${e.message}",
                 e
             )
         } catch (e: IllegalArgumentException) {
             throw AprMalformedResponseException(
-                "Nie udało się odczytać danych (${deserializer.descriptor.serialName}): ${e.message}",
+                "Could not decode ${deserializer.descriptor.serialName}: ${e.message}",
                 e
             )
         }
@@ -121,7 +126,7 @@ internal suspend fun <T> HttpResponse.decodeAbp(
     if (code in 300..399) {
         val location = headers[HttpHeaders.Location]
         if (AbpEnvelope.isLoginRedirect(location)) throw AprSessionExpiredException()
-        throw AprHttpException(code, "Nieoczekiwane przekierowanie HTTP $code${location?.let { " → $it" }.orEmpty()}.")
+        throw AprHttpException(code, "Unexpected HTTP redirect $code${location?.let { " → $it" }.orEmpty()}.")
     }
     val text = bodyAsText()
     if (!status.isSuccess()) {
@@ -129,7 +134,7 @@ internal suspend fun <T> HttpResponse.decodeAbp(
         runCatching { AbpEnvelope.unwrap(json, text) }
             .exceptionOrNull()
             ?.let { if (it is AprApiException && it !is AprMalformedResponseException) throw it }
-        throw AprHttpException(code, "Wirtualny Dziekanat odpowiedział kodem HTTP $code.")
+        throw AprHttpException(code, "Virtual Dean's Office responded with HTTP $code.")
     }
     return AbpEnvelope.decode(json, text, deserializer)
 }

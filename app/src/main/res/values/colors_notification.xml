@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Live Notification palette (light shade). Notifications are drawn by SystemUI, not Compose, so the
+    Taal Material 3 Expressive tokens are mirrored here; values-night holds the dark counterparts.
+    NotificationHelper resolves these against the *system* night mode, not the in-app theme.
+-->
+<resources>
+    <!-- Taal primary: small icon tint, active class segment, subject badge, progress tracker. -->
+    <color name="notif_accent">#FF006B58</color>
+    <!-- Content on notif_accent (badge icon). -->
+    <color name="notif_on_accent">#FFFFFFFF</color>
+    <!-- Other classes of the day on the segmented progress bar (Taal secondary). -->
+    <color name="notif_segment_class">#FF3F6375</color>
+    <!-- Breaks on the progress bar and the badge during a break (neutral, visible on light shade). -->
+    <color name="notif_segment_break">#FF8F9A95</color>
+    <!-- Ring around the progress tracker thumb, separates it from the bar. -->
+    <color name="notif_tracker_ring">#FFFFFFFF</color>
+</resources>

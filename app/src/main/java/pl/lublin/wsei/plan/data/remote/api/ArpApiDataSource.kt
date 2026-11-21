@@ -24,6 +24,7 @@ import pl.lublin.wsei.plan.domain.model.DataSourceOrigin
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
 import pl.lublin.wsei.plan.domain.model.FinancialObligation
 import pl.lublin.wsei.plan.domain.model.GradeItem
+import pl.lublin.wsei.plan.domain.model.GroupCodeParser
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
 import pl.lublin.wsei.plan.domain.model.ScholarshipApplication
 import pl.lublin.wsei.plan.domain.model.ScholarshipPayoutItem
@@ -43,6 +44,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
+import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.data.local.LocalizedStrings
 
 /**
  * Primary data source: APR System "Mobilny Student" REST API (`MobilnyStudent.ApiPa`) for
@@ -59,7 +62,8 @@ import kotlin.math.roundToInt
 class ArpApiDataSource @Inject constructor(
     private val httpClient: HttpClient,
     private val sessionCookieJar: ArpSessionCookieJar,
-    private val json: Json
+    private val json: Json,
+    private val strings: LocalizedStrings
 ) : WseiRemoteDataSource {
 
     override val sourceOrigin: DataSourceOrigin = DataSourceOrigin.APR_WD_API
@@ -153,18 +157,18 @@ class ArpApiDataSource @Inject constructor(
             authResponse.decodeAbp(json, MobileAuthResponseDto.serializer())
         } catch (e: AprSessionExpiredException) {
             // On the login call a 401 means "wrong credentials", not "session expired".
-            throw AprServerException(401, "Nieprawidłowy login lub hasło.", null)
+            throw AprServerException(401, strings.get(R.string.error_login_invalid_credentials), null)
         }
-        val authResult = decodedAuth ?: error("Serwer nie zwrócił danych logowania. Spróbuj ponownie.")
+        val authResult = decodedAuth ?: error(strings.get(R.string.error_login_no_data))
 
         if (authResult.shouldResetPassword) {
-            error("Konto wymaga zmiany hasła w Wirtualnym Dziekanacie.")
+            error(strings.get(R.string.error_login_password_reset_required))
         }
         if (authResult.requiresTwoFactorVerification && authResult.accessToken.isNullOrBlank()) {
-            error("Konto wymaga kodu weryfikacji dwuetapowej.")
+            error(strings.get(R.string.error_login_two_factor_required))
         }
         val accessToken = authResult.accessToken?.takeIf { it.isNotBlank() }
-            ?: error("Serwer nie zwrócił tokenu dostępu. Spróbuj ponownie.")
+            ?: error(strings.get(R.string.error_login_no_token))
 
         sessionCookieJar.bearerToken = accessToken
         sessionCookieJar.savedLogin = login
@@ -291,11 +295,14 @@ class ArpApiDataSource @Inject constructor(
                 semesterLabel = sem.name.ifBlank { "Semestr ${sem.number}" },
                 semesterNumber = sem.number,
                 groups = sem.groups.map { grp ->
+                    // The group number is encoded in the code ("Lab4/1/I/N" → 4); `editionName` is the
+                    // group's edition, not its number, and must not be used (it showed "Gr. 1" for lab 4).
+                    val parsed = GroupCodeParser.parse(grp.name, grp.type)
                     StudentGroupItem(
                         id = grp.id,
                         groupCode = grp.name,
                         formName = grp.type.ifBlank { "Grupa" },
-                        groupNumber = grp.editionName.ifBlank { "1" },
+                        groupNumber = parsed.number.orEmpty(),
                         isPlanVisible = grp.isPlanVisible
                     )
                 }
@@ -517,7 +524,7 @@ class ArpApiDataSource @Inject constructor(
         }
         answer?.paymentUrl?.takeIf { it.isNotBlank() }
             ?: error(answer?.errorMessage?.ifBlank { null } ?: answer?.error?.ifBlank { null }
-                ?: "Brak linku do płatności online BlueMedia.")
+                ?: strings.get(R.string.error_payment_no_link))
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -582,11 +589,11 @@ class ArpApiDataSource @Inject constructor(
             parameter("Id", attachmentId)
             parameter("PersonType", PERSON_TYPE_STUDENT)
             parameter("IdLoggedPersonType", session.studId)
-        } ?: error("Nie udało się pobrać załącznika.")
+        } ?: error(strings.get(R.string.error_attachment_download))
         AnnouncementAttachment(
             id = dto.id.takeIf { it != 0 } ?: attachmentId,
             fileName = dto.name.ifBlank { "zalacznik_$attachmentId.pdf" },
-            fileBytesBase64 = dto.fileBytes?.ifBlank { null } ?: error("Załącznik jest pusty.")
+            fileBytesBase64 = dto.fileBytes?.ifBlank { null } ?: error(strings.get(R.string.data_attachment_empty))
         )
     }
 
