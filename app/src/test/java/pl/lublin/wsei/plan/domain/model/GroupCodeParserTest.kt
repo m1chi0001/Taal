@@ -69,7 +69,55 @@ class GroupCodeParserTest {
 
     @Test
     fun `bare study track number is not a group number`() {
-        assertParsed("1/I/N", GroupClassKind.OTHER, null, typeHint = "Tok")
+        assertParsed("1/I/N", GroupClassKind.STUDY_TRACK, null, typeHint = "Tok")
+        assertParsed("1/I/N", GroupClassKind.OTHER, null)
+    }
+
+    @Test
+    fun `ROK entries are the study track, never a class group`() {
+        assertParsed("ROK1/ N", GroupClassKind.STUDY_TRACK, null, typeHint = "Tok")
+        assertParsed("ROK1/ N", GroupClassKind.STUDY_TRACK, null)
+        assertParsed("ROK2/S", GroupClassKind.STUDY_TRACK, null, typeHint = "Grupa")
+        assertParsed("rok 3/ N", GroupClassKind.STUDY_TRACK, null)
+        val track = StudentGroupItem(id = 9, groupCode = "ROK1/ N", formName = "Tok", groupNumber = "1")
+        assertEquals(true, track.isStudyTrack)
+        assertEquals("", track.displayGroupNumber)
+    }
+
+    @Test
+    fun `Tok type wins over the code`() {
+        assertParsed("KI/N/1", GroupClassKind.STUDY_TRACK, null, typeHint = "Tok")
+    }
+
+    @Test
+    fun `professional practice`() {
+        assertParsed("PZZ1/1/I/N", GroupClassKind.PRACTICE, "1", typeHint = "Prakt zaw zajęcia")
+        assertParsed("PZZ1/1/I/N", GroupClassKind.PRACTICE, "1")
+        assertParsed("PZZ/1/I/N", GroupClassKind.PRACTICE, null)
+        assertEquals(false, StudentGroupItem(1, "PZZ1/1/I/N", "Prakt zaw zajęcia", "1").isStudyTrack)
+    }
+
+    @Test
+    fun `e-learning code with a space instead of a slash`() {
+        assertParsed("Elrn1/1/I N", GroupClassKind.ELEARNING, "1", typeHint = "Elearning")
+        assertParsed("Elrn1 1/I/N", GroupClassKind.ELEARNING, "1")
+        assertParsed("Elrn2/1/I N", GroupClassKind.ELEARNING, "2")
+    }
+
+    @Test
+    fun `all observed codes`() {
+        assertParsed("W/1/I/N", GroupClassKind.LECTURE, null, typeHint = "Wykład")
+        assertParsed("Cw1/1/I/N", GroupClassKind.EXERCISES, "1", typeHint = "Ćwiczenia")
+        assertParsed("Lab4/1/I/N", GroupClassKind.LAB, "4", typeHint = "Laboratorium")
+        assertParsed("Elrn1/1/I N", GroupClassKind.ELEARNING, "1", typeHint = "Elearning")
+        assertParsed("PZZ1/1/I/N", GroupClassKind.PRACTICE, "1", typeHint = "Prakt zaw zajęcia")
+        assertParsed("ROK1/ N", GroupClassKind.STUDY_TRACK, null, typeHint = "Tok")
+    }
+
+    @Test
+    fun `demo account codes are class groups`() {
+        assertEquals(false, StudentGroupItem(503, "WYK-CSI-5", "Wykład kierunkowy", "5").isStudyTrack)
+        assertEquals(false, StudentGroupItem(501, "LAB-CSI-5A", "Laboratorium CyberSec", "5A").isStudyTrack)
     }
 
     @Test
@@ -80,7 +128,7 @@ class GroupCodeParserTest {
     @Test
     fun `kind falls back to the type field`() {
         assertParsed("XYZ3/1/I/N", GroupClassKind.LAB, "3", typeHint = "Laboratorium")
-        assertParsed("PZZ1/1/I/N", GroupClassKind.OTHER, "1", typeHint = "Prakt zaw zajęcia")
+        assertParsed("XYZ1/1/I/N", GroupClassKind.PRACTICE, "1", typeHint = "Prakt zaw zajęcia")
         assertParsed("Gr1/1/I/N", GroupClassKind.ELEARNING, "1", typeHint = "Elearning")
     }
 

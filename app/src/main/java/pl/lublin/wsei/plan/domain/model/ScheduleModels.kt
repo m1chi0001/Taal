@@ -317,6 +317,10 @@ data class StudentGroupItem(
     /** Kind of classes this group is for, derived from [groupCode] with [formName] as a fallback. */
     val groupKind: GroupClassKind
         get() = GroupCodeParser.parse(groupCode, formName).kind
+
+    /** Study-track entry ("Tok", e.g. `ROK1/ N`) — part of "Tok nauki", not a class group. */
+    val isStudyTrack: Boolean
+        get() = groupKind == GroupClassKind.STUDY_TRACK
 }
 
 @Immutable

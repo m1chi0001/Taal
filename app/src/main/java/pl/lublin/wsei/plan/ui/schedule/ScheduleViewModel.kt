@@ -57,6 +57,10 @@ import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import javax.inject.Inject
+import pl.lublin.wsei.plan.domain.model.StudyTrackInfo
+import pl.lublin.wsei.plan.domain.model.StudyTrackParser
+import pl.lublin.wsei.plan.domain.schedule.ScheduleFocus
+import pl.lublin.wsei.plan.domain.schedule.ScheduleFocusResolver
 import pl.lublin.wsei.plan.data.local.AppPreferencesStore
 import pl.lublin.wsei.plan.domain.attachments.AttachmentOpenResult
 import pl.lublin.wsei.plan.domain.attachments.AttachmentOpener
@@ -228,13 +232,31 @@ data class ScheduleUiState(
             )
     }
 
+    /**
+     * Day to focus on now (today, tomorrow, later this zjazd or the next zjazd) — shared by Start
+     * and the default day of Plan zajęć. Recomputed every minute via [nowEpochMillis].
+     */
+    val scheduleFocus: ScheduleFocus by lazy(LazyThreadSafetyMode.NONE) {
+        ScheduleFocusResolver.resolve(allEvents, nowEpochMillis)
+    }
+
+    /** "Tok nauki" (year of study, academic year, semester, mode) — separate from class groups. */
+    val studyTrack: StudyTrackInfo? by lazy(LazyThreadSafetyMode.NONE) {
+        StudyTrackParser.from(studentGroups, currentSession?.courseOfStudyCode, currentSession?.studyMode)
+    }
+
+    /** Class groups per semester, without study-track ("Tok") entries. */
+    val classGroupsBySemester: List<StudentSemesterGroups> by lazy(LazyThreadSafetyMode.NONE) {
+        studentGroups.map { sem -> sem.copy(groups = sem.groups.filterNot { it.isStudyTrack }) }
+    }
+
     /** First real group code (or the course-of-study code); null when the student has none. */
     val primaryStudentGroupLabel: String?
         get() {
             val firstGroup = studentGroups
                 .firstOrNull()
                 ?.groups
-                ?.firstOrNull { !it.formName.equals("Tok", ignoreCase = true) }
+                ?.firstOrNull { !it.isStudyTrack && !it.formName.equals("Tok", ignoreCase = true) }
                 ?.groupCode
             return firstGroup ?: currentSession?.courseOfStudyCode
         }
@@ -378,10 +400,18 @@ class ScheduleViewModel @Inject constructor(
                         ?.dateIso
                         ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 
-                    val targetDate = if (state.allEvents.isEmpty() && activeEventDate != null) {
-                        activeEventDate
+                    // First load: open Plan zajęć on the focus day — today while classes are
+                    // ongoing/upcoming, otherwise the next class day (tomorrow / next zjazd).
+                    val focusDate = if (state.allEvents.isEmpty()) {
+                        ScheduleFocusResolver.resolve(events, state.nowEpochMillis).dateIso
+                            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                     } else {
-                        state.selectedDate
+                        null
+                    }
+                    val targetDate = when {
+                        focusDate != null -> focusDate
+                        state.allEvents.isEmpty() && activeEventDate != null -> activeEventDate
+                        else -> state.selectedDate
                     }
 
                     state.copy(

@@ -60,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,9 +87,12 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.os.LocaleListCompat
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.graphics.shapes.Morph
 import pl.lublin.wsei.plan.BuildConfig
 import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.data.update.UpdateViewModel
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.AppColorPalette
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
@@ -117,7 +121,9 @@ import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import pl.lublin.wsei.plan.ui.theme.isWseiDarkTheme
+import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
 import pl.lublin.wsei.plan.ui.theme.wseiPaletteSwatch
+import pl.lublin.wsei.plan.ui.update.UpdateChangelogSheet
 import androidx.compose.ui.res.pluralStringResource
 
 private const val LINK_VIRTUAL_DEAN = "https://dziekanat.wsei.lublin.pl/"
@@ -164,9 +170,12 @@ fun MoreScreen(
     onToggleLiveNotification: (Boolean) -> Unit,
     onToggleHideSensitiveData: (Boolean) -> Unit,
     onRefresh: () -> Unit,
-    onSelectColorPalette: (AppColorPalette) -> Unit = {}
+    onSelectColorPalette: (AppColorPalette) -> Unit = {},
+    updateViewModel: UpdateViewModel = hiltViewModel()
 ) {
     val windowLayout = LocalWseiWindowLayout.current
+    val updateStatus by updateViewModel.updateStatus.collectAsStateWithLifecycle()
+    val updateAvailable = updateStatus.isUpdateAvailable
     val subPage: @Composable (MoreSubView, embedded: Boolean) -> Unit = { subView, embedded ->
         val onBack: (() -> Unit)? = if (embedded) null else ({ onNavigateSubView(MoreSubView.HUB) })
         when (subView) {
@@ -176,7 +185,7 @@ fun MoreScreen(
                     onOpenAnnouncements = { onNavigateSubView(MoreSubView.ANNOUNCEMENTS) }
                 )
             } else {
-                MoreHub(uiState = uiState, onOpen = onNavigateSubView)
+                MoreHub(uiState = uiState, onOpen = onNavigateSubView, updateAvailable = updateAvailable)
             }
             MoreSubView.ANNOUNCEMENTS -> AnnouncementsScreen(
                 uiState = uiState,
@@ -210,7 +219,8 @@ fun MoreScreen(
                     uiState = uiState,
                     onOpen = onNavigateSubView,
                     selected = currentSubView,
-                    forceList = true
+                    forceList = true,
+                    updateAvailable = updateAvailable
                 )
             },
             second = {
@@ -219,7 +229,7 @@ fun MoreScreen(
                     transitionSpec = {
                         (fadeIn(WseiMotion.effects()) +
                             slideInHorizontally(WseiMotion.spatial()) { width -> width / 12 }) togetherWith
-                            fadeOut(WseiMotion.effects())
+                            fadeOut(WseiMotion.fastEffects()) using null
                     },
                     modifier = Modifier.fillMaxSize(),
                     label = "moreDetailTransition"
@@ -234,7 +244,7 @@ fun MoreScreen(
                 val forward = targetState != MoreSubView.HUB
                 (fadeIn(WseiMotion.effects()) +
                     slideInHorizontally(WseiMotion.spatial()) { width -> if (forward) width / 8 else -width / 8 }) togetherWith
-                    fadeOut(WseiMotion.effects())
+                    fadeOut(WseiMotion.fastEffects()) using null
             },
             modifier = Modifier.fillMaxSize(),
             label = "moreSubViewTransition"
@@ -286,7 +296,9 @@ private class HubEntry(
     val icon: ImageVector,
     val onClick: () -> Unit,
     val subView: MoreSubView? = null,
-    val unreadCount: Int = 0
+    val unreadCount: Int = 0,
+    /** Short highlighted label, e.g. "Nowa wersja" on "O aplikacji". */
+    val badge: String? = null
 )
 
 /** Badge with the number of unread announcements („1 nowe”, „5 nowych”). */
@@ -298,7 +310,8 @@ private fun MoreHub(
     uiState: ScheduleUiState,
     onOpen: (MoreSubView) -> Unit,
     selected: MoreSubView? = null,
-    forceList: Boolean = false
+    forceList: Boolean = false,
+    updateAvailable: Boolean = false
 ) {
     val unread = uiState.unreadAnnouncementsCount
     val context = LocalContext.current
@@ -328,7 +341,8 @@ private fun MoreHub(
             supporting = stringResource(R.string.about_hub_supporting, BuildConfig.VERSION_NAME),
             icon = WseiIcons.Info,
             onClick = { onOpen(MoreSubView.ABOUT) },
-            subView = MoreSubView.ABOUT
+            subView = MoreSubView.ABOUT,
+            badge = if (updateAvailable) stringResource(R.string.about_hub_update_badge) else null
         )
     )
     val links = listOf(
@@ -387,6 +401,14 @@ private fun HubTrailing(entry: HubEntry) {
             text = newCountLabel(entry.unreadCount),
             containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            emphasized = true
+        )
+    }
+    if (entry.badge != null) {
+        WseiPill(
+            text = entry.badge,
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
             emphasized = true
         )
     }
@@ -566,6 +588,7 @@ private fun SettingsScreen(
     onToggleLiveNotification: (Boolean) -> Unit,
     onToggleHideSensitiveData: (Boolean) -> Unit
 ) {
+    var showChangelog by rememberSaveable { mutableStateOf(false) }
     MorePage(title = stringResource(R.string.settings_title), onBack = onBack, embedded = embedded) { itemModifier ->
         item(key = "section_theme", contentType = "section") {
             WseiSectionTitle(stringResource(R.string.settings_section_theme), modifier = itemModifier)
@@ -625,6 +648,27 @@ private fun SettingsScreen(
                 )
             }
         }
+
+        item(key = "section_app", contentType = "section") {
+            WseiSectionTitle(stringResource(R.string.about_section_app), modifier = itemModifier)
+        }
+        item(key = "app_changelog", contentType = "app_row") {
+            WseiListItem(
+                title = stringResource(R.string.about_whats_new_title),
+                supporting = stringResource(R.string.about_whats_new_supporting),
+                icon = WseiIcons.AutoAwesome,
+                iconContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                iconContentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                shape = wseiGroupItemShape(0, 1),
+                onClick = { showChangelog = true },
+                trailing = { WseiChevron() },
+                modifier = itemModifier
+            )
+        }
+    }
+
+    if (showChangelog) {
+        UpdateChangelogSheet(onDismiss = { showChangelog = false })
     }
 }
 

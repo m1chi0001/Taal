@@ -44,22 +44,6 @@
     <string name="about_hub_supporting">Wersja %1$s • licencja i kod źródłowy</string>
     <string name="about_tagline">Plan zajęć, oceny, finanse i ogłoszenia z Wirtualnego Dziekanatu Uniwersytetu WSEI w Lublinie</string>
     <string name="about_version">Wersja %1$s</string>
-    <string name="about_min_android">Android 8.0+</string>
-    <string name="about_source_code">Kod źródłowy</string>
-    <string name="about_releases">Wydania</string>
-    <string name="about_releases_supporting">Historia wersji i pliki APK</string>
-    <string name="about_project_title">Projekt</string>
-    <string name="about_author">Autor</string>
-    <string name="about_author_supporting">%1$s na GitHubie</string>
-    <string name="about_tech_title">Technologie</string>
-    <string name="about_tech_architecture">Clean Architecture, MVVM i pamięć podręczna offline-first.</string>
-    <string name="about_licence_title">Licencja</string>
-    <string name="about_licence_app">Aplikacja</string>
-    <string name="about_licence_mit">MIT</string>
-    <string name="about_licence_copyright">Prawa autorskie</string>
-    <string name="about_licence_font">Czcionka</string>
-    <string name="about_licence_data">Dane</string>
-    <string name="about_licence_data_value">Wirtualny Dziekanat (APR System)</string>
     <string name="about_disclaimer">Niezależny projekt studencki, niepowiązany oficjalnie z Uniwersytetem WSEI ani z APR System.</string>
 
     <string name="about_update_title">Aktualizacje</string>
@@ -70,8 +54,6 @@
     <string name="about_update_downloading">Pobieranie wersji %1$s… %2$d%%</string>
     <string name="about_update_ready">Wersja %1$s jest pobrana i gotowa do instalacji.</string>
     <string name="about_update_error">Nie udało się sprawdzić aktualizacji.</string>
-    <string name="about_update_whats_new">Co nowego</string>
-    <string name="about_update_download">Pobierz</string>
     <string name="about_update_cancel">Anuluj</string>
     <string name="about_update_install">Zainstaluj</string>
     <string name="about_update_allow_and_install">Zezwól i zainstaluj</string>
@@ -79,9 +61,48 @@
     <string name="about_update_check_again">Sprawdź ponownie</string>
     <string name="about_update_permission_hint">Android poprosi o zgodę na instalowanie aplikacji z Taala. Po jej nadaniu wróć i dotknij „Zainstaluj”.</string>
 
+    <string name="about_section_app">Aplikacja</string>
+    <string name="about_whats_new_title">Co nowego</string>
+    <string name="about_whats_new_supporting">Historia zmian wszystkich wersji</string>
+    <string name="about_github">GitHub</string>
+    <string name="about_credits_line">Kotlin · Jetpack Compose · Material 3 Expressive</string>
+    <string name="about_licence_line">Licencja MIT · © 2026 %1$s</string>
+    <string name="about_hub_update_badge">Nowa wersja</string>
+
+    <!-- Aktualizacje: baner i historia zmian -->
+    <string name="update_prompt_title">Dostępna aktualizacja</string>
+    <string name="update_prompt_installed">Masz %1$s</string>
+    <string name="update_prompt_download">Pobierz aktualizację</string>
+    <string name="update_prompt_open_release">Otwórz stronę wydania</string>
+    <string name="update_prompt_changes">Zobacz zmiany</string>
+    <string name="update_prompt_dismiss">Ukryj powiadomienie o tej wersji</string>
+    <string name="update_prompt_downloading">Pobieranie… %1$d%%</string>
+
+    <string name="changelog_title">Historia zmian</string>
+    <string name="changelog_subtitle">Wszystkie wydania Taala, od najnowszego</string>
+    <string name="changelog_version_badge">v%1$s</string>
+    <string name="changelog_latest">Najnowsza</string>
+    <string name="changelog_installed">Zainstalowana</string>
+    <string name="changelog_loading">Wczytywanie historii zmian…</string>
+    <string name="changelog_empty">Nie udało się wczytać historii zmian. Sprawdź połączenie z internetem.</string>
+    <string name="changelog_retry">Spróbuj ponownie</string>
+    <string name="changelog_open_github">Wszystkie wydania na GitHubie</string>
+    <string name="changelog_open_release">Otwórz wydanie</string>
+    <string name="changelog_no_notes">Brak opisu zmian dla tego wydania.</string>
+
     <!-- Profil -->
     <string name="profile_group_number">gr. %1$s</string>
     <string name="profile_groups_empty">Brak przypisanych grup w bieżącym semestrze.</string>
+    <string name="profile_study_details">Szczegóły studiów</string>
+    <string name="profile_track_title">Tok nauki</string>
+    <string name="profile_track_year">Rok %1$d</string>
+    <string name="profile_track_winter">Semestr zimowy</string>
+    <string name="profile_track_summer">Semestr letni</string>
+    <string name="profile_track_term_year">%1$s %2$s</string>
+    <string name="profile_track_academic_year">Rok akademicki %1$s</string>
+    <string name="profile_track_full_time">Stacjonarne</string>
+    <string name="profile_track_part_time">Niestacjonarne</string>
+    <string name="profile_track_course">Kierunek %1$s</string>
 
     <!-- Przedmioty -->
     <string name="subjects_semester_number">Semestr %1$d</string>

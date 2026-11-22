@@ -8,6 +8,13 @@ enum class GroupClassKind {
     PROJECT,
     SEMINAR,
     ELEARNING,
+    /** Professional practice ("Praktyki zawodowe", e.g. `PZZ1/1/I/N`). */
+    PRACTICE,
+    /**
+     * Not a class group: the study track / year of study ("Tok", e.g. `ROK1/ N`).
+     * Belongs to "Tok nauki", never to the class-group list.
+     */
+    STUDY_TRACK,
     OTHER
 }
 
@@ -26,9 +33,13 @@ data class ParsedGroupCode(
  * so it must never be shown as one.
  *
  * Handled forms: `W`, `Cw1`, `Ćw2`, `Lab4`, `L4`, `Lab 4`, `lab.4`, `Lab12`, `Proj2`,
- * `grupa laboratoryjna 4`, `Cw1a`. A code without a number yields `number = null` — never a fake "1".
+ * `grupa laboratoryjna 4`, `Cw1a`, `Elrn1/1/I N` (space instead of a slash), `PZZ1/1/I/N`
+ * (professional practice). A code without a number yields `number = null` — never a fake "1".
  * When the code does not reveal the kind, the group type (`MsGroupDto.type`, e.g. "Laboratorium")
  * is used as a hint.
+ *
+ * Study-track entries (`ROK1/ N`, or any entry whose type is "Tok") are [GroupClassKind.STUDY_TRACK]
+ * and never carry a group number: the digit in `ROK1` is the year of study, not a group.
  */
 object GroupCodeParser {
 
@@ -36,12 +47,25 @@ object GroupCodeParser {
     private val NUMBER_REGEX = Regex("(?<![0-9])0*([0-9]{1,3})([A-Za-z])?(?![A-Za-z0-9])")
     private val WORD_SPLIT_REGEX = Regex("[^a-z]+")
     private val FILLER_WORDS = setOf("grupa", "grupy", "gr", "grp", "group", "nr")
+    private val WHITESPACE_REGEX = Regex("\\s+")
+    /** A single token like "Elrn1", "Lab4", "Cw1a". */
+    private val KIND_AND_NUMBER_REGEX = Regex("[\\p{L}.]+[0-9]{1,3}[A-Za-z]?")
 
     fun parse(code: String, typeHint: String = ""): ParsedGroupCode {
         val segments = code.trim().split('/')
-        val head = segments.first().trim()
+        val head = segments.first().trim().let { raw ->
+            // "Elrn1 1/I/N": the kind+number token is complete, the rest belongs to the year segment.
+            val first = raw.split(WHITESPACE_REGEX).first()
+            if (first != raw && KIND_AND_NUMBER_REGEX.matches(first)) first else raw
+        }
 
-        val kind = kindOf(head) ?: kindOf(typeHint) ?: GroupClassKind.OTHER
+        val hintKind = kindOf(typeHint)
+        val kind = when (hintKind) {
+            // The dean's office type "Tok" is authoritative: such an entry is never a class group.
+            GroupClassKind.STUDY_TRACK -> GroupClassKind.STUDY_TRACK
+            else -> kindOf(head) ?: hintKind ?: GroupClassKind.OTHER
+        }
+        if (kind == GroupClassKind.STUDY_TRACK) return ParsedGroupCode(kind = kind, number = null)
 
         // "1/I/N" (a study track) — a bare number followed by year/level segments is not a group number.
         val number = if (head.none { it.isLetter() } && segments.size > 1) {
@@ -69,6 +93,8 @@ object GroupCodeParser {
         word == "p" || word.startsWith("proj") -> GroupClassKind.PROJECT
         word == "s" || word == "sem" || word.startsWith("semin") -> GroupClassKind.SEMINAR
         word == "e" || word.startsWith("elrn") || word.startsWith("elearn") -> GroupClassKind.ELEARNING
+        word == "pzz" || word.startsWith("prakt") -> GroupClassKind.PRACTICE
+        word == "rok" || word == "tok" -> GroupClassKind.STUDY_TRACK
         else -> null
     }
 

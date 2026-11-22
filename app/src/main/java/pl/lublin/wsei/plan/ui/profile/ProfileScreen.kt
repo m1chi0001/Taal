@@ -1,32 +1,43 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package pl.lublin.wsei.plan.ui.profile
 
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,9 +47,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -46,10 +61,15 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.domain.model.ClassType
+import pl.lublin.wsei.plan.domain.model.GroupClassKind
+import pl.lublin.wsei.plan.domain.model.SemesterTerm
 import pl.lublin.wsei.plan.domain.model.StudentGroupItem
 import pl.lublin.wsei.plan.domain.model.StudentSession
+import pl.lublin.wsei.plan.domain.model.StudyMode
+import pl.lublin.wsei.plan.domain.model.StudyTrackInfo
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiTwoPane
 import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
@@ -67,13 +87,13 @@ import pl.lublin.wsei.plan.ui.components.WseiPill
 import pl.lublin.wsei.plan.ui.components.WseiScreenFrame
 import pl.lublin.wsei.plan.ui.components.WseiScreenScaffold
 import pl.lublin.wsei.plan.ui.components.WseiSectionTitle
-import pl.lublin.wsei.plan.ui.components.WseiStat
-import pl.lublin.wsei.plan.ui.components.wseiMasked
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
 import pl.lublin.wsei.plan.ui.theme.M3XCookie12Shape
+import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.WseiCorners
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
+import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
@@ -91,10 +111,14 @@ private class ProfileSectionsState(
     val onTogglePasswordForm: () -> Unit
 )
 
+/** Avatar size in the hero card (the outer tonal ring included). */
+private val HeroAvatarSize = 136.dp
+
 /**
- * Profil studenta: karta tożsamości, tok studiów, grupy, plan studiów i konto.
+ * Profil studenta: karta tożsamości, tok nauki, szczegóły studiów, grupy, plan studiów i konto.
  *
- * Na szerokich oknach karta studenta i konto są w lewej kolumnie, a szczegóły studiów w prawej.
+ * Na szerokich oknach karta studenta, tok nauki i konto są w lewej kolumnie, a szczegóły
+ * studiów w prawej.
  */
 @Composable
 fun ProfileScreen(
@@ -186,8 +210,37 @@ fun ProfileScreen(
     }
 }
 
+// -----------------------------------------------------------------------------------------
+// Etykiety
+// -----------------------------------------------------------------------------------------
+
 /** Title and supporting line of a student group row. */
 private class StudentGroupLabel(val title: String, val supporting: String?)
+
+/** Human name of the class kind ("Laboratorium"); unknown kinds fall back to the dean's form name. */
+@Composable
+private fun groupKindLabel(group: StudentGroupItem): String = when (group.groupKind) {
+    GroupClassKind.LECTURE -> stringResource(R.string.class_type_lecture)
+    GroupClassKind.EXERCISES -> stringResource(R.string.class_type_exercise)
+    GroupClassKind.LAB -> stringResource(R.string.class_type_lab)
+    GroupClassKind.PROJECT -> stringResource(R.string.class_type_project)
+    GroupClassKind.SEMINAR -> stringResource(R.string.class_type_seminar)
+    GroupClassKind.ELEARNING -> stringResource(R.string.class_type_elearning)
+    GroupClassKind.PRACTICE -> stringResource(R.string.class_type_practice)
+    GroupClassKind.STUDY_TRACK, GroupClassKind.OTHER ->
+        group.formName.trim().ifEmpty { stringResource(R.string.profile_group) }
+}
+
+private fun groupKindIcon(kind: GroupClassKind): ImageVector = when (kind) {
+    GroupClassKind.LECTURE -> WseiIcons.School
+    GroupClassKind.EXERCISES -> WseiIcons.Calculate
+    GroupClassKind.LAB -> WseiIcons.Computer
+    GroupClassKind.PROJECT -> WseiIcons.IntegrationInstructions
+    GroupClassKind.SEMINAR -> WseiIcons.Psychology
+    GroupClassKind.ELEARNING -> WseiIcons.Cloud
+    GroupClassKind.PRACTICE -> WseiIcons.BusinessCenter
+    GroupClassKind.STUDY_TRACK, GroupClassKind.OTHER -> WseiIcons.Groups
+}
 
 /**
  * Exact group data from the dean's office: "Laboratorium · gr. 4" with the raw code
@@ -196,26 +249,73 @@ private class StudentGroupLabel(val title: String, val supporting: String?)
  */
 @Composable
 private fun studentGroupLabel(group: StudentGroupItem): StudentGroupLabel {
-    val form = group.formName.trim()
+    val kind = groupKindLabel(group)
     // Parsed from groupCode, so it is right even for stale cached data; "" when unknown.
     val number = group.displayGroupNumber.trim()
     val code = group.groupCode.trim()
     return if (number.isNotEmpty()) {
-        val numberLabel = stringResource(R.string.profile_group_number, number)
         StudentGroupLabel(
-            title = listOf(form, numberLabel).filter { it.isNotEmpty() }.joinToString(" · "),
+            title = listOf(kind, stringResource(R.string.profile_group_number, number))
+                .filter { it.isNotEmpty() }
+                .joinToString(" · "),
             supporting = code.takeIf { it.isNotEmpty() }
         )
     } else {
         StudentGroupLabel(
-            title = listOf(form, code).filter { it.isNotEmpty() }.distinct().joinToString(" · ").ifEmpty { "—" },
+            title = listOf(kind, code).filter { it.isNotEmpty() }.distinct().joinToString(" · ").ifEmpty { "—" },
             supporting = null
         )
     }
 }
 
-private fun formatAverage(value: Double?, hidden: Boolean): String =
-    wseiMasked(String.format(Locale.US, "%.2f", value ?: 0.0), hidden)
+private fun formatAverage(uiState: ScheduleUiState, value: Double?): String =
+    uiState.maskSensitive(String.format(Locale.US, "%.2f", value ?: 0.0))
+
+/** Facts of "Tok nauki" that are actually known; every field is optional. */
+private class StudyTrackFacts(
+    val year: String?,
+    val term: String?,
+    val mode: String?,
+    val course: String?
+) {
+    val isEmpty: Boolean get() = year == null && term == null && mode == null && course == null
+}
+
+private fun StudyTrackInfo?.hasAnyFact(): Boolean =
+    this != null && (
+        yearOfStudy != null ||
+            !academicYear.isNullOrBlank() ||
+            semesterTerm != null ||
+            studyMode != StudyMode.UNKNOWN ||
+            !courseCode.isNullOrBlank()
+        )
+
+@Composable
+private fun studyTrackFacts(track: StudyTrackInfo): StudyTrackFacts {
+    val termName = when (track.semesterTerm) {
+        SemesterTerm.WINTER -> stringResource(R.string.profile_track_winter)
+        SemesterTerm.SUMMER -> stringResource(R.string.profile_track_summer)
+        null -> null
+    }
+    val academicYear = track.academicYear?.trim()?.takeIf { it.isNotEmpty() }
+    val term = when {
+        termName != null && academicYear != null -> stringResource(R.string.profile_track_term_year, termName, academicYear)
+        termName != null -> termName
+        academicYear != null -> stringResource(R.string.profile_track_academic_year, academicYear)
+        else -> null
+    }
+    return StudyTrackFacts(
+        year = track.yearOfStudy?.let { stringResource(R.string.profile_track_year, it) },
+        term = term,
+        mode = when (track.studyMode) {
+            StudyMode.FULL_TIME -> stringResource(R.string.profile_track_full_time)
+            StudyMode.PART_TIME -> stringResource(R.string.profile_track_part_time)
+            StudyMode.UNKNOWN -> null
+        },
+        course = track.courseCode?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { stringResource(R.string.profile_track_course, it) }
+    )
+}
 
 // -----------------------------------------------------------------------------------------
 // Sekcje listy
@@ -225,6 +325,12 @@ private fun LazyListScope.identityItems(uiState: ScheduleUiState, itemModifier: 
     item(key = "identity", contentType = "identity") {
         IdentityCard(uiState = uiState, modifier = itemModifier)
     }
+    val track = uiState.studyTrack
+    if (track != null && track.hasAnyFact()) {
+        item(key = "study_track", contentType = "study_track") {
+            StudyTrackCard(track = track, modifier = itemModifier)
+        }
+    }
 }
 
 private fun LazyListScope.studyItems(
@@ -233,7 +339,6 @@ private fun LazyListScope.studyItems(
     itemModifier: Modifier
 ) {
     val session = uiState.currentSession
-    val hidden = uiState.isHideSensitiveData
 
     item(key = "section_studies", contentType = "section") {
         WseiSectionTitle(stringResource(R.string.profile_section_studies), modifier = itemModifier)
@@ -241,8 +346,8 @@ private fun LazyListScope.studyItems(
 
     item(key = "course_of_study", contentType = "accordion") {
         ProfileAccordion(
-            title = stringResource(R.string.profile_course_of_study),
-            badge = session?.courseOfStudyCode ?: "—",
+            title = stringResource(R.string.profile_study_details),
+            badge = session?.courseOfStudyCode?.takeIf { it.isNotBlank() } ?: "—",
             icon = WseiIcons.School,
             expanded = sections.isCourseExpanded,
             onToggle = sections.onToggleCourse,
@@ -269,15 +374,17 @@ private fun LazyListScope.studyItems(
                     uiState.primaryStudentGroupLabel ?: stringResource(R.string.profile_no_group)
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                WseiInfoRow(stringResource(R.string.profile_average_current), formatAverage(session?.averageCurrentSemester, hidden))
-                WseiInfoRow(stringResource(R.string.profile_average_previous), formatAverage(session?.averagePreviousSemester, hidden))
-                WseiInfoRow(stringResource(R.string.profile_average_overall), formatAverage(session?.averageGrade, hidden))
+                WseiInfoRow(stringResource(R.string.profile_average_current), formatAverage(uiState, session?.averageCurrentSemester))
+                WseiInfoRow(stringResource(R.string.profile_average_previous), formatAverage(uiState, session?.averagePreviousSemester))
+                WseiInfoRow(stringResource(R.string.profile_average_overall), formatAverage(uiState, session?.averageGrade))
             }
         }
     }
 
     item(key = "student_groups", contentType = "accordion") {
-        val semesterGroups = uiState.studentGroups.firstOrNull()
+        // Class groups only: study-track entries ("ROK1/ N") belong to "Tok nauki" above.
+        val semesters = uiState.classGroupsBySemester
+        val semesterGroups = semesters.firstOrNull { it.groups.isNotEmpty() } ?: semesters.firstOrNull()
         val groups = semesterGroups?.groups.orEmpty()
         ProfileAccordion(
             title = stringResource(R.string.profile_student_groups),
@@ -292,6 +399,7 @@ private fun LazyListScope.studyItems(
                 Text(
                     text = semesterLabel,
                     style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
@@ -304,11 +412,12 @@ private fun LazyListScope.studyItems(
             } else {
                 WseiListGroup(
                     entries = groups.mapIndexed { index, group ->
-                        WseiListEntry(key = "group_${group.id}_$index") { shape ->
+                        WseiListEntry(key = "group_${group.id}_${group.groupCode}_$index") { shape ->
                             val label = studentGroupLabel(group)
                             WseiListItem(
                                 title = label.title,
                                 supporting = label.supporting,
+                                icon = groupKindIcon(group.groupKind),
                                 shape = shape,
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                             )
@@ -367,6 +476,7 @@ private fun LazyListScope.accountItems(
         WseiSectionTitle(stringResource(R.string.profile_section_account), modifier = itemModifier)
     }
     item(key = "account_actions", contentType = "account") {
+        val colors = MaterialTheme.colorScheme
         val count = if (canChangePassword) 2 else 1
         Column(
             modifier = itemModifier,
@@ -379,12 +489,13 @@ private fun LazyListScope.accountItems(
                     icon = WseiIcons.Lock,
                     shape = wseiGroupItemShape(0, count),
                     selected = sections.showPasswordForm,
-                    onClick = sections.onTogglePasswordForm
+                    onClick = sections.onTogglePasswordForm,
+                    trailing = { ExpandIndicator(expanded = sections.showPasswordForm) }
                 )
                 AnimatedVisibility(
                     visible = sections.showPasswordForm,
-                    enter = expandVertically(WseiMotion.size()) + fadeIn(WseiMotion.effects()),
-                    exit = shrinkVertically(WseiMotion.size()) + fadeOut(WseiMotion.effects())
+                    enter = expandVertically(WseiMotion.size(), expandFrom = Alignment.Top) + fadeIn(WseiMotion.effects()),
+                    exit = shrinkVertically(WseiMotion.size(), shrinkTowards = Alignment.Top) + fadeOut(WseiMotion.fastEffects())
                 ) {
                     PasswordChangeForm(onSubmit = onSubmitPassword)
                 }
@@ -393,8 +504,8 @@ private fun LazyListScope.accountItems(
                 title = stringResource(R.string.profile_logout),
                 supporting = stringResource(R.string.profile_logout_supporting),
                 icon = WseiIcons.Logout,
-                iconContainerColor = MaterialTheme.colorScheme.errorContainer,
-                iconContentColor = MaterialTheme.colorScheme.onErrorContainer,
+                iconContainerColor = colors.errorContainer,
+                iconContentColor = colors.onErrorContainer,
                 shape = wseiGroupItemShape(count - 1, count),
                 onClick = onLogout
             )
@@ -409,45 +520,48 @@ private fun LazyListScope.accountItems(
 @Composable
 private fun IdentityCard(uiState: ScheduleUiState, modifier: Modifier = Modifier) {
     val session = uiState.currentSession
-    val hidden = uiState.isHideSensitiveData
     val colors = MaterialTheme.colorScheme
-    val displayAlbum = wseiMasked(session?.albumNumber ?: "—", hidden)
+    val fullName = session?.fullName ?: stringResource(R.string.common_student)
+    val displayAlbum = uiState.maskSensitive(session?.albumNumber?.takeIf { it.isNotBlank() } ?: "—")
 
     WseiCard(
         modifier = modifier,
         shape = WseiHeroShape,
         containerColor = colors.primaryContainer,
         contentColor = colors.onPrimaryContainer,
-        verticalSpacing = WseiSpacing.l
+        contentPadding = PaddingValues(start = WseiSpacing.l, end = WseiSpacing.l, top = WseiSpacing.xxl, bottom = WseiSpacing.l),
+        verticalSpacing = WseiSpacing.xl
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(WseiSpacing.m)
         ) {
-            StudentAvatar(
-                base64Photo = session?.personPictureBase64,
-                fullName = session?.fullName ?: stringResource(R.string.common_student),
-                size = 112.dp,
-                shape = M3XCookie12Shape
-            )
-            Text(
-                text = session?.fullName ?: stringResource(R.string.common_student),
-                style = MaterialTheme.typography.headlineSmall,
-                textAlign = TextAlign.Center
-            )
-            val subtitle = listOfNotNull(session?.fieldOfStudy, session?.studyMode)
-                .filter { it.isNotBlank() }
-                .joinToString(" • ")
-            if (subtitle.isNotEmpty()) {
+            ProfilePhoto(base64Photo = session?.personPictureBase64, fullName = fullName)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
+            ) {
                 Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = fullName,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
-                    color = colors.onPrimaryContainer.copy(alpha = 0.8f)
+                    modifier = Modifier.semantics { heading() }
                 )
+                val subtitle = listOfNotNull(session?.fieldOfStudy, session?.studyMode)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" • ")
+                if (subtitle.isNotEmpty()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = colors.onPrimaryContainer.copy(alpha = 0.8f)
+                    )
+                }
             }
-            // FlowRow: on narrow panes the pills wrap instead of being clipped.
+            // FlowRow: on narrow panes the badges wrap instead of being clipped.
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
@@ -460,36 +574,196 @@ private fun IdentityCard(uiState: ScheduleUiState, modifier: Modifier = Modifier
                     emphasized = true
                 )
                 WseiPill(
-                    text = session?.statusName ?: stringResource(R.string.profile_status_default),
-                    containerColor = colors.onPrimaryContainer.copy(alpha = 0.1f),
-                    contentColor = colors.onPrimaryContainer
+                    text = session?.statusName?.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.profile_status_default),
+                    icon = WseiIcons.CheckCircle,
+                    containerColor = colors.surfaceContainerLowest,
+                    contentColor = colors.primary,
+                    emphasized = true
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
-            val statColor = colors.onPrimaryContainer.copy(alpha = 0.1f)
-            val statContent = colors.onPrimaryContainer
-            WseiStat(
-                formatAverage(session?.averageCurrentSemester, hidden),
-                stringResource(R.string.profile_stat_semester_average),
-                Modifier.weight(1f),
-                statColor,
-                statContent
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+        ) {
+            val statModifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+            ProfileStatCard(
+                value = formatAverage(uiState, session?.averageCurrentSemester),
+                label = stringResource(R.string.profile_stat_semester_average),
+                icon = WseiIcons.AutoAwesome,
+                modifier = statModifier
             )
-            WseiStat(
-                formatAverage(session?.averageGrade, hidden),
-                stringResource(R.string.profile_stat_overall_average),
-                Modifier.weight(1f),
-                statColor,
-                statContent
+            ProfileStatCard(
+                value = formatAverage(uiState, session?.averageGrade),
+                label = stringResource(R.string.profile_stat_overall_average),
+                icon = WseiIcons.WorkspacePremium,
+                modifier = statModifier
             )
-            WseiStat(
-                session?.semesterNumber?.toString() ?: "—",
-                stringResource(R.string.profile_stat_semester),
-                Modifier.weight(1f),
-                statColor,
-                statContent
+            ProfileStatCard(
+                value = session?.semesterNumber?.toString() ?: "—",
+                label = stringResource(R.string.profile_stat_semester),
+                icon = WseiIcons.CalendarMonth,
+                modifier = statModifier
             )
+        }
+    }
+}
+
+/**
+ * Student photo framed by a tonal ring: an outer cookie in `primary`, a thin `primaryContainer`
+ * gap and the photo clipped to the same (smaller) cookie. The photo never touches the card, so
+ * the white background of ID photos does not bleed into the hero.
+ */
+@Composable
+private fun ProfilePhoto(base64Photo: String?, fullName: String) {
+    val colors = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier
+            .size(HeroAvatarSize)
+            .clip(M3XCookie12Shape)
+            .background(colors.primary)
+            .padding(4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        StudentAvatar(
+            base64Photo = base64Photo,
+            fullName = fullName,
+            size = HeroAvatarSize - 8.dp,
+            shape = M3XCookie12Shape,
+            ringWidth = 3.dp,
+            ringColor = colors.primaryContainer,
+            photoZoom = 1.08f
+        )
+    }
+}
+
+/** One of the three hero statistics: small icon, large value, short label. */
+@Composable
+private fun ProfileStatCard(
+    value: String,
+    label: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        shape = WseiInsetShape,
+        color = colors.surfaceContainerLowest,
+        contentColor = colors.onSurface,
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = WseiSpacing.m, vertical = WseiSpacing.m),
+            verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = colors.primary,
+                modifier = Modifier.size(18.dp)
+            )
+            val valueStyle = MaterialTheme.typography.headlineSmall
+            // Narrow columns (three stats on a small phone) shrink the value instead of clipping it.
+            Text(
+                text = value,
+                style = valueStyle,
+                fontWeight = FontWeight.Bold,
+                color = colors.primary,
+                maxLines = 1,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = 14.sp,
+                    maxFontSize = valueStyle.fontSize,
+                    stepSize = 1.sp
+                )
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/** "Tok nauki": year of study, semester, mode and course — only the fields that are known. */
+@Composable
+private fun StudyTrackCard(track: StudyTrackInfo, modifier: Modifier = Modifier) {
+    val facts = studyTrackFacts(track)
+    if (facts.isEmpty) return
+    val colors = MaterialTheme.colorScheme
+    // The most specific fact is the headline; the rest become supporting text and chips.
+    val headline = facts.year ?: facts.term ?: facts.mode ?: facts.course.orEmpty()
+    val secondary = if (facts.year != null) facts.term else null
+    val chips = listOfNotNull(
+        facts.mode?.takeIf { it != headline }?.let { it to WseiIcons.Schedule },
+        facts.course?.takeIf { it != headline }?.let { it to WseiIcons.School }
+    )
+
+    WseiCard(
+        modifier = modifier,
+        containerColor = colors.surfaceContainer,
+        verticalSpacing = WseiSpacing.m
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)
+        ) {
+            WseiIconBadge(
+                icon = WseiIcons.School,
+                shape = M3XCookieShape,
+                containerColor = colors.tertiaryContainer,
+                contentColor = colors.onTertiaryContainer,
+                size = 52.dp,
+                iconSize = 26.dp
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
+            ) {
+                Text(
+                    text = stringResource(R.string.profile_track_title),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.primary
+                )
+                Text(
+                    text = headline,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (secondary != null) {
+                    Text(
+                        text = secondary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        if (chips.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s),
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+            ) {
+                chips.forEach { (text, icon) ->
+                    WseiPill(
+                        text = text,
+                        icon = icon,
+                        containerColor = colors.secondaryContainer,
+                        contentColor = colors.onSecondaryContainer,
+                        emphasized = true
+                    )
+                }
+            }
         }
     }
 }
@@ -525,6 +799,23 @@ private fun ProfileAccordion(
             )
         },
         body = { content() }
+    )
+}
+
+/** Small chevron for list rows that reveal content below them. */
+@Composable
+private fun ExpandIndicator(expanded: Boolean) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = WseiMotion.spatial(),
+        label = "profileRowChevron"
+    )
+    Icon(
+        imageVector = WseiIcons.ExpandMore,
+        contentDescription = null,
+        modifier = Modifier
+            .size(22.dp)
+            .graphicsLayer { rotationZ = rotation }
     )
 }
 

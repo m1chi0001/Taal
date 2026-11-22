@@ -40,22 +40,6 @@
     <string name="about_hub_supporting">Version %1$s • licence and source code</string>
     <string name="about_tagline">Schedule, grades, finances and announcements from the Virtual Dean\'s Office of WSEI University in Lublin</string>
     <string name="about_version">Version %1$s</string>
-    <string name="about_min_android">Android 8.0+</string>
-    <string name="about_source_code">Source code</string>
-    <string name="about_releases">Releases</string>
-    <string name="about_releases_supporting">Version history and APK files</string>
-    <string name="about_project_title">Project</string>
-    <string name="about_author">Author</string>
-    <string name="about_author_supporting">%1$s on GitHub</string>
-    <string name="about_tech_title">Technologies</string>
-    <string name="about_tech_architecture">Clean Architecture, MVVM and an offline-first cache.</string>
-    <string name="about_licence_title">Licence</string>
-    <string name="about_licence_app">App</string>
-    <string name="about_licence_mit">MIT</string>
-    <string name="about_licence_copyright">Copyright</string>
-    <string name="about_licence_font">Font</string>
-    <string name="about_licence_data">Data</string>
-    <string name="about_licence_data_value">Virtual Dean\'s Office (APR System)</string>
     <string name="about_disclaimer">An independent student project, not officially affiliated with WSEI University or APR System.</string>
 
     <string name="about_update_title">Updates</string>
@@ -66,8 +50,6 @@
     <string name="about_update_downloading">Downloading version %1$s… %2$d%%</string>
     <string name="about_update_ready">Version %1$s has been downloaded and is ready to install.</string>
     <string name="about_update_error">Couldn\'t check for updates.</string>
-    <string name="about_update_whats_new">What\'s new</string>
-    <string name="about_update_download">Download</string>
     <string name="about_update_cancel">Cancel</string>
     <string name="about_update_install">Install</string>
     <string name="about_update_allow_and_install">Allow and install</string>
@@ -75,9 +57,48 @@
     <string name="about_update_check_again">Check again</string>
     <string name="about_update_permission_hint">Android will ask for permission to install apps from Taal. Once you grant it, come back and tap “Install”.</string>
 
+    <string name="about_section_app">App</string>
+    <string name="about_whats_new_title">What\'s new</string>
+    <string name="about_whats_new_supporting">Change history for every version</string>
+    <string name="about_github">GitHub</string>
+    <string name="about_credits_line">Kotlin · Jetpack Compose · Material 3 Expressive</string>
+    <string name="about_licence_line">MIT licence · © 2026 %1$s</string>
+    <string name="about_hub_update_badge">New version</string>
+
+    <!-- Updates: banner and changelog -->
+    <string name="update_prompt_title">Update available</string>
+    <string name="update_prompt_installed">You have %1$s</string>
+    <string name="update_prompt_download">Download update</string>
+    <string name="update_prompt_open_release">Open release page</string>
+    <string name="update_prompt_changes">See what\'s changed</string>
+    <string name="update_prompt_dismiss">Hide the notice for this version</string>
+    <string name="update_prompt_downloading">Downloading… %1$d%%</string>
+
+    <string name="changelog_title">Changelog</string>
+    <string name="changelog_subtitle">Every Taal release, newest first</string>
+    <string name="changelog_version_badge">v%1$s</string>
+    <string name="changelog_latest">Latest</string>
+    <string name="changelog_installed">Installed</string>
+    <string name="changelog_loading">Loading changelog…</string>
+    <string name="changelog_empty">Couldn\'t load the changelog. Check your internet connection.</string>
+    <string name="changelog_retry">Try again</string>
+    <string name="changelog_open_github">All releases on GitHub</string>
+    <string name="changelog_open_release">Open release</string>
+    <string name="changelog_no_notes">No release notes for this version.</string>
+
     <!-- Profile -->
     <string name="profile_group_number">gr. %1$s</string>
     <string name="profile_groups_empty">No groups assigned in the current semester.</string>
+    <string name="profile_study_details">Study details</string>
+    <string name="profile_track_title">Study track</string>
+    <string name="profile_track_year">Year %1$d</string>
+    <string name="profile_track_winter">Winter semester</string>
+    <string name="profile_track_summer">Summer semester</string>
+    <string name="profile_track_term_year">%1$s %2$s</string>
+    <string name="profile_track_academic_year">Academic year %1$s</string>
+    <string name="profile_track_full_time">Full-time</string>
+    <string name="profile_track_part_time">Part-time</string>
+    <string name="profile_track_course">Field of study %1$s</string>
 
     <!-- Subjects -->
     <string name="subjects_semester_number">Semester %1$d</string>

@@ -7,29 +7,32 @@ package pl.lublin.wsei.plan.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -65,7 +68,8 @@ fun classRowStateOf(
 /**
  * Karta zajęć (Start i Plan zajęć).
  * Po lewej „kafelek czasu”, po prawej przedmiot, forma, sala i prowadzący.
- * Trwające zajęcia dostają kolor główny i falujący pasek postępu.
+ * Trwające zajęcia są wyróżnione kolorem głównym i plakietką z liczbą minut do końca — bez paska
+ * postępu (ten jest tylko w karcie „Trwa teraz” nad listą).
  *
  * @param lecturerLabel lecturer line as it may be shown — pass `uiState.maskLecturer(...)` so
  *   "Ukryj dane" hides the name; defaults to the unmasked name for previews and legacy callers.
@@ -120,7 +124,8 @@ fun WseiClassCard(
     )
     val classTypeLabel = stringResource(event.classType.labelRes)
     val roomLabel = event.room.localizedLabel()
-    val rowAlpha by animateFloatAsState(
+    // Read in the graphics layer only, so the fade never recomposes the row.
+    val rowAlpha = animateFloatAsState(
         targetValue = if (finished) 0.55f else 1f,
         animationSpec = WseiMotion.effects(),
         label = "classRowAlpha"
@@ -146,7 +151,7 @@ fun WseiClassCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .alpha(rowAlpha),
+                    .graphicsLayer { alpha = rowAlpha.value },
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = if (compact) Alignment.CenterVertically else Alignment.Top
             ) {
@@ -182,7 +187,12 @@ fun WseiClassCard(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     when (state) {
-                        ClassRowState.ONGOING -> StatusLabel(stringResource(R.string.class_badge_ongoing), colors.primary)
+                        ClassRowState.ONGOING -> OngoingBadge(
+                            text = stringResource(
+                                R.string.schedule_class_ongoing_badge,
+                                event.remainingMinutes(nowEpochMillis)
+                            )
+                        )
                         ClassRowState.NEXT -> StatusLabel(stringResource(R.string.class_badge_next), colors.tertiary)
                         else -> Unit
                     }
@@ -225,35 +235,36 @@ fun WseiClassCard(
                     }
                 }
             }
+        }
+    }
+}
 
-            if (ongoing) {
-                val progress by animateFloatAsState(
-                    targetValue = event.progressFraction(nowEpochMillis),
-                    animationSpec = WseiMotion.size(),
-                    label = "classProgress"
-                )
-                val elapsed = event.elapsedMinutes(nowEpochMillis)
-                val total = event.totalDurationMinutes
-                val progressDescription = stringResource(R.string.schedule_hero_progress_cd, elapsed, total)
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    LinearWavyProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(14.dp)
-                            .semantics {
-                                contentDescription = progressDescription
-                            },
-                        color = colors.primary,
-                        trackColor = contentColor.copy(alpha = 0.18f)
-                    )
-                    Text(
-                        text = stringResource(R.string.class_card_progress, elapsed, total, event.timeSlot.endFormatted),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = mutedColor
-                    )
-                }
-            }
+/** Subtle "live" badge of the ongoing class: a pill with a sunny marker instead of a progress bar. */
+@Composable
+private fun OngoingBadge(text: String) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        shape = CircleShape,
+        color = colors.primary,
+        contentColor = colors.onPrimary
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 6.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(MaterialShapes.Sunny.toShape())
+                    .background(colors.onPrimary)
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
         }
     }
 }
