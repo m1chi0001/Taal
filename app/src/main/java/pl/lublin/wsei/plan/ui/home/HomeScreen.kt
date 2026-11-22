@@ -1,11 +1,26 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package pl.lublin.wsei.plan.ui.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,16 +33,23 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.domain.model.ClassEvent
+import pl.lublin.wsei.plan.domain.model.DeliveryMode
+import pl.lublin.wsei.plan.domain.schedule.ScheduleFocus
+import pl.lublin.wsei.plan.domain.schedule.ScheduleFocusKind
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiWidthClass
 import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
@@ -45,21 +67,28 @@ import pl.lublin.wsei.plan.ui.finances.isDueThisMonth
 import pl.lublin.wsei.plan.ui.finances.outstandingAmountPln
 import pl.lublin.wsei.plan.ui.finances.sortedForDisplay
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
+import pl.lublin.wsei.plan.ui.schedule.ScheduleAccentBadge
+import pl.lublin.wsei.plan.ui.schedule.ScheduleCountdown
+import pl.lublin.wsei.plan.ui.schedule.ScheduleStatusChip
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
+import pl.lublin.wsei.plan.ui.theme.ActiveHeroCardAsymmetricShape
 import pl.lublin.wsei.plan.ui.theme.M3XCloverShape
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.M3XSunnyShape
-import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
+import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.l10n.appLocale
 import pl.lublin.wsei.plan.l10n.capitalizeFirst
+import pl.lublin.wsei.plan.l10n.labelRes
+import pl.lublin.wsei.plan.l10n.localizedLabel
 import pl.lublin.wsei.plan.l10n.localizedNameOrPlaceholder
 import pl.lublin.wsei.plan.l10n.rememberLocalizedDateFormatter
 
@@ -67,7 +96,8 @@ import pl.lublin.wsei.plan.l10n.rememberLocalizedDateFormatter
 private const val DayHeaderSkeleton = "EEEEdMMMM"
 
 /**
- * Ekran Start: powitanie, plan na dziś, szybkie skróty i najbliższa opłata.
+ * Ekran Start: powitanie, karta dnia „w centrum uwagi” (trwające / następne zajęcia albo
+ * najbliższy dzień z zajęciami) z listą pozostałych zajęć, szybkie skróty i najbliższa opłata.
  * Wszystko, czego student potrzebuje rano, bez przechodzenia między zakładkami.
  */
 @Composable
@@ -107,7 +137,7 @@ fun HomeScreen(
         isRefreshing = uiState.isRefreshing,
         contentPadding = wseiScreenContentPadding()
     ) {
-        item(key = "home_intro") {
+        item(key = "home_intro", contentType = "home_intro") {
             HomeIntro(
                 uiState = uiState,
                 todayIso = todayIso,
@@ -115,10 +145,10 @@ fun HomeScreen(
             )
         }
         if (windowLayout.isCompact) {
-            item(key = "home_today") {
-                TodayScheduleCard(uiState = uiState, todayIso = todayIso, onClick = onOpenSchedule)
+            item(key = "home_focus", contentType = "home_focus") {
+                HomeFocusSection(uiState = uiState, todayIso = todayIso, onOpenSchedule = onOpenSchedule)
             }
-            item(key = "home_shortcuts") {
+            item(key = "home_shortcuts", contentType = "home_shortcuts") {
                 QuickShortcutsGrid(
                     uiState = uiState,
                     onOpenSchedule = onOpenSchedule,
@@ -127,22 +157,22 @@ fun HomeScreen(
                     onOpenAnnouncements = onOpenAnnouncements
                 )
             }
-            item(key = "home_payment") {
+            item(key = "home_payment", contentType = "home_payment") {
                 NextPaymentCard(uiState = uiState, onClick = onOpenFinances)
             }
         } else {
-            // Tablets, unfolded foldables and landscape: the day plan on the left, the summary
-            // tiles in a side column — instead of four cards stretched edge to edge.
-            item(key = "home_dashboard") {
+            // Tablets, unfolded foldables and landscape: the focus hero and its day list on the
+            // left, the summary tiles in a side column — instead of cards stretched edge to edge.
+            item(key = "home_dashboard", contentType = "home_dashboard") {
                 Row(
                     modifier = Modifier.wseiReadableWidth(HomeDashboardMaxWidth),
                     horizontalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
                 ) {
                     val primaryWeight = if (windowLayout.widthClass == WseiWidthClass.EXPANDED) 0.58f else 0.5f
-                    TodayScheduleCard(
+                    HomeFocusSection(
                         uiState = uiState,
                         todayIso = todayIso,
-                        onClick = onOpenSchedule,
+                        onOpenSchedule = onOpenSchedule,
                         modifier = Modifier.weight(primaryWeight)
                     )
                     Column(
@@ -210,87 +240,410 @@ private fun HomeIntro(
     }
 }
 
+// -----------------------------------------------------------------------------------------
+// W centrum uwagi — karta dnia (dziś / jutro / dalej w zjeździe / następny zjazd)
+// -----------------------------------------------------------------------------------------
+
+/** Visual state of the focus hero; switching between these is the only hero transition. */
+private enum class FocusMode { LIVE, NEXT_TODAY, AWAY, NONE }
+
 /**
- * Plan na dziś (albo najbliższy dzień z zajęciami). Te same karty zajęć co w Planie,
- * w wersji kompaktowej; trwające zajęcia mają pasek postępu.
+ * What the focus hero shows. [event] is the class in the spotlight (active, next, or the first
+ * class of the focus day). The AnimatedContent animates on [key] only, so the per-minute ticker
+ * updates the countdown in place instead of re-running the transition.
+ */
+@Immutable
+private data class FocusHeroModel(
+    val mode: FocusMode,
+    val focus: ScheduleFocus,
+    val event: ClassEvent?
+) {
+    val key: Any get() = Triple(mode, event?.id, focus.dateIso)
+}
+
+private fun focusHeroModelOf(focus: ScheduleFocus): FocusHeroModel = when {
+    focus.kind == ScheduleFocusKind.TODAY && focus.activeEvent != null ->
+        FocusHeroModel(FocusMode.LIVE, focus, focus.activeEvent)
+    focus.kind == ScheduleFocusKind.TODAY && focus.nextEvent != null ->
+        FocusHeroModel(FocusMode.NEXT_TODAY, focus, focus.nextEvent)
+    focus.kind != ScheduleFocusKind.NONE && focus.kind != ScheduleFocusKind.TODAY && focus.events.isNotEmpty() ->
+        FocusHeroModel(FocusMode.AWAY, focus, focus.events.first())
+    else -> FocusHeroModel(FocusMode.NONE, focus, null)
+}
+
+/**
+ * Start's schedule block: the expressive focus hero driven by [ScheduleUiState.scheduleFocus]
+ * and, below it, a compact list of the focus day's remaining classes.
  */
 @Composable
-private fun TodayScheduleCard(
+private fun HomeFocusSection(
     uiState: ScheduleUiState,
     todayIso: String,
-    onClick: () -> Unit,
+    onOpenSchedule: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val dayEvents: List<ClassEvent> = remember(uiState.allEvents, todayIso) {
-        val upcomingDate = uiState.allEvents
-            .asSequence()
-            .map { it.dateIso }
-            .filter { it >= todayIso }
-            .minOrNull()
-        if (upcomingDate == null) {
-            emptyList()
-        } else {
-            uiState.allEvents
-                .filter { it.dateIso == upcomingDate }
-                .sortedBy { it.timeSlot.startEpochMillis }
+    val focus = uiState.scheduleFocus
+    val model = remember(focus) { focusHeroModelOf(focus) }
+    val now = uiState.nowEpochMillis
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+    ) {
+        AnimatedContent(
+            targetState = model,
+            contentKey = { it.key },
+            transitionSpec = {
+                (fadeIn(WseiMotion.effects()) + scaleIn(WseiMotion.spatial(), initialScale = 0.96f)) togetherWith
+                    fadeOut(WseiMotion.fastEffects()) using
+                    SizeTransform(clip = false) { _, _ -> WseiMotion.size() }
+            },
+            contentAlignment = Alignment.TopCenter,
+            label = "homeFocusHero"
+        ) { shown ->
+            FocusHeroCard(
+                model = shown,
+                uiState = uiState,
+                todayIso = todayIso,
+                nowEpochMillis = now,
+                onClick = onOpenSchedule
+            )
+        }
+        // The list follows the focus day; it disappears for the calm "no classes" state. The last
+        // shown day is kept in a plain holder so the list keeps its rows while it animates out.
+        val lastListModel = remember { arrayOfNulls<FocusHeroModel>(1) }
+        if (model.mode != FocusMode.NONE) lastListModel[0] = model
+        val listModel = lastListModel[0]
+        val upcoming = remember(listModel, now) { listModel?.remainingAfterHero(now).orEmpty() }
+        AnimatedVisibility(
+            visible = model.mode != FocusMode.NONE,
+            enter = expandVertically(WseiMotion.size()) + fadeIn(WseiMotion.effects()),
+            exit = shrinkVertically(WseiMotion.size()) + fadeOut(WseiMotion.fastEffects())
+        ) {
+            if (listModel != null) {
+                FocusDayList(
+                    uiState = uiState,
+                    isToday = listModel.focus.isToday,
+                    events = upcoming,
+                    nowEpochMillis = now,
+                    onClick = onOpenSchedule
+                )
+            }
         }
     }
-    val now = uiState.nowEpochMillis
-    val displayedDateIso = dayEvents.firstOrNull()?.dateIso ?: todayIso
-    val isToday = displayedDateIso == todayIso
-    val locale = appLocale()
-    val dayHeaderFormatter = rememberLocalizedDateFormatter(DayHeaderSkeleton)
-    val dateLabel = remember(displayedDateIso, dayHeaderFormatter) {
-        runCatching { LocalDate.parse(displayedDateIso).format(dayHeaderFormatter) }
-            .getOrDefault(displayedDateIso)
-            .capitalizeFirst(locale)
+}
+
+/** Classes of the focus day that come after the one in the hero (all of them for a later day). */
+private fun FocusHeroModel.remainingAfterHero(now: Long): List<ClassEvent> = when (mode) {
+    FocusMode.LIVE, FocusMode.NEXT_TODAY -> {
+        val heroStart = event?.timeSlot?.startEpochMillis ?: now
+        focus.events.filter { it.id != event?.id && it.timeSlot.startEpochMillis >= heroStart && it.timeSlot.endEpochMillis > now }
     }
-    val classCount = pluralStringResource(R.plurals.home_classes_short, dayEvents.size, dayEvents.size)
+    FocusMode.AWAY -> focus.events
+    FocusMode.NONE -> emptyList()
+}
 
-    val remaining = remember(dayEvents, now) { dayEvents.filter { it.timeSlot.endEpochMillis > now } }
-    val source = remaining.ifEmpty { dayEvents }
-    val visible = source.take(3)
-    val hiddenCount = source.size - visible.size
-    val activeId = uiState.activeClass?.id
-    val nextId = remaining.firstOrNull { it.timeSlot.startEpochMillis > now }?.id
+/** Minutes as "25 min" or "1 h 05 min". */
+@Composable
+private fun formatCountdown(minutes: Int): String = if (minutes >= 60) {
+    stringResource(R.string.home_focus_duration_hours, minutes / 60, minutes % 60)
+} else {
+    stringResource(R.string.schedule_hero_remaining_value, minutes)
+}
 
-    WseiCard(
-        modifier = modifier,
-        onClick = onClick,
-        shape = WseiHeroShape,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        verticalSpacing = WseiSpacing.s
-    ) {
-        WseiCardHeader(
-            title = if (isToday) stringResource(R.string.home_today) else dateLabel,
-            overline = when {
-                dayEvents.isEmpty() -> stringResource(R.string.nav_schedule)
-                isToday -> stringResource(R.string.home_today_overline, dateLabel, classCount)
-                else -> stringResource(R.string.home_next_session_overline, classCount)
-            },
-            icon = WseiIcons.CalendarMonth,
-            iconContainerColor = MaterialTheme.colorScheme.primary,
-            iconContentColor = MaterialTheme.colorScheme.onPrimary,
-            trailing = { ArrowBubble() }
+@Composable
+private fun FocusHeroCard(
+    model: FocusHeroModel,
+    uiState: ScheduleUiState,
+    todayIso: String,
+    nowEpochMillis: Long,
+    onClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val event = model.event
+    when (model.mode) {
+        FocusMode.LIVE, FocusMode.NEXT_TODAY -> {
+            if (event == null) return
+            val live = model.mode == FocusMode.LIVE
+            val container = if (live) colors.primaryContainer else colors.tertiaryContainer
+            val content = if (live) colors.onPrimaryContainer else colors.onTertiaryContainer
+            val accent = if (live) colors.primary else colors.tertiary
+            val onAccent = if (live) colors.onPrimary else colors.onTertiary
+            val minutes = if (live) {
+                event.remainingMinutes(nowEpochMillis)
+            } else {
+                ((event.timeSlot.startEpochMillis - nowEpochMillis + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
+            }
+            val location = if (event.deliveryMode == DeliveryMode.ON_SITE) {
+                event.room.localizedLabel()
+            } else {
+                stringResource(event.deliveryMode.labelRes)
+            }
+            FocusHeroLayout(
+                containerColor = container,
+                contentColor = content,
+                accentColor = accent,
+                onAccentColor = onAccent,
+                status = stringResource(if (live) R.string.schedule_hero_status_live else R.string.class_state_next),
+                trailing = stringResource(
+                    R.string.schedule_hero_time_range,
+                    event.timeSlot.startFormatted,
+                    event.timeSlot.endFormatted
+                ),
+                icon = WseiIcons.forSubject(event.subject.name, event.classType),
+                overline = stringResource(event.classType.labelRes),
+                title = event.subject.name,
+                countdownValue = formatCountdown(minutes),
+                countdownCaption = stringResource(
+                    if (live) R.string.schedule_hero_remaining_label else R.string.home_focus_until_start
+                ),
+                message = null,
+                pills = listOf(
+                    WseiIcons.LocationOn to location,
+                    WseiIcons.Person to uiState.maskLecturer(event.lecturer.localizedNameOrPlaceholder())
+                ),
+                onClick = onClick
+            )
+        }
+        FocusMode.AWAY -> {
+            val focus = model.focus
+            val locale = appLocale()
+            val dayFormatter = rememberLocalizedDateFormatter(DayHeaderSkeleton)
+            val dateLabel = remember(focus.dateIso, dayFormatter, locale) {
+                focus.dateIso?.let { iso ->
+                    runCatching { LocalDate.parse(iso).format(dayFormatter).capitalizeFirst(locale) }.getOrNull()
+                }.orEmpty()
+            }
+            val todayHadClasses = remember(uiState.allEvents, todayIso) {
+                uiState.allEvents.any { it.dateIso == todayIso }
+            }
+            val daysUntil = remember(focus.dateIso, todayIso) {
+                runCatching {
+                    ChronoUnit.DAYS.between(LocalDate.parse(todayIso), LocalDate.parse(focus.dateIso ?: todayIso)).toInt()
+                }.getOrDefault(0)
+            }
+            val count = focus.events.size
+            FocusHeroLayout(
+                containerColor = colors.secondaryContainer,
+                contentColor = colors.onSecondaryContainer,
+                accentColor = colors.secondary,
+                onAccentColor = colors.onSecondary,
+                status = stringResource(
+                    when (focus.kind) {
+                        ScheduleFocusKind.TOMORROW -> R.string.home_focus_status_tomorrow
+                        ScheduleFocusKind.LATER_THIS_ZJAZD -> R.string.home_focus_status_later
+                        else -> R.string.home_focus_status_next_zjazd
+                    }
+                ),
+                trailing = if (focus.kind == ScheduleFocusKind.NEXT_ZJAZD && daysUntil > 1) {
+                    pluralStringResource(R.plurals.home_focus_in_days, daysUntil, daysUntil)
+                } else {
+                    null
+                },
+                icon = WseiIcons.AutoAwesome,
+                overline = dateLabel,
+                title = stringResource(
+                    if (todayHadClasses) R.string.home_focus_free_now else R.string.home_focus_free_today
+                ),
+                countdownValue = event?.timeSlot?.startFormatted,
+                countdownCaption = stringResource(
+                    R.string.home_focus_first_class_caption,
+                    pluralStringResource(R.plurals.schedule_day_blocks, count, count)
+                ),
+                message = stringResource(
+                    when (focus.kind) {
+                        ScheduleFocusKind.TOMORROW -> R.string.home_focus_message_tomorrow
+                        ScheduleFocusKind.LATER_THIS_ZJAZD -> R.string.home_focus_message_later
+                        else -> R.string.home_focus_message_next_zjazd
+                    }
+                ),
+                pills = emptyList(),
+                onClick = onClick
+            )
+        }
+        FocusMode.NONE -> FocusHeroLayout(
+            containerColor = colors.surfaceContainerHigh,
+            contentColor = colors.onSurface,
+            accentColor = colors.tertiaryContainer,
+            onAccentColor = colors.onTertiaryContainer,
+            status = null,
+            trailing = null,
+            icon = WseiIcons.CheckCircle,
+            overline = null,
+            title = stringResource(R.string.schedule_day_off_title),
+            countdownValue = null,
+            countdownCaption = null,
+            message = stringResource(R.string.home_no_classes),
+            pills = emptyList(),
+            onClick = onClick
         )
+    }
+}
 
+/**
+ * Shared layout of every focus state, in the visual language of Plan zajęć's „Trwa teraz” hero:
+ * status chip + time, cookie accent badge with overline and title, big countdown, detail pills.
+ */
+@Composable
+private fun FocusHeroLayout(
+    containerColor: Color,
+    contentColor: Color,
+    accentColor: Color,
+    onAccentColor: Color,
+    status: String?,
+    trailing: String?,
+    icon: ImageVector,
+    overline: String?,
+    title: String,
+    countdownValue: String?,
+    countdownCaption: String?,
+    message: String?,
+    pills: List<Pair<ImageVector, String>>,
+    onClick: () -> Unit
+) {
+    val mutedColor = contentColor.copy(alpha = 0.78f)
+    WseiCard(
+        onClick = onClick,
+        shape = ActiveHeroCardAsymmetricShape,
+        containerColor = containerColor,
+        contentColor = contentColor,
+        contentPadding = PaddingValues(WseiSpacing.xl),
+        verticalSpacing = WseiSpacing.l,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        if (status != null || trailing != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+            ) {
+                if (status != null) {
+                    ScheduleStatusChip(text = status, containerColor = accentColor, contentColor = onAccentColor)
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                if (trailing != null) {
+                    Text(
+                        text = trailing,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
+                ArrowBubble(containerColor = contentColor.copy(alpha = 0.08f), contentColor = contentColor)
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)
+        ) {
+            ScheduleAccentBadge(icon = icon, containerColor = accentColor, contentColor = onAccentColor)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
+            ) {
+                if (!overline.isNullOrBlank()) {
+                    Text(
+                        text = overline,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = accentColor.takeIf { status != null } ?: mutedColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() }
+                )
+            }
+        }
+        if (countdownValue != null && countdownCaption != null) {
+            ScheduleCountdown(value = countdownValue, caption = countdownCaption, captionColor = mutedColor)
+        }
+        if (message != null) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = mutedColor
+            )
+        }
+        if (pills.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s),
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+            ) {
+                pills.forEach { (pillIcon, text) ->
+                    WseiPill(
+                        text = text,
+                        icon = pillIcon,
+                        containerColor = contentColor.copy(alpha = 0.1f),
+                        contentColor = contentColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Compact list of the focus day's (remaining) classes under the hero. */
+@Composable
+private fun FocusDayList(
+    uiState: ScheduleUiState,
+    isToday: Boolean,
+    events: List<ClassEvent>,
+    nowEpochMillis: Long,
+    onClick: () -> Unit
+) {
+    val visible = events.take(FocusListMaxRows)
+    val hiddenCount = events.size - visible.size
+    val activeId = uiState.scheduleFocus.activeEvent?.id
+    val nextId = uiState.scheduleFocus.nextEvent?.id
+    WseiCard(
+        onClick = onClick,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        verticalSpacing = WseiSpacing.s,
+        contentPadding = PaddingValues(horizontal = WseiSpacing.l, vertical = WseiSpacing.l),
+        // The only size animation of this card: rows leave as classes end.
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(WseiMotion.size())
+    ) {
+        Row(
+            modifier = Modifier.padding(start = WseiSpacing.xs),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(if (isToday) R.string.home_focus_list_later_today else R.string.home_focus_list_day),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { heading() }
+            )
+            ArrowBubble()
+        }
         if (visible.isEmpty()) {
             Text(
-                text = stringResource(R.string.home_no_classes),
-                style = MaterialTheme.typography.bodyLarge,
+                text = stringResource(R.string.home_focus_last_today),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = WseiSpacing.s)
+                modifier = Modifier.padding(start = WseiSpacing.xs, bottom = WseiSpacing.xs)
             )
         } else {
-            visible.forEach { event ->
-                WseiClassCard(
-                    event = event,
-                    nowEpochMillis = now,
-                    state = classRowStateOf(event, now, activeId, nextId),
-                    compact = true,
-                    showContainer = false,
-                    lecturerLabel = uiState.maskLecturer(event.lecturer.localizedNameOrPlaceholder())
-                )
+            visible.forEachIndexed { index, event ->
+                key(event.id, index) {
+                    WseiClassCard(
+                        event = event,
+                        nowEpochMillis = nowEpochMillis,
+                        // The hero already carries the live/next highlight; rows stay quiet unless
+                        // they are the active or next class of a later-day list.
+                        state = classRowStateOf(event, nowEpochMillis, activeId, nextId?.takeIf { !isToday }),
+                        compact = true,
+                        showContainer = false,
+                        lecturerLabel = uiState.maskLecturer(event.lecturer.localizedNameOrPlaceholder())
+                    )
+                }
             }
             if (hiddenCount > 0) {
                 Text(
@@ -303,6 +656,9 @@ private fun TodayScheduleCard(
         }
     }
 }
+
+/** Rows in the Start list before "+N więcej w planie". */
+private const val FocusListMaxRows = 4
 
 @Composable
 private fun ArrowBubble(
