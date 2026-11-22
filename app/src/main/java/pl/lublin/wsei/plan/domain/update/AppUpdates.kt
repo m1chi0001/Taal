@@ -46,11 +46,13 @@ object VersionComparator {
     fun normalize(version: String): String = version.trim().removePrefix("v").removePrefix("V")
 
     fun compare(a: String, b: String): Int {
-        fun parts(v: String) = Regex("\\d+").findAll(normalize(v)).map { it.value.toInt() }.toList()
+        // Long + saturation: a long numeric tag (e.g. a date stamp) must not throw NumberFormatException.
+        fun parts(v: String) =
+            Regex("\\d+").findAll(normalize(v)).map { it.value.toLongOrNull() ?: Long.MAX_VALUE }.toList()
         val pa = parts(a)
         val pb = parts(b)
         for (i in 0 until maxOf(pa.size, pb.size)) {
-            val c = pa.getOrElse(i) { 0 }.compareTo(pb.getOrElse(i) { 0 })
+            val c = pa.getOrElse(i) { 0L }.compareTo(pb.getOrElse(i) { 0L })
             if (c != 0) return c
         }
         return 0

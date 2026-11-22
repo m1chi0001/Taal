@@ -20,6 +20,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.data.local.LocalizedStrings
+import pl.lublin.wsei.plan.domain.update.VersionComparator
 
 /** Wydanie z GitHuba, które da się zainstalować (ma załączony plik APK). */
 data class ReleaseInfo(
@@ -90,7 +91,7 @@ class UpdateManager @Inject constructor(
         val json = JSONObject(body)
         val tag = json.optString("tag_name")
         if (tag.isBlank()) return UpdateCheckResult.Failure(strings.get(R.string.update_error_no_version))
-        val remote = tag.removePrefix("v").removePrefix("V")
+        val remote = VersionComparator.normalize(tag)
         if (!isNewer(remote, currentVersion)) return UpdateCheckResult.UpToDate(currentVersion)
 
         val assets = json.optJSONArray("assets")
@@ -201,25 +202,21 @@ class UpdateManager @Inject constructor(
             instanceFollowRedirects = true
             setRequestProperty("Accept", accept)
             setRequestProperty("User-Agent", "Taal-Android/$currentVersion")
+            if (url.startsWith(GITHUB_API)) setRequestProperty("X-GitHub-Api-Version", GITHUB_API_VERSION)
         }
 
     companion object {
         const val REPO = "m1chi0001/Taal"
         const val RELEASES_PAGE = "https://github.com/$REPO/releases"
-        private const val LATEST_RELEASE_API = "https://api.github.com/repos/$REPO/releases/latest"
+        private const val GITHUB_API = "https://api.github.com/"
+        private const val GITHUB_API_VERSION = "2022-11-28"
+        private const val LATEST_RELEASE_API = "${GITHUB_API}repos/$REPO/releases/latest"
 
-        /** `isNewer("0.5.1", "0.5")` → true; porównuje liczbowo kolejne człony wersji. */
-        fun isNewer(remote: String, local: String): Boolean {
-            fun parts(v: String) = Regex("\\d+").findAll(v).map { it.value.toInt() }.toList()
-            val a = parts(remote)
-            val b = parts(local)
-            if (a.isEmpty()) return false
-            for (i in 0 until maxOf(a.size, b.size)) {
-                val x = a.getOrElse(i) { 0 }
-                val y = b.getOrElse(i) { 0 }
-                if (x != y) return x > y
-            }
-            return false
-        }
+        /**
+         * `isNewer("0.5.1", "0.5")` → true. Delegates to [VersionComparator] (shared with
+         * [GitHubUpdateRepository]); a remote version without any number is never newer.
+         */
+        fun isNewer(remote: String, local: String): Boolean =
+            remote.any { it.isDigit() } && VersionComparator.compare(remote, local) > 0
     }
 }
