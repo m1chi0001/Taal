@@ -6,7 +6,6 @@
 package pl.lublin.wsei.plan.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -570,14 +569,23 @@ fun WseiStat(
 // Awatar studenta
 // -----------------------------------------------------------------------------------------
 
-/** Zdjęcie studenta z Wirtualnego Dziekanatu albo inicjały na kolorowym tle. */
+/**
+ * Zdjęcie studenta z Wirtualnego Dziekanatu albo inicjały na kolorowym tle.
+ *
+ * @param ringWidth when > 0 the photo sits inside a tonal ring of [ringColor] drawn with the same
+ *   [shape], so the (often white) photo background never touches the card behind it.
+ * @param photoZoom slight zoom of the photo (≥ 1) that crops the white margins of ID photos.
+ */
 @Composable
 fun StudentAvatar(
     base64Photo: String?,
     fullName: String,
     size: Dp,
     modifier: Modifier = Modifier,
-    shape: Shape = M3XCookieShape
+    shape: Shape = M3XCookieShape,
+    ringWidth: Dp = 0.dp,
+    ringColor: Color = MaterialTheme.colorScheme.primary,
+    photoZoom: Float = 1f
 ) {
     val decodedBitmap = rememberDecodedStudentPhoto(base64Photo)
     val initials = remember(fullName) {
@@ -588,9 +596,17 @@ fun StudentAvatar(
             .joinToString("") { it.first().uppercase() }
             .ifEmpty { "ST" }
     }
-    Box(
-        modifier = modifier
+    val outer = if (ringWidth > 0.dp) {
+        modifier
             .size(size)
+            .clip(shape)
+            .background(ringColor)
+            .padding(ringWidth)
+    } else {
+        modifier.size(size)
+    }
+    Box(
+        modifier = outer
             .clip(shape)
             .background(MaterialTheme.colorScheme.primary),
         contentAlignment = Alignment.Center
@@ -600,7 +616,18 @@ fun StudentAvatar(
                 bitmap = decodedBitmap,
                 contentDescription = stringResource(R.string.common_photo_of, fullName),
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (photoZoom != 1f) {
+                            Modifier.graphicsLayer {
+                                scaleX = photoZoom
+                                scaleY = photoZoom
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
             )
         } else {
             Text(
@@ -685,7 +712,9 @@ fun WseiExpandableCard(
         contentColor = contentColor,
         modifier = modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.animateContentSize(animationSpec = WseiMotion.size())) {
+        // AnimatedVisibility below is the only size animation: an extra animateContentSize here
+        // used to chase it frame by frame and made the card jitter when expanding.
+        Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -724,8 +753,10 @@ fun WseiExpandableCard(
             }
             AnimatedVisibility(
                 visible = expanded,
-                enter = expandVertically(animationSpec = WseiMotion.size()) + fadeIn(WseiMotion.effects()),
-                exit = shrinkVertically(animationSpec = WseiMotion.size()) + fadeOut(WseiMotion.effects())
+                enter = expandVertically(animationSpec = WseiMotion.size(), expandFrom = Alignment.Top) +
+                    fadeIn(WseiMotion.effects()),
+                exit = shrinkVertically(animationSpec = WseiMotion.size(), shrinkTowards = Alignment.Top) +
+                    fadeOut(WseiMotion.fastEffects())
             ) {
                 Column(
                     modifier = Modifier.padding(start = WseiSpacing.xl, end = WseiSpacing.xl, bottom = WseiSpacing.xl),

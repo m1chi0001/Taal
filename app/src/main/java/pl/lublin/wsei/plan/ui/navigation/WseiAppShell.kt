@@ -4,10 +4,13 @@ import android.content.Context
 import androidx.annotation.StringRes
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -43,14 +46,17 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.window.core.layout.WindowSizeClass
 import kotlinx.datetime.LocalDate
 import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.data.update.UpdateViewModel
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
@@ -75,6 +81,8 @@ import pl.lublin.wsei.plan.ui.schedule.ScheduleScreen
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
 import pl.lublin.wsei.plan.ui.subjects.SubjectsScreen
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
+import pl.lublin.wsei.plan.ui.update.UpdateChangelogSheet
+import pl.lublin.wsei.plan.ui.update.UpdatePromptHost
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 
 /**
@@ -144,7 +152,15 @@ fun WseiAppShell(
     var currentDestination by rememberSaveable { mutableStateOf(WseiDestination.START) }
     var profileReturnDestination by rememberSaveable { mutableStateOf(WseiDestination.START) }
     var moreSubView by rememberSaveable { mutableStateOf(MoreSubView.HUB) }
+    var showChangelog by rememberSaveable { mutableStateOf(false) }
     val isLoggedIn = scheduleUiState.currentSession != null
+
+    // Activity-scoped: the prompt, "O aplikacji" and the changelog share one update state.
+    val updateViewModel: UpdateViewModel = hiltViewModel()
+    LaunchedEffect(updateViewModel) {
+        // Throttled by the repository; the 12 h background worker covers the rest.
+        updateViewModel.autoCheckOnce()
+    }
 
     fun openProfile() {
         if (currentDestination != WseiDestination.PROFILE) {
@@ -215,8 +231,9 @@ fun WseiAppShell(
         AnimatedContent(
             targetState = phase,
             transitionSpec = {
+                // Fade + scale only (both drawn in a graphics layer); no size animation.
                 (fadeIn(WseiMotion.effects()) + scaleIn(WseiMotion.spatial(), initialScale = 0.96f)) togetherWith
-                    fadeOut(WseiMotion.fastEffects())
+                    fadeOut(WseiMotion.fastEffects()) using null
             },
             modifier = modifier.fillMaxSize(),
             label = "authPhaseTransition"
@@ -291,11 +308,7 @@ fun WseiAppShell(
                                 AnimatedContent(
                                     targetState = currentDestination,
                                     transitionSpec = {
-                                        // Quick cross-fade with a short spring lift; the old tab
-                                        // leaves almost instantly so the two never overlap visibly.
-                                        (fadeIn(WseiMotion.effects()) +
-                                            slideInVertically(WseiMotion.fastSpatial()) { it / 32 }) togetherWith
-                                            fadeOut(WseiMotion.fastEffects())
+                                        destinationTransform(initialState, targetState)
                                     },
                                     modifier = Modifier.fillMaxSize(),
                                     label = "destinationTransition"
@@ -347,6 +360,14 @@ fun WseiAppShell(
                                         ),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
+                                    // The About page has its own update card, so the prompt
+                                    // steps aside there instead of repeating it.
+                                    UpdatePromptHost(
+                                        viewModel = updateViewModel,
+                                        allowed = !(currentDestination == WseiDestination.MORE &&
+                                            moreSubView == MoreSubView.ABOUT),
+                                        onShowChanges = { showChangelog = true }
+                                    )
                                     StatusMessage(
                                         message = scheduleUiState.statusBannerMessage,
                                         onDismiss = onDismissStatusBanner
@@ -366,10 +387,51 @@ fun WseiAppShell(
                             }
                         }
                     }
+
+                    if (showChangelog) {
+                        UpdateChangelogSheet(
+                            onDismiss = { showChangelog = false },
+                            viewModel = updateViewModel
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+/**
+ * One transition for every destination change, built only from fade, scale and a small spring
+ * offset (no size animation, so nothing is measured twice):
+ * - Profile opens with a lift-in scale from the top end (where the avatar is) and closes back,
+ * - tabs slide a few dp in the direction of travel on the bar.
+ * The outgoing screen fades out quickly so the two never visibly overlap.
+ */
+private fun destinationTransform(initial: WseiDestination, target: WseiDestination): ContentTransform {
+    val profileOrigin = TransformOrigin(1f, 0f)
+    val transform = when {
+        target == WseiDestination.PROFILE ->
+            (fadeIn(WseiMotion.effects()) +
+                scaleIn(WseiMotion.spatial(), initialScale = 0.92f, transformOrigin = profileOrigin)) togetherWith
+                fadeOut(WseiMotion.fastEffects())
+        initial == WseiDestination.PROFILE ->
+            fadeIn(WseiMotion.effects()) togetherWith
+                (fadeOut(WseiMotion.fastEffects()) +
+                    scaleOut(WseiMotion.size(), targetScale = 0.94f, transformOrigin = profileOrigin))
+        else -> {
+            val forward = target.ordinal > initial.ordinal
+            (fadeIn(WseiMotion.effects()) +
+                slideInHorizontally(WseiMotion.spatial()) { width -> if (forward) width / 24 else -width / 24 }) togetherWith
+                fadeOut(WseiMotion.fastEffects())
+        }
+    }
+    // No size animation between tabs: every destination fills the same bounds.
+    return ContentTransform(
+        targetContentEnter = transform.targetContentEnter,
+        initialContentExit = transform.initialContentExit,
+        targetContentZIndex = transform.targetContentZIndex,
+        sizeTransform = null
+    )
 }
 
 @Composable
