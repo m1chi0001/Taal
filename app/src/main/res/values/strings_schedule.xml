@@ -5,8 +5,6 @@
     <string name="schedule_hero_time_range">%1$s – %2$s</string>
     <string name="schedule_hero_remaining_value">%1$d min</string>
     <string name="schedule_hero_remaining_label">do końca zajęć</string>
-    <string name="schedule_hero_elapsed">%1$d z %2$d min</string>
-    <string name="schedule_hero_ends_at">koniec %1$s</string>
     <string name="schedule_hero_state">Trwają zajęcia: %1$s, pozostało %2$d min</string>
     <string name="schedule_hero_progress_cd">Postęp zajęć: %1$d z %2$d minut</string>
     <string name="schedule_hero_expand_cd">Pokaż plan dnia i następne zajęcia</string>
@@ -75,11 +73,7 @@
         <item quantity="many">%1$d bloków</item>
         <item quantity="other">%1$d bloku</item>
     </plurals>
-    <string name="schedule_day_session_with_count">Zjazd • %1$s</string>
     <string name="schedule_hero_next_details">%1$s • %2$s</string>
-    <string name="schedule_your_day">Twój dzień</string>
-    <string name="schedule_segment_class">Zaj. %1$d</string>
-    <string name="schedule_segment_break">Przerwa</string>
 
     <!-- Plan zajęć: dzień w centrum uwagi (focus) i lista dnia -->
     <string name="schedule_class_ongoing_badge">Trwa • jeszcze %1$d min</string>

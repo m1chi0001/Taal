@@ -79,10 +79,8 @@
     <string name="class_state_next">Наступне заняття</string>
     <string name="class_state_finished">Завершено</string>
     <string name="class_state_upcoming">Заплановано</string>
-    <string name="class_badge_ongoing">Триває зараз</string>
     <string name="class_badge_next">Наступне</string>
     <string name="class_card_type_room">%1$s • %2$s</string>
-    <string name="class_card_progress">%1$d з %2$d хв • до %3$s</string>
     <string name="day_monday_min">Пн</string>
     <string name="day_tuesday_min">Вт</string>
     <string name="day_wednesday_min">Ср</string>
@@ -132,15 +130,6 @@
     <string name="home_greeting_evening">Добрий вечір, %1$s</string>
     <string name="home_greeting_fallback_name">студенте</string>
     <string name="home_album_number">Залікова %1$s</string>
-    <string name="home_today">Сьогодні</string>
-    <string name="home_today_overline">%1$s • %2$s</string>
-    <string name="home_next_session_overline">Найближчий день занять • %1$s</string>
-    <plurals name="home_classes_short">
-        <item quantity="one">%1$d зан.</item>
-        <item quantity="few">%1$d зан.</item>
-        <item quantity="many">%1$d зан.</item>
-        <item quantity="other">%1$d зан.</item>
-    </plurals>
     <string name="home_no_classes">Занять не заплановано. Відпочиньте!</string>
     <plurals name="home_more_in_schedule">
         <item quantity="one">+ ще %1$d у розкладі</item>
@@ -240,7 +229,6 @@
 
     <!-- Profile -->
     <string name="profile_section_studies">Навчання</string>
-    <string name="profile_course_of_study">Хід навчання</string>
     <string name="profile_field_of_study">Спеціальність</string>
     <string name="profile_specialization">Спеціалізація</string>
     <string name="profile_specialization_general">Загальна</string>

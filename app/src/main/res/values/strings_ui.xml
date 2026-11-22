@@ -79,10 +79,8 @@
     <string name="class_state_next">Następne zajęcia</string>
     <string name="class_state_finished">Zakończone</string>
     <string name="class_state_upcoming">Zaplanowane</string>
-    <string name="class_badge_ongoing">Trwa teraz</string>
     <string name="class_badge_next">Następne</string>
     <string name="class_card_type_room">%1$s • %2$s</string>
-    <string name="class_card_progress">%1$d z %2$d min • do %3$s</string>
     <string name="day_monday_min">Pn</string>
     <string name="day_tuesday_min">Wt</string>
     <string name="day_wednesday_min">Śr</string>
@@ -132,15 +130,6 @@
     <string name="home_greeting_evening">Dobry wieczór, %1$s</string>
     <string name="home_greeting_fallback_name">Studencie</string>
     <string name="home_album_number">Album %1$s</string>
-    <string name="home_today">Dzisiaj</string>
-    <string name="home_today_overline">%1$s • %2$s</string>
-    <string name="home_next_session_overline">Najbliższy zjazd • %1$s</string>
-    <plurals name="home_classes_short">
-        <item quantity="one">%1$d zaj.</item>
-        <item quantity="few">%1$d zaj.</item>
-        <item quantity="many">%1$d zaj.</item>
-        <item quantity="other">%1$d zaj.</item>
-    </plurals>
     <string name="home_no_classes">Brak zaplanowanych zajęć. Odpocznij!</string>
     <plurals name="home_more_in_schedule">
         <item quantity="one">+ %1$d więcej w planie</item>
@@ -240,7 +229,6 @@
 
     <!-- Profile -->
     <string name="profile_section_studies">Studia</string>
-    <string name="profile_course_of_study">Tok studiów</string>
     <string name="profile_field_of_study">Kierunek</string>
     <string name="profile_specialization">Specjalność</string>
     <string name="profile_specialization_general">Ogólna</string>

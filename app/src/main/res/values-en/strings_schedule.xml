@@ -5,8 +5,6 @@
     <string name="schedule_hero_time_range">%1$s – %2$s</string>
     <string name="schedule_hero_remaining_value">%1$d min</string>
     <string name="schedule_hero_remaining_label">until the class ends</string>
-    <string name="schedule_hero_elapsed">%1$d of %2$d min</string>
-    <string name="schedule_hero_ends_at">ends at %1$s</string>
     <string name="schedule_hero_state">Class in progress: %1$s, %2$d min left</string>
     <string name="schedule_hero_progress_cd">Class progress: %1$d of %2$d minutes</string>
     <string name="schedule_hero_expand_cd">Show today\'s plan and upcoming classes</string>
@@ -69,9 +67,34 @@
         <item quantity="one">%1$d block</item>
         <item quantity="other">%1$d blocks</item>
     </plurals>
-    <string name="schedule_day_session_with_count">Weekend • %1$s</string>
     <string name="schedule_hero_next_details">%1$s • %2$s</string>
-    <string name="schedule_your_day">Your day</string>
-    <string name="schedule_segment_class">Class %1$d</string>
-    <string name="schedule_segment_break">Break</string>
+
+    <!-- Schedule: focus day and day list -->
+    <string name="schedule_class_ongoing_badge">Now • %1$d min left</string>
+    <string name="schedule_focus_today_done">Today\'s classes are over</string>
+    <string name="schedule_focus_today_free">No classes today</string>
+    <string name="schedule_focus_next_tomorrow">Next class: tomorrow at %1$s</string>
+    <string name="schedule_focus_next_later">Next day of this session: %1$s</string>
+    <string name="schedule_focus_next_zjazd">Next weekend session: %1$s</string>
+    <string name="schedule_day_date_count">%1$s • %2$s</string>
+
+    <!-- Home: focus card -->
+    <string name="home_focus_status_tomorrow">Tomorrow</string>
+    <string name="home_focus_status_later">Session continues</string>
+    <string name="home_focus_status_next_zjazd">Next weekend session</string>
+    <string name="home_focus_free_now">Done for today</string>
+    <string name="home_focus_free_today">No classes today</string>
+    <string name="home_focus_until_start">until it starts</string>
+    <string name="home_focus_duration_hours">%1$d h %2$02d min</string>
+    <string name="home_focus_first_class_caption">first class • %1$s</string>
+    <string name="home_focus_message_tomorrow">Rest and recharge — classes again tomorrow.</string>
+    <string name="home_focus_message_later">The session isn\'t over yet — hang in there, the weekend is almost yours!</string>
+    <string name="home_focus_message_next_zjazd">Take a breather before the next weekend session.</string>
+    <plurals name="home_focus_in_days">
+        <item quantity="one">in %1$d day</item>
+        <item quantity="other">in %1$d days</item>
+    </plurals>
+    <string name="home_focus_list_later_today">Later today</string>
+    <string name="home_focus_list_day">Day plan</string>
+    <string name="home_focus_last_today">This is your last class today</string>
 </resources>

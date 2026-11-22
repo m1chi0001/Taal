@@ -44,22 +44,6 @@
     <string name="about_hub_supporting">Wersja %1$s • licencja i kod źródłowy</string>
     <string name="about_tagline">Plan zajęć, oceny, finanse i ogłoszenia z Wirtualnego Dziekanatu Uniwersytetu WSEI w Lublinie</string>
     <string name="about_version">Wersja %1$s</string>
-    <string name="about_min_android">Android 8.0+</string>
-    <string name="about_source_code">Kod źródłowy</string>
-    <string name="about_releases">Wydania</string>
-    <string name="about_releases_supporting">Historia wersji i pliki APK</string>
-    <string name="about_project_title">Projekt</string>
-    <string name="about_author">Autor</string>
-    <string name="about_author_supporting">%1$s na GitHubie</string>
-    <string name="about_tech_title">Technologie</string>
-    <string name="about_tech_architecture">Clean Architecture, MVVM i pamięć podręczna offline-first.</string>
-    <string name="about_licence_title">Licencja</string>
-    <string name="about_licence_app">Aplikacja</string>
-    <string name="about_licence_mit">MIT</string>
-    <string name="about_licence_copyright">Prawa autorskie</string>
-    <string name="about_licence_font">Czcionka</string>
-    <string name="about_licence_data">Dane</string>
-    <string name="about_licence_data_value">Wirtualny Dziekanat (APR System)</string>
     <string name="about_disclaimer">Niezależny projekt studencki, niepowiązany oficjalnie z Uniwersytetem WSEI ani z APR System.</string>
 
     <string name="about_update_title">Aktualizacje</string>
@@ -70,8 +54,6 @@
     <string name="about_update_downloading">Pobieranie wersji %1$s… %2$d%%</string>
     <string name="about_update_ready">Wersja %1$s jest pobrana i gotowa do instalacji.</string>
     <string name="about_update_error">Nie udało się sprawdzić aktualizacji.</string>
-    <string name="about_update_whats_new">Co nowego</string>
-    <string name="about_update_download">Pobierz</string>
     <string name="about_update_cancel">Anuluj</string>
     <string name="about_update_install">Zainstaluj</string>
     <string name="about_update_allow_and_install">Zezwól i zainstaluj</string>

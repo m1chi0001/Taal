@@ -35,7 +35,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -64,6 +63,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import pl.lublin.wsei.plan.l10n.appLocale
 
 /**
  * "Historia zmian" sheet wired to the shared [UpdateViewModel]. Opened from the update prompt,
@@ -92,7 +92,7 @@ fun ChangelogSheet(
 ) {
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
-    val locale = LocalConfiguration.current.locales.get(0) ?: Locale.getDefault()
+    val locale = appLocale()
     // The newest release is open by default; the rest stay compact until tapped.
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
 

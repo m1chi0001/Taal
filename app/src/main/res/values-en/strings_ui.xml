@@ -77,10 +77,8 @@
     <string name="class_state_next">Next class</string>
     <string name="class_state_finished">Finished</string>
     <string name="class_state_upcoming">Scheduled</string>
-    <string name="class_badge_ongoing">Now</string>
     <string name="class_badge_next">Next</string>
     <string name="class_card_type_room">%1$s • %2$s</string>
-    <string name="class_card_progress">%1$d of %2$d min • until %3$s</string>
     <string name="day_monday_min">Mo</string>
     <string name="day_tuesday_min">Tu</string>
     <string name="day_wednesday_min">We</string>
@@ -130,13 +128,6 @@
     <string name="home_greeting_evening">Good evening, %1$s</string>
     <string name="home_greeting_fallback_name">Student</string>
     <string name="home_album_number">Student ID %1$s</string>
-    <string name="home_today">Today</string>
-    <string name="home_today_overline">%1$s • %2$s</string>
-    <string name="home_next_session_overline">Next class day • %1$s</string>
-    <plurals name="home_classes_short">
-        <item quantity="one">%1$d class</item>
-        <item quantity="other">%1$d classes</item>
-    </plurals>
     <string name="home_no_classes">No classes scheduled. Take a break!</string>
     <plurals name="home_more_in_schedule">
         <item quantity="one">+ %1$d more in the schedule</item>
@@ -224,7 +215,6 @@
 
     <!-- Profile -->
     <string name="profile_section_studies">Studies</string>
-    <string name="profile_course_of_study">Course of study</string>
     <string name="profile_field_of_study">Field of study</string>
     <string name="profile_specialization">Specialisation</string>
     <string name="profile_specialization_general">General</string>

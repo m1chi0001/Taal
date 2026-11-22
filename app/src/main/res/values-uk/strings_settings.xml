@@ -40,22 +40,6 @@
     <string name="about_hub_supporting">Версія %1$s • ліцензія та вихідний код</string>
     <string name="about_tagline">Розклад занять, оцінки, фінанси й оголошення з Віртуального деканату Університету WSEI в Любліні</string>
     <string name="about_version">Версія %1$s</string>
-    <string name="about_min_android">Android 8.0+</string>
-    <string name="about_source_code">Вихідний код</string>
-    <string name="about_releases">Випуски</string>
-    <string name="about_releases_supporting">Історія версій і файли APK</string>
-    <string name="about_project_title">Проєкт</string>
-    <string name="about_author">Автор</string>
-    <string name="about_author_supporting">%1$s на GitHub</string>
-    <string name="about_tech_title">Технології</string>
-    <string name="about_tech_architecture">Clean Architecture, MVVM і кеш за принципом offline-first.</string>
-    <string name="about_licence_title">Ліцензія</string>
-    <string name="about_licence_app">Застосунок</string>
-    <string name="about_licence_mit">MIT</string>
-    <string name="about_licence_copyright">Авторські права</string>
-    <string name="about_licence_font">Шрифт</string>
-    <string name="about_licence_data">Дані</string>
-    <string name="about_licence_data_value">Віртуальний деканат (APR System)</string>
     <string name="about_disclaimer">Незалежний студентський проєкт, офіційно не повʼязаний з Університетом WSEI чи APR System.</string>
 
     <string name="about_update_title">Оновлення</string>
@@ -66,8 +50,6 @@
     <string name="about_update_downloading">Завантаження версії %1$s… %2$d%%</string>
     <string name="about_update_ready">Версію %1$s завантажено, її можна встановити.</string>
     <string name="about_update_error">Не вдалося перевірити оновлення.</string>
-    <string name="about_update_whats_new">Що нового</string>
-    <string name="about_update_download">Завантажити</string>
     <string name="about_update_cancel">Скасувати</string>
     <string name="about_update_install">Встановити</string>
     <string name="about_update_allow_and_install">Дозволити й встановити</string>
@@ -75,9 +57,48 @@
     <string name="about_update_check_again">Перевірити ще раз</string>
     <string name="about_update_permission_hint">Android попросить дозвіл на встановлення застосунків із Taal. Після надання дозволу поверніться й торкніться «Встановити».</string>
 
+    <string name="about_section_app">Застосунок</string>
+    <string name="about_whats_new_title">Що нового</string>
+    <string name="about_whats_new_supporting">Історія змін усіх версій</string>
+    <string name="about_github">GitHub</string>
+    <string name="about_credits_line">Kotlin · Jetpack Compose · Material 3 Expressive</string>
+    <string name="about_licence_line">Ліцензія MIT · © 2026 %1$s</string>
+    <string name="about_hub_update_badge">Нова версія</string>
+
+    <!-- Updates: banner and changelog -->
+    <string name="update_prompt_title">Доступне оновлення</string>
+    <string name="update_prompt_installed">Встановлено %1$s</string>
+    <string name="update_prompt_download">Завантажити оновлення</string>
+    <string name="update_prompt_open_release">Відкрити сторінку випуску</string>
+    <string name="update_prompt_changes">Переглянути зміни</string>
+    <string name="update_prompt_dismiss">Приховати сповіщення про цю версію</string>
+    <string name="update_prompt_downloading">Завантаження… %1$d%%</string>
+
+    <string name="changelog_title">Історія змін</string>
+    <string name="changelog_subtitle">Усі випуски Taal, від найновішого</string>
+    <string name="changelog_version_badge">v%1$s</string>
+    <string name="changelog_latest">Найновіша</string>
+    <string name="changelog_installed">Встановлена</string>
+    <string name="changelog_loading">Завантаження історії змін…</string>
+    <string name="changelog_empty">Не вдалося завантажити історію змін. Перевірте підключення до інтернету.</string>
+    <string name="changelog_retry">Спробувати ще раз</string>
+    <string name="changelog_open_github">Усі випуски на GitHub</string>
+    <string name="changelog_open_release">Відкрити випуск</string>
+    <string name="changelog_no_notes">Для цього випуску немає опису змін.</string>
+
     <!-- Profile -->
     <string name="profile_group_number">гр. %1$s</string>
     <string name="profile_groups_empty">У поточному семестрі немає призначених груп.</string>
+    <string name="profile_study_details">Деталі навчання</string>
+    <string name="profile_track_title">Хід навчання</string>
+    <string name="profile_track_year">Курс %1$d</string>
+    <string name="profile_track_winter">Зимовий семестр</string>
+    <string name="profile_track_summer">Літній семестр</string>
+    <string name="profile_track_term_year">%1$s %2$s</string>
+    <string name="profile_track_academic_year">Навчальний рік %1$s</string>
+    <string name="profile_track_full_time">Денна форма</string>
+    <string name="profile_track_part_time">Заочна форма</string>
+    <string name="profile_track_course">Спеціальність %1$s</string>
 
     <!-- Subjects -->
     <string name="subjects_semester_number">Семестр %1$d</string>
