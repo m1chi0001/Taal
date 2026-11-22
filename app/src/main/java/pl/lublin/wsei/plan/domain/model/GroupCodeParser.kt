@@ -8,6 +8,13 @@ enum class GroupClassKind {
     PROJECT,
     SEMINAR,
     ELEARNING,
+    /** Professional practice ("Praktyki zawodowe", e.g. `PZZ1/1/I/N`). */
+    PRACTICE,
+    /**
+     * Not a class group: the study track / year of study ("Tok", e.g. `ROK1/ N`).
+     * Belongs to "Tok nauki", never to the class-group list.
+     */
+    STUDY_TRACK,
     OTHER
 }
 
