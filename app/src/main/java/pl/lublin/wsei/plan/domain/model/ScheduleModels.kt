@@ -400,22 +400,113 @@ data class ScholarshipPayoutItem(
     val status: String
 )
 
+/**
+ * Semantic class of a scholarship application's `Stan` (status) text.
+ *
+ * The raw backend text is always kept for display; this classification only drives colours and
+ * icons. Matching is keyword based on a normalized (lower-case, diacritic-free) string, so variants
+ * such as "Przyjęto", "Przyjęty" or "PRZYJETO" all resolve to [ACCEPTED].
+ */
+enum class ScholarshipStatusKind {
+    /** Application formally accepted for processing ("Przyjęto"). */
+    ACCEPTED,
+
+    /** Scholarship granted ("Przyznano", "Rozpatrzony pozytywnie"). */
+    GRANTED,
+
+    /** Application rejected or refused ("Odrzucono", "Rozpatrzony negatywnie", "Odmowa"). */
+    REJECTED,
+
+    /** Application is being reviewed ("W rozpatrywaniu", "W toku"). */
+    UNDER_REVIEW,
+
+    /** Application submitted but not yet processed ("Złożony"). */
+    SUBMITTED,
+
+    /** Missing or unrecognized status text. */
+    UNKNOWN;
+
+    companion object {
+        private val REJECTED_KEYS = listOf("odrzuc", "negatywn", "odmow", "nie przyzn", "nieprzyzn", "niezasadn", "rejected", "denied")
+        private val GRANTED_KEYS = listOf("przyzna", "pozytywn", "granted", "awarded")
+        private val ACCEPTED_KEYS = listOf("przyjet", "zaakceptow", "accepted")
+        private val UNDER_REVIEW_KEYS = listOf("rozpatrywan", "w toku", "weryfik", "oczekuj", "review", "pending")
+        private val SUBMITTED_KEYS = listOf("zlozon", "zlozen", "wyslan", "submitted")
+        private val COMBINING_MARKS = Regex("\\p{Mn}+")
+        private val WHITESPACE = Regex("\\s+")
+
+        /** Classifies a raw status text; `null`/blank yields [UNKNOWN]. */
+        fun classify(raw: String?): ScholarshipStatusKind {
+            if (raw.isNullOrBlank()) return UNKNOWN
+            val text = normalize(raw)
+            return when {
+                REJECTED_KEYS.any { it in text } -> REJECTED
+                GRANTED_KEYS.any { it in text } -> GRANTED
+                ACCEPTED_KEYS.any { it in text } -> ACCEPTED
+                UNDER_REVIEW_KEYS.any { it in text } -> UNDER_REVIEW
+                SUBMITTED_KEYS.any { it in text } -> SUBMITTED
+                else -> UNKNOWN
+            }
+        }
+
+        private fun normalize(raw: String): String {
+            val lower = raw.trim().lowercase().replace('ł', 'l')
+            return java.text.Normalizer.normalize(lower, java.text.Normalizer.Form.NFD)
+                .replace(COMBINING_MARKS, "")
+                .replace(WHITESPACE, " ")
+        }
+    }
+}
+
+/**
+ * A single scholarship application.
+ *
+ * Optional fields are `null`/blank when the backend does not provide them; the UI must hide them
+ * instead of inventing placeholders. All fields added after 0.7.6 have defaults so previously
+ * cached JSON still deserializes.
+ *
+ * @property number application number shown as "№ 70"; `null` (or a legacy `0`) when unknown.
+ * @property title application name, e.g. "WNIOSEK O STYPENDIUM SOCJALNE 2026/2027".
+ * @property typeName scholarship type (`Typ`); often identical to [title].
+ * @property typeVariantName type variant (`Wariant`), e.g. "Studenci".
+ * @property submissionDateIso submission date (`Złożony`) as dd.MM.yyyy; blank when unknown.
+ * @property statusString raw `Stan` text exactly as returned by the backend; `null` when absent.
+ * @property isGranted backend `schoolarshipGranted` flag. It never implies a decision exists.
+ * @property decisionNumber ruling number; only set when a real ruling exists.
+ * @property decisionDateIso ruling date (dd.MM.yyyy); only set when a real ruling exists.
+ * @property decisionStatus ruling status text; only set when a real ruling exists.
+ * @property amountFormatted granted/accrued amount; only set when the backend returns a positive amount.
+ * @property payouts payments with positive amounts.
+ */
 @Immutable
 @Serializable
 data class ScholarshipApplication(
     val id: Int,
     val semesterLabel: String,
-    val number: Int,
+    val number: Int? = null,
     val title: String,
     val typeVariantName: String = "",
-    val submissionDateIso: String,
-    val statusString: String,
-    val isGranted: Boolean,
+    val submissionDateIso: String = "",
+    val statusString: String? = null,
+    val isGranted: Boolean = false,
     val decisionNumber: String? = null,
     val decisionDateIso: String? = null,
     val acceptedRules: Boolean = true,
-    val payouts: List<ScholarshipPayoutItem> = emptyList()
-)
+    val payouts: List<ScholarshipPayoutItem> = emptyList(),
+    val typeName: String = "",
+    val decisionStatus: String? = null,
+    val amountFormatted: String? = null
+) {
+    /** Application number to display, ignoring the legacy `0` placeholder. */
+    val displayNumber: Int? get() = number?.takeIf { it > 0 }
+
+    /** Semantic class of [statusString]. */
+    val statusKind: ScholarshipStatusKind get() = ScholarshipStatusKind.classify(statusString)
+
+    /** `true` only when the backend returned an actual ruling (number, date or status). */
+    val hasDecision: Boolean
+        get() = !decisionNumber.isNullOrBlank() || !decisionDateIso.isNullOrBlank() || !decisionStatus.isNullOrBlank()
+}
 
 /**
  * Finances & Online Payments (`FinancesData` & `BlueMedia`) mapped from `MsFinancesDto`, `MsChargeDto`, and `PaymentAnswerDto`.
