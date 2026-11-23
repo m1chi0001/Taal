@@ -28,12 +28,8 @@ object ScheduleFocusResolver {
 
     fun resolve(events: List<ClassEvent>, nowEpochMillis: Long, zone: ZoneId = WARSAW): ScheduleFocus {
         if (events.isEmpty()) return ScheduleFocus.None
-        val today = Instant.ofEpochMilli(nowEpochMillis).atZone(zone).toLocalDate()
-
-        val byDate: Map<LocalDate, List<ClassEvent>> = events
-            .mapNotNull { event -> event.localDate(zone)?.let { it to event } }
-            .groupBy({ it.first }, { it.second })
-            .mapValues { (_, dayEvents) -> dayEvents.sortedWith(START_ORDER) }
+        val today = todayOf(nowEpochMillis, zone)
+        val byDate = groupByDate(events, zone)
 
         val todayEvents = byDate[today].orEmpty()
         val active = todayEvents.firstOrNull { it.isOngoing(nowEpochMillis) }
@@ -70,6 +66,53 @@ object ScheduleFocusResolver {
             nextEvent = nextDayEvents.firstOrNull()
         )
     }
+
+    /**
+     * The first day after [afterDateIso] that has classes, with its distance from today (the date
+     * of [nowEpochMillis] in [zone]), first start time and block count. [afterDateIso] may be any
+     * day — past, today or future; the result is always the next class day after it. Returns
+     * `null` when [afterDateIso] is malformed or no class day follows it.
+     *
+     * With `afterDateIso` = today this is the same day [resolve] picks once today is over.
+     */
+    fun nextClassDayAfter(
+        events: List<ClassEvent>,
+        afterDateIso: String,
+        nowEpochMillis: Long,
+        zone: ZoneId = WARSAW
+    ): NextClassDay? {
+        if (events.isEmpty()) return null
+        val after = parseDate(afterDateIso) ?: return null
+        val byDate = groupByDate(events, zone)
+        val date = byDate.keys.filter { it.isAfter(after) }.minOrNull() ?: return null
+        val dayEvents = byDate.getValue(date)
+        val first = dayEvents.first()
+        val startsZjazd = (1..MAX_ZJAZD_GAP_DAYS).none { gap -> byDate.containsKey(date.minusDays(gap)) }
+        return NextClassDay(
+            dateIso = date.toString(),
+            daysFromToday = ChronoUnit.DAYS.between(todayOf(nowEpochMillis, zone), date).toInt(),
+            firstStartMillis = first.timeSlot.startEpochMillis,
+            firstStartLabel = first.timeSlot.startFormatted,
+            blockCount = dayEvents.size,
+            startsZjazd = startsZjazd
+        )
+    }
+
+    private fun todayOf(nowEpochMillis: Long, zone: ZoneId): LocalDate =
+        Instant.ofEpochMilli(nowEpochMillis).atZone(zone).toLocalDate()
+
+    /** Events grouped by their local date, each day sorted by start time. */
+    private fun groupByDate(events: List<ClassEvent>, zone: ZoneId): Map<LocalDate, List<ClassEvent>> = events
+        .mapNotNull { event -> event.localDate(zone)?.let { it to event } }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, dayEvents) -> dayEvents.sortedWith(START_ORDER) }
+
+    private fun parseDate(iso: String): LocalDate? =
+        try {
+            LocalDate.parse(iso.trim().take(10))
+        } catch (e: DateTimeParseException) {
+            null
+        }
 
     private val START_ORDER = compareBy<ClassEvent>({ it.timeSlot.startEpochMillis }, { it.timeSlot.endEpochMillis })
 

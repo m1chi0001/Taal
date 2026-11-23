@@ -50,6 +50,11 @@
     <!-- Plan zajęć: lista dnia i kalendarz -->
     <string name="schedule_day_off_title">Wolne od zajęć</string>
     <string name="schedule_day_off_message">Na ten dzień nie ma zajęć. Wybierz inny dzień w kalendarzu.</string>
+    <string name="schedule_day_off_date_countdown">%1$s (%2$s)</string>
+    <string name="schedule_day_off_next_details">Pierwsze zajęcia o %1$s • %2$s</string>
+    <string name="schedule_day_off_go_to">Przejdź do %1$s</string>
+    <string name="schedule_relative_today">dzisiaj</string>
+    <string name="schedule_relative_tomorrow">jutro</string>
     <string name="schedule_calendar_month_year">%1$s %2$d</string>
     <string name="schedule_calendar_month_view">Widok miesiąca</string>
     <string name="schedule_calendar_previous_month">Poprzedni miesiąc</string>
@@ -86,16 +91,14 @@
 
     <!-- Start: karta „w centrum uwagi” -->
     <string name="home_focus_status_tomorrow">Jutro</string>
-    <string name="home_focus_status_later">Ciąg dalszy zjazdu</string>
+    <string name="home_focus_status_later">Dalej w tym zjeździe</string>
     <string name="home_focus_status_next_zjazd">Następny zjazd</string>
-    <string name="home_focus_free_now">Dzisiaj już wolne</string>
-    <string name="home_focus_free_today">Dzisiaj bez zajęć</string>
+    <string name="home_focus_free_now">Dzisiejsze zajęcia zakończone</string>
+    <string name="home_focus_free_today">Dziś bez zajęć</string>
     <string name="home_focus_until_start">do rozpoczęcia</string>
     <string name="home_focus_duration_hours">%1$d h %2$02d min</string>
-    <string name="home_focus_first_class_caption">pierwsze zajęcia • %1$s</string>
-    <string name="home_focus_message_tomorrow">Odpocznij i naładuj baterie — jutro znów zajęcia.</string>
-    <string name="home_focus_message_later">Zjazd jeszcze trwa — jeszcze trochę i weekend Twój!</string>
-    <string name="home_focus_message_next_zjazd">Masz chwilę oddechu przed kolejnym zjazdem.</string>
+    <string name="home_focus_first_class_label">pierwsze zajęcia</string>
+    <string name="home_focus_open_schedule">Otwórz plan</string>
     <plurals name="home_focus_in_days">
         <item quantity="one">za %1$d dzień</item>
         <item quantity="few">za %1$d dni</item>
@@ -103,6 +106,6 @@
         <item quantity="other">za %1$d dnia</item>
     </plurals>
     <string name="home_focus_list_later_today">Dalej dzisiaj</string>
-    <string name="home_focus_list_day">Plan dnia</string>
+    <string name="home_focus_list_upcoming_date">Najbliższe zajęcia • %1$s</string>
     <string name="home_focus_last_today">To ostatnie zajęcia na dziś</string>
 </resources>

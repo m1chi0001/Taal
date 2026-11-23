@@ -50,6 +50,7 @@ import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DeliveryMode
 import pl.lublin.wsei.plan.domain.schedule.ScheduleFocus
 import pl.lublin.wsei.plan.domain.schedule.ScheduleFocusKind
+import pl.lublin.wsei.plan.domain.schedule.ScheduleFocusResolver
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiWidthClass
 import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
@@ -71,6 +72,8 @@ import pl.lublin.wsei.plan.ui.schedule.ScheduleAccentBadge
 import pl.lublin.wsei.plan.ui.schedule.ScheduleCountdown
 import pl.lublin.wsei.plan.ui.schedule.ScheduleStatusChip
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
+import pl.lublin.wsei.plan.ui.schedule.relativeDaysLabel
+import pl.lublin.wsei.plan.ui.schedule.rememberDayTitle
 import pl.lublin.wsei.plan.ui.theme.ActiveHeroCardAsymmetricShape
 import pl.lublin.wsei.plan.ui.theme.M3XCloverShape
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
@@ -80,7 +83,6 @@ import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -323,6 +325,7 @@ private fun HomeFocusSection(
                 FocusDayList(
                     uiState = uiState,
                     isToday = listModel.focus.isToday,
+                    dateIso = listModel.focus.dateIso,
                     events = upcoming,
                     nowEpochMillis = now,
                     onClick = onOpenSchedule
@@ -406,57 +409,49 @@ private fun FocusHeroCard(
         }
         FocusMode.AWAY -> {
             val focus = model.focus
-            val locale = appLocale()
-            val dayFormatter = rememberLocalizedDateFormatter(DayHeaderSkeleton)
-            val dateLabel = remember(focus.dateIso, dayFormatter, locale) {
-                focus.dateIso?.let { iso ->
-                    runCatching { LocalDate.parse(iso).format(dayFormatter).capitalizeFirst(locale) }.getOrNull()
-                }.orEmpty()
-            }
             val todayHadClasses = remember(uiState.allEvents, todayIso) {
                 uiState.allEvents.any { it.dateIso == todayIso }
             }
-            val daysUntil = remember(focus.dateIso, todayIso) {
-                runCatching {
-                    ChronoUnit.DAYS.between(LocalDate.parse(todayIso), LocalDate.parse(focus.dateIso ?: todayIso)).toInt()
-                }.getOrDefault(0)
+            // Same resolver as Plan zajęć's day-off card, so both screens agree on the countdown.
+            val nextDay = remember(uiState.allEvents, todayIso, focus.dateIso) {
+                ScheduleFocusResolver.nextClassDayAfter(uiState.allEvents, todayIso, nowEpochMillis)
+                    ?.takeIf { it.dateIso == focus.dateIso }
             }
-            val count = focus.events.size
+            val daysUntil = nextDay?.daysFromToday ?: 0
+            val count = nextDay?.blockCount ?: focus.events.size
+            val kindLabel = stringResource(
+                when (focus.kind) {
+                    ScheduleFocusKind.TOMORROW -> R.string.home_focus_status_tomorrow
+                    ScheduleFocusKind.LATER_THIS_ZJAZD -> R.string.home_focus_status_later
+                    else -> R.string.home_focus_status_next_zjazd
+                }
+            )
+            // "Jutro" already says when; later days get "• za 11 dni".
+            val countdown = if (daysUntil > 1) relativeDaysLabel(daysUntil) else null
             FocusHeroLayout(
                 containerColor = colors.secondaryContainer,
                 contentColor = colors.onSecondaryContainer,
                 accentColor = colors.secondary,
                 onAccentColor = colors.onSecondary,
+                // Today's state is a quiet header of its own, apart from the next-day block below.
                 status = stringResource(
-                    when (focus.kind) {
-                        ScheduleFocusKind.TOMORROW -> R.string.home_focus_status_tomorrow
-                        ScheduleFocusKind.LATER_THIS_ZJAZD -> R.string.home_focus_status_later
-                        else -> R.string.home_focus_status_next_zjazd
-                    }
-                ),
-                trailing = if (focus.kind == ScheduleFocusKind.NEXT_ZJAZD && daysUntil > 1) {
-                    pluralStringResource(R.plurals.home_focus_in_days, daysUntil, daysUntil)
-                } else {
-                    null
-                },
-                icon = WseiIcons.AutoAwesome,
-                overline = dateLabel,
-                title = stringResource(
                     if (todayHadClasses) R.string.home_focus_free_now else R.string.home_focus_free_today
                 ),
-                countdownValue = event?.timeSlot?.startFormatted,
-                countdownCaption = stringResource(
-                    R.string.home_focus_first_class_caption,
-                    pluralStringResource(R.plurals.schedule_day_blocks, count, count)
+                statusIcon = WseiIcons.CheckCircle,
+                trailing = null,
+                icon = WseiIcons.CalendarMonth,
+                overline = if (countdown != null) {
+                    stringResource(R.string.schedule_day_date_count, kindLabel, countdown)
+                } else {
+                    kindLabel
+                },
+                title = rememberDayTitle(focus.dateIso),
+                countdownValue = nextDay?.firstStartLabel ?: event?.timeSlot?.startFormatted,
+                countdownCaption = stringResource(R.string.home_focus_first_class_label),
+                message = null,
+                pills = listOf(
+                    WseiIcons.School to pluralStringResource(R.plurals.schedule_day_blocks, count, count)
                 ),
-                message = stringResource(
-                    when (focus.kind) {
-                        ScheduleFocusKind.TOMORROW -> R.string.home_focus_message_tomorrow
-                        ScheduleFocusKind.LATER_THIS_ZJAZD -> R.string.home_focus_message_later
-                        else -> R.string.home_focus_message_next_zjazd
-                    }
-                ),
-                pills = emptyList(),
                 onClick = onClick
             )
         }
@@ -480,8 +475,13 @@ private fun FocusHeroCard(
 }
 
 /**
- * Shared layout of every focus state, in the visual language of Plan zajęć's „Trwa teraz” hero:
- * status chip + time, cookie accent badge with overline and title, big countdown, detail pills.
+ * Shared layout of every focus state, in the visual language of Plan zajęć's „Trwa teraz” hero.
+ * All states keep the same geometry: header (status + trailing), cookie accent badge with
+ * overline and title, big figure with caption, and a footer with detail pills and the
+ * "Otwórz plan ›" affordance (the whole card opens Plan zajęć).
+ *
+ * [statusIcon] == null renders [status] as an accent chip ("Trwa teraz"); with an icon it is a
+ * quiet line about today ("Dziś bez zajęć") that stays visually apart from the block below.
  */
 @Composable
 private fun FocusHeroLayout(
@@ -498,7 +498,8 @@ private fun FocusHeroLayout(
     countdownCaption: String?,
     message: String?,
     pills: List<Pair<ImageVector, String>>,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    statusIcon: ImageVector? = null
 ) {
     val mutedColor = contentColor.copy(alpha = 0.78f)
     WseiCard(
@@ -512,11 +513,28 @@ private fun FocusHeroLayout(
     ) {
         if (status != null || trailing != null) {
             Row(
+                modifier = Modifier.heightIn(min = FocusHeaderMinHeight),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
             ) {
                 if (status != null) {
-                    ScheduleStatusChip(text = status, containerColor = accentColor, contentColor = onAccentColor)
+                    if (statusIcon == null) {
+                        ScheduleStatusChip(text = status, containerColor = accentColor, contentColor = onAccentColor)
+                    } else {
+                        Icon(
+                            imageVector = statusIcon,
+                            contentDescription = null,
+                            tint = mutedColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = status,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = mutedColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 if (trailing != null) {
@@ -527,7 +545,6 @@ private fun FocusHeroLayout(
                         maxLines = 1
                     )
                 }
-                ArrowBubble(containerColor = contentColor.copy(alpha = 0.08f), contentColor = contentColor)
             }
         }
         Row(
@@ -568,8 +585,13 @@ private fun FocusHeroLayout(
                 color = mutedColor
             )
         }
-        if (pills.isNotEmpty()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+        ) {
             FlowRow(
+                modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s),
                 verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
             ) {
@@ -582,7 +604,34 @@ private fun FocusHeroLayout(
                     )
                 }
             }
+            OpenScheduleAffordance(color = mutedColor)
         }
+    }
+}
+
+/** Keeps the chip header and the quiet status line at the same height across focus states. */
+private val FocusHeaderMinHeight = 30.dp
+
+/** Subtle "Otwórz plan ›" at the end of the hero; the whole card is the click target. */
+@Composable
+private fun OpenScheduleAffordance(color: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
+    ) {
+        Text(
+            text = stringResource(R.string.home_focus_open_schedule),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
+            color = color,
+            maxLines = 1
+        )
+        Icon(
+            imageVector = WseiIcons.ChevronRight,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
 
@@ -591,12 +640,23 @@ private fun FocusHeroLayout(
 private fun FocusDayList(
     uiState: ScheduleUiState,
     isToday: Boolean,
+    dateIso: String?,
     events: List<ClassEvent>,
     nowEpochMillis: Long,
     onClick: () -> Unit
 ) {
     val visible = events.take(FocusListMaxRows)
     val hiddenCount = events.size - visible.size
+    // "Dalej dzisiaj" only for today; another day is named by its date, never "Plan dnia".
+    val shortDateFormatter = rememberLocalizedDateFormatter(FocusListDateSkeleton)
+    val title = if (isToday) {
+        stringResource(R.string.home_focus_list_later_today)
+    } else {
+        val shortDate = remember(dateIso, shortDateFormatter) {
+            dateIso?.let { iso -> runCatching { LocalDate.parse(iso).format(shortDateFormatter) }.getOrNull() }.orEmpty()
+        }
+        stringResource(R.string.home_focus_list_upcoming_date, shortDate)
+    }
     val activeId = uiState.scheduleFocus.activeEvent?.id
     val nextId = uiState.scheduleFocus.nextEvent?.id
     WseiCard(
@@ -614,7 +674,7 @@ private fun FocusDayList(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(if (isToday) R.string.home_focus_list_later_today else R.string.home_focus_list_day),
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
@@ -656,6 +716,9 @@ private fun FocusDayList(
         }
     }
 }
+
+/** CLDR skeleton of the list title date ("pt., 4 gru" / "Fri, Dec 4"). */
+private const val FocusListDateSkeleton = "EEEdMMM"
 
 /** Rows in the Start list before "+N więcej w planie". */
 private const val FocusListMaxRows = 4
