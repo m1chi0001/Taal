@@ -222,19 +222,12 @@
 
     <!-- Profile -->
     <string name="profile_section_studies">Studies</string>
-    <string name="profile_field_of_study">Field of study</string>
     <string name="profile_specialization">Specialisation</string>
     <string name="profile_specialization_general">General</string>
     <string name="profile_department">Faculty</string>
-    <string name="profile_study_mode">Mode of study</string>
     <string name="profile_obtained_title">Degree awarded</string>
-    <string name="profile_year_semester">Year / semester</string>
-    <string name="profile_year_semester_value">Year %1$d • Semester %2$d</string>
     <string name="profile_group">Group</string>
-    <string name="profile_no_group">No group</string>
-    <string name="profile_average_current">Average (current sem.)</string>
     <string name="profile_average_previous">Average (previous sem.)</string>
-    <string name="profile_average_overall">Overall average</string>
     <string name="profile_student_groups">Student groups</string>
     <string name="profile_study_plan">Study plan</string>
     <string name="profile_plan_subject_title">%1$d. %2$s</string>

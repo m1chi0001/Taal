@@ -236,19 +236,12 @@
 
     <!-- Profile -->
     <string name="profile_section_studies">Навчання</string>
-    <string name="profile_field_of_study">Спеціальність</string>
     <string name="profile_specialization">Спеціалізація</string>
     <string name="profile_specialization_general">Загальна</string>
     <string name="profile_department">Факультет</string>
-    <string name="profile_study_mode">Форма навчання</string>
     <string name="profile_obtained_title">Ступінь, що присвоюється</string>
-    <string name="profile_year_semester">Курс / семестр</string>
-    <string name="profile_year_semester_value">Курс %1$d • Семестр %2$d</string>
     <string name="profile_group">Група</string>
-    <string name="profile_no_group">Немає групи</string>
-    <string name="profile_average_current">Середній бал (поточний сем.)</string>
     <string name="profile_average_previous">Середній бал (попередній сем.)</string>
-    <string name="profile_average_overall">Середній бал за навчання</string>
     <string name="profile_student_groups">Студентські групи</string>
     <string name="profile_study_plan">Навчальний план</string>
     <string name="profile_plan_subject_title">%1$d. %2$s</string>

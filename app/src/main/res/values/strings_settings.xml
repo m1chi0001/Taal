@@ -93,7 +93,6 @@
     <!-- Profil -->
     <string name="profile_group_number">gr. %1$s</string>
     <string name="profile_groups_empty">Brak przypisanych grup w bieżącym semestrze.</string>
-    <string name="profile_study_details">Szczegóły studiów</string>
     <string name="profile_track_title">Tok nauki</string>
     <string name="profile_track_year">Rok %1$d</string>
     <string name="profile_track_winter">Semestr zimowy</string>
@@ -102,7 +101,8 @@
     <string name="profile_track_academic_year">Rok akademicki %1$s</string>
     <string name="profile_track_full_time">Stacjonarne</string>
     <string name="profile_track_part_time">Niestacjonarne</string>
-    <string name="profile_track_course">Kierunek %1$s</string>
+    <string name="profile_stat_no_grades">Brak ocen</string>
+    <string name="profile_plan_empty">Plan studiów nie jest jeszcze dostępny.</string>
 
     <!-- Przedmioty -->
     <string name="subjects_semester_number">Semestr %1$d</string>

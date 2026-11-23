@@ -89,7 +89,6 @@
     <!-- Profile -->
     <string name="profile_group_number">гр. %1$s</string>
     <string name="profile_groups_empty">У поточному семестрі немає призначених груп.</string>
-    <string name="profile_study_details">Деталі навчання</string>
     <string name="profile_track_title">Хід навчання</string>
     <string name="profile_track_year">Курс %1$d</string>
     <string name="profile_track_winter">Зимовий семестр</string>
@@ -98,7 +97,8 @@
     <string name="profile_track_academic_year">Навчальний рік %1$s</string>
     <string name="profile_track_full_time">Денна форма</string>
     <string name="profile_track_part_time">Заочна форма</string>
-    <string name="profile_track_course">Спеціальність %1$s</string>
+    <string name="profile_stat_no_grades">Оцінок ще немає</string>
+    <string name="profile_plan_empty">План навчання ще недоступний.</string>
 
     <!-- Subjects -->
     <string name="subjects_semester_number">Семестр %1$d</string>

@@ -236,19 +236,12 @@
 
     <!-- Profile -->
     <string name="profile_section_studies">Studia</string>
-    <string name="profile_field_of_study">Kierunek</string>
     <string name="profile_specialization">Specjalność</string>
     <string name="profile_specialization_general">Ogólna</string>
     <string name="profile_department">Wydział</string>
-    <string name="profile_study_mode">Tryb studiów</string>
     <string name="profile_obtained_title">Otrzymywany tytuł</string>
-    <string name="profile_year_semester">Rok / semestr</string>
-    <string name="profile_year_semester_value">Rok %1$d • Semestr %2$d</string>
     <string name="profile_group">Grupa</string>
-    <string name="profile_no_group">Brak grupy</string>
-    <string name="profile_average_current">Średnia (bieżący sem.)</string>
     <string name="profile_average_previous">Średnia (poprzedni sem.)</string>
-    <string name="profile_average_overall">Średnia ze studiów</string>
     <string name="profile_student_groups">Grupy studenckie</string>
     <string name="profile_study_plan">Plan studiów</string>
     <string name="profile_plan_subject_title">%1$d. %2$s</string>
