@@ -17,6 +17,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.serializer
 import pl.lublin.wsei.plan.data.remote.ScheduleNormalizer
+import pl.lublin.wsei.plan.data.remote.ScholarshipMapper
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.ClassType
@@ -27,7 +28,6 @@ import pl.lublin.wsei.plan.domain.model.GradeItem
 import pl.lublin.wsei.plan.domain.model.GroupCodeParser
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
 import pl.lublin.wsei.plan.domain.model.ScholarshipApplication
-import pl.lublin.wsei.plan.domain.model.ScholarshipPayoutItem
 import pl.lublin.wsei.plan.domain.model.StudentGroupItem
 import pl.lublin.wsei.plan.domain.model.StudentSemesterGroups
 import pl.lublin.wsei.plan.domain.model.StudentSession
@@ -447,29 +447,7 @@ class ArpApiDataSource @Inject constructor(
                         parameter("IdLoggedPersonType", session.studId)
                     }
                 }
-                val firstRuling = details?.rulings?.firstOrNull() ?: details?.ruling
-                ScholarshipApplication(
-                    id = item.id,
-                    semesterLabel = semLabel,
-                    number = item.number,
-                    title = details?.name?.ifBlank { null } ?: item.name,
-                    typeVariantName = details?.typeVariantName.orEmpty(),
-                    submissionDateIso = ScheduleNormalizer.isoToPolishDate(details?.applicationDate ?: item.date),
-                    statusString = details?.applicationStatusString?.ifBlank { null }
-                        ?: item.state.ifBlank { "Złożony" },
-                    isGranted = item.schoolarshipGranted,
-                    decisionNumber = firstRuling?.number?.ifBlank { null },
-                    decisionDateIso = firstRuling?.date?.ifBlank { null }?.let(ScheduleNormalizer::isoToPolishDate),
-                    acceptedRules = firstRuling?.acceptedRules ?: true,
-                    payouts = details?.payments?.payments.orEmpty().map { p ->
-                        ScholarshipPayoutItem(
-                            id = p.id,
-                            amountFormatted = p.amount,
-                            dateIso = ScheduleNormalizer.isoToPolishDate(p.date),
-                            status = p.status
-                        )
-                    }
-                )
+                ScholarshipMapper.map(item = item, details = details, semesterLabel = semLabel)
             }
         }
     }

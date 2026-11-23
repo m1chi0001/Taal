@@ -18,6 +18,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -62,6 +63,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -130,13 +132,15 @@ import pl.lublin.wsei.plan.domain.model.NextClassPreview
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
 import pl.lublin.wsei.plan.domain.schedule.ScheduleFocus
 import pl.lublin.wsei.plan.domain.schedule.ScheduleFocusKind
+import pl.lublin.wsei.plan.domain.schedule.ScheduleFocusResolver
+import pl.lublin.wsei.plan.domain.schedule.NextClassDay
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiTwoPane
 import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
 import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiClassCard
-import pl.lublin.wsei.plan.ui.components.WseiEmptyState
+import pl.lublin.wsei.plan.ui.components.WseiIconBadge
 import pl.lublin.wsei.plan.ui.components.WseiPill
 import pl.lublin.wsei.plan.ui.components.WseiScreenFrame
 import pl.lublin.wsei.plan.ui.components.classRowStateOf
@@ -155,6 +159,8 @@ import java.time.ZoneId
 import java.util.Locale
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.pluralStringResource
+import pl.lublin.wsei.plan.l10n.appLocale
+import pl.lublin.wsei.plan.l10n.capitalizeFirst
 import pl.lublin.wsei.plan.l10n.fullNameRes
 import pl.lublin.wsei.plan.l10n.labelRes
 import pl.lublin.wsei.plan.l10n.localizedLabel
@@ -317,7 +323,7 @@ fun ScheduleScreen(
                         contentPadding = PaddingValues(top = paneTop, bottom = paneBottom),
                         verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
                     ) {
-                        dayTimeline(uiState, timelineRows, todayIso)
+                        dayTimeline(uiState, timelineRows, todayIso, onSelectDate)
                     }
                 }
             )
@@ -332,7 +338,7 @@ fun ScheduleScreen(
                 item(key = "schedule_controls", contentType = "schedule_controls") {
                     controls(if (windowLayout.isCompact) Modifier else Modifier.wseiReadableWidth())
                 }
-                dayTimeline(uiState, timelineRows, todayIso, readableWidth = !windowLayout.isCompact)
+                dayTimeline(uiState, timelineRows, todayIso, onSelectDate, readableWidth = !windowLayout.isCompact)
             }
         }
     }
@@ -477,6 +483,7 @@ private fun LazyListScope.dayTimeline(
     uiState: ScheduleUiState,
     rows: List<TimelineRow>,
     todayIso: String,
+    onSelectDate: (LocalDate) -> Unit,
     readableWidth: Boolean = false
 ) {
     val itemModifier = if (readableWidth) Modifier.wseiReadableWidth() else Modifier
@@ -506,11 +513,20 @@ private fun LazyListScope.dayTimeline(
     }
     if (rows.isEmpty()) {
         item(key = "empty_day", contentType = "empty_day") {
-            WseiEmptyState(
-                icon = WseiIcons.CalendarMonth,
-                title = stringResource(R.string.schedule_day_off_title),
-                message = stringResource(R.string.schedule_day_off_message),
-                modifier = itemModifier
+            val viewedIso = (selectedDay?.date ?: uiState.selectedDate).toString()
+            // The countdown only depends on today's date, so the per-minute ticker does not recompute it.
+            val nextDay = remember(uiState.allEvents, viewedIso, todayIso) {
+                ScheduleFocusResolver.nextClassDayAfter(uiState.allEvents, viewedIso, uiState.nowEpochMillis)
+            }
+            DayOffCard(
+                model = DayOffModel(viewedIso, nextDay),
+                onGoTo = { iso -> runCatching { LocalDate.parse(iso) }.getOrNull()?.let(onSelectDate) },
+                modifier = itemModifier.animateItem(
+                    fadeInSpec = WseiMotion.effects(),
+                    placementSpec = WseiMotion.spatial(),
+                    // Like the class rows: leaves at once when the next day's rows come in.
+                    fadeOutSpec = null
+                )
             )
         }
     } else {
@@ -1457,6 +1473,31 @@ private const val FocusNoticeDateSkeleton = "EEEdMMMM"
 @Composable
 private fun DaySectionHeader(selectedDay: AcademicDay?, modifier: Modifier = Modifier) {
     if (selectedDay == null) return
+    // Keyed by date: switching days slides the header in the direction of travel, while a refresh
+    // of the same day only updates the count in place.
+    AnimatedContent(
+        targetState = selectedDay,
+        contentKey = { it.date },
+        transitionSpec = {
+            dayChangeEnter(forward = targetState.date > initialState.date) togetherWith
+                fadeOut(WseiMotion.fastEffects()) using
+                SizeTransform(clip = false) { _, _ -> WseiMotion.size() }
+        },
+        contentAlignment = Alignment.TopStart,
+        modifier = modifier.fillMaxWidth(),
+        label = "scheduleDayHeader"
+    ) { day ->
+        DaySectionHeaderContent(day)
+    }
+}
+
+/** Enter transition of day-keyed content: a short slide from the side we are moving to. */
+private fun dayChangeEnter(forward: Boolean): EnterTransition =
+    fadeIn(WseiMotion.effects()) +
+        slideInHorizontally(WseiMotion.spatial()) { width -> if (forward) width / 10 else -width / 10 }
+
+@Composable
+private fun DaySectionHeaderContent(selectedDay: AcademicDay) {
     val count = selectedDay.events.size
     val countText = if (count == 0) {
         stringResource(R.string.schedule_day_no_classes)
@@ -1470,7 +1511,7 @@ private fun DaySectionHeader(selectedDay: AcademicDay?, modifier: Modifier = Mod
     }
     // Count folded into the date line — the former "Zjazd • N bloki" chip only repeated it.
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .padding(start = WseiSpacing.xs, end = WseiSpacing.xs, top = WseiSpacing.s)
     ) {
@@ -1485,6 +1526,171 @@ private fun DaySectionHeader(selectedDay: AcademicDay?, modifier: Modifier = Mod
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+// -----------------------------------------------------------------------------------------
+// Wolne od zajęć — z podpowiedzią najbliższego dnia z zajęciami
+// -----------------------------------------------------------------------------------------
+
+/** What the day-off card shows: the viewed day and the next class day after it (if any). */
+@Immutable
+private data class DayOffModel(val dateIso: String, val next: NextClassDay?)
+
+/**
+ * "Wolne od zajęć" for a day without classes. When a class day follows the viewed one, the card
+ * names it ("Następny zjazd: Piątek, 4 grudnia (za 11 dni)"), shows its first start and block
+ * count and offers a tonal jump to it. Content is keyed by the viewed date, so moving between
+ * free days cross-fades and the card resizes with the size spring instead of jumping.
+ */
+@Composable
+private fun DayOffCard(
+    model: DayOffModel,
+    onGoTo: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    WseiCard(
+        modifier = modifier.fillMaxWidth(),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        AnimatedContent(
+            targetState = model,
+            contentKey = { it.dateIso },
+            transitionSpec = {
+                dayChangeEnter(forward = targetState.dateIso > initialState.dateIso) togetherWith
+                    fadeOut(WseiMotion.fastEffects()) using
+                    SizeTransform(clip = false) { _, _ -> WseiMotion.size() }
+            },
+            contentAlignment = Alignment.TopStart,
+            label = "scheduleDayOff"
+        ) { shown ->
+            DayOffContent(next = shown.next, onGoTo = onGoTo)
+        }
+    }
+}
+
+@Composable
+private fun DayOffContent(next: NextClassDay?, onGoTo: (String) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = if (next == null) Alignment.CenterVertically else Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)
+    ) {
+        WseiIconBadge(
+            icon = WseiIcons.CalendarMonth,
+            shape = M3XCookieShape,
+            containerColor = colors.tertiaryContainer,
+            contentColor = colors.onTertiaryContainer,
+            size = 56.dp,
+            iconSize = 26.dp
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
+        ) {
+            Text(
+                text = stringResource(R.string.schedule_day_off_title),
+                style = MaterialTheme.typography.titleLarge
+            )
+            if (next == null) {
+                Text(
+                    text = stringResource(R.string.schedule_day_off_message),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant
+                )
+            } else {
+                NextClassDayDetails(next = next, onGoTo = onGoTo)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NextClassDayDetails(next: NextClassDay, onGoTo: (String) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val dayTitle = rememberDayTitle(next.dateIso)
+    val countdown = relativeDaysLabel(next.daysFromToday)
+    val dateWithCountdown = if (countdown != null) {
+        stringResource(R.string.schedule_day_off_date_countdown, dayTitle, countdown)
+    } else {
+        dayTitle
+    }
+    val shortDateFormatter = rememberLocalizedDateFormatter(GoToDateSkeleton)
+    val shortDate = remember(next.dateIso, shortDateFormatter) {
+        runCatching { java.time.LocalDate.parse(next.dateIso).format(shortDateFormatter) }.getOrDefault(next.dateIso)
+    }
+    Column(
+        modifier = Modifier.semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
+    ) {
+        Text(
+            text = stringResource(
+                if (next.startsZjazd) R.string.schedule_focus_next_zjazd else R.string.schedule_focus_next_later,
+                dateWithCountdown
+            ),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = colors.secondary
+        )
+        Text(
+            text = stringResource(
+                R.string.schedule_day_off_next_details,
+                next.firstStartLabel,
+                pluralStringResource(R.plurals.schedule_day_blocks, next.blockCount, next.blockCount)
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurfaceVariant
+        )
+    }
+    FilledTonalButton(
+        onClick = { onGoTo(next.dateIso) },
+        // Expressive shape morph on press, like the rest of Plan zajęć's buttons.
+        shapes = ButtonDefaults.shapes(),
+        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+        modifier = Modifier.padding(top = WseiSpacing.s)
+    ) {
+        Icon(
+            imageVector = WseiIcons.ArrowForward,
+            contentDescription = null,
+            modifier = Modifier.size(ButtonDefaults.IconSize)
+        )
+        Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+        Text(
+            text = stringResource(R.string.schedule_day_off_go_to, shortDate),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** CLDR skeleton of the jump button date ("4 grudnia" / "December 4"). */
+private const val GoToDateSkeleton = "dMMMM"
+
+/** CLDR skeleton of a day title ("piątek, 4 grudnia" / "Friday, December 4"). */
+private const val DayTitleSkeleton = "EEEEdMMMM"
+
+/** "Piątek, 4 grudnia" for [dateIso] in the app language (empty for a malformed date). */
+@Composable
+internal fun rememberDayTitle(dateIso: String?): String {
+    val locale = appLocale()
+    val formatter = rememberLocalizedDateFormatter(DayTitleSkeleton)
+    return remember(dateIso, formatter, locale) {
+        dateIso?.let { iso ->
+            runCatching { java.time.LocalDate.parse(iso).format(formatter).capitalizeFirst(locale) }.getOrNull()
+        }.orEmpty()
+    }
+}
+
+/**
+ * Distance of a class day from today: "dzisiaj", "jutro" or "za 11 dni"; `null` for a day in
+ * the past (no countdown is shown then).
+ */
+@Composable
+internal fun relativeDaysLabel(days: Int): String? = when {
+    days < 0 -> null
+    days == 0 -> stringResource(R.string.schedule_relative_today)
+    days == 1 -> stringResource(R.string.schedule_relative_tomorrow)
+    else -> pluralStringResource(R.plurals.home_focus_in_days, days, days)
 }
 
 /** CLDR skeleton of the date under the day name ("20 listopada 2026" / "November 20, 2026"). */

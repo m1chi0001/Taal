@@ -220,28 +220,28 @@
     <string name="finances_discount">Знижка</string>
     <string name="finances_expired">Позовна давність</string>
     <string name="finances_scholarship_overline">%1$s • %2$s</string>
-    <string name="finances_scholarship_submitted">Дата заяви</string>
+    <string name="finances_scholarship_submitted">Подано</string>
     <string name="finances_scholarship_decision">Рішення</string>
-    <string name="finances_scholarship_decision_pending">На розгляді</string>
     <string name="finances_scholarship_decision_date">Дата рішення</string>
+    <string name="finances_scholarship_number">№ %1$s</string>
+    <string name="finances_scholarship_status">Стан</string>
+    <string name="finances_scholarship_type">Тип</string>
+    <string name="finances_scholarship_variant">Варіант</string>
+    <string name="finances_scholarship_decision_number">Номер рішення</string>
+    <string name="finances_scholarship_decision_status">Результат</string>
+    <string name="finances_scholarship_amount">Сума</string>
+    <string name="finances_scholarship_payouts">Виплати</string>
     <string name="finances_payout_label">%1$s • %2$s</string>
     <string name="finances_scholarship_history">Історія рішень</string>
 
     <!-- Profile -->
     <string name="profile_section_studies">Навчання</string>
-    <string name="profile_field_of_study">Спеціальність</string>
     <string name="profile_specialization">Спеціалізація</string>
     <string name="profile_specialization_general">Загальна</string>
     <string name="profile_department">Факультет</string>
-    <string name="profile_study_mode">Форма навчання</string>
     <string name="profile_obtained_title">Ступінь, що присвоюється</string>
-    <string name="profile_year_semester">Курс / семестр</string>
-    <string name="profile_year_semester_value">Курс %1$d • Семестр %2$d</string>
     <string name="profile_group">Група</string>
-    <string name="profile_no_group">Немає групи</string>
-    <string name="profile_average_current">Середній бал (поточний сем.)</string>
     <string name="profile_average_previous">Середній бал (попередній сем.)</string>
-    <string name="profile_average_overall">Середній бал за навчання</string>
     <string name="profile_student_groups">Студентські групи</string>
     <string name="profile_study_plan">Навчальний план</string>
     <string name="profile_plan_subject_title">%1$d. %2$s</string>

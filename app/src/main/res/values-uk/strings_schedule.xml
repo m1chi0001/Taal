@@ -50,6 +50,11 @@
     <!-- Schedule: day list and calendar -->
     <string name="schedule_day_off_title">Вільний від занять день</string>
     <string name="schedule_day_off_message">Цього дня занять немає. Виберіть інший день у календарі.</string>
+    <string name="schedule_day_off_date_countdown">%1$s (%2$s)</string>
+    <string name="schedule_day_off_next_details">Перше заняття о %1$s • %2$s</string>
+    <string name="schedule_day_off_go_to">Перейти до %1$s</string>
+    <string name="schedule_relative_today">сьогодні</string>
+    <string name="schedule_relative_tomorrow">завтра</string>
     <string name="schedule_calendar_month_year">%1$s %2$d</string>
     <string name="schedule_calendar_month_view">Перегляд місяця</string>
     <string name="schedule_calendar_previous_month">Попередній місяць</string>
@@ -86,16 +91,14 @@
 
     <!-- Home: focus card -->
     <string name="home_focus_status_tomorrow">Завтра</string>
-    <string name="home_focus_status_later">Зʼїзд триває</string>
+    <string name="home_focus_status_later">Далі в цьому зʼїзді</string>
     <string name="home_focus_status_next_zjazd">Наступний зʼїзд</string>
-    <string name="home_focus_free_now">На сьогодні все</string>
+    <string name="home_focus_free_now">Сьогоднішні заняття завершено</string>
     <string name="home_focus_free_today">Сьогодні без занять</string>
     <string name="home_focus_until_start">до початку</string>
     <string name="home_focus_duration_hours">%1$d год %2$02d хв</string>
-    <string name="home_focus_first_class_caption">перше заняття • %1$s</string>
-    <string name="home_focus_message_tomorrow">Відпочиньте й наберіться сил — завтра знову заняття.</string>
-    <string name="home_focus_message_later">Зʼїзд ще триває — ще трохи, і вихідні ваші!</string>
-    <string name="home_focus_message_next_zjazd">Маєте трохи часу перепочити перед наступним зʼїздом.</string>
+    <string name="home_focus_first_class_label">перше заняття</string>
+    <string name="home_focus_open_schedule">Відкрити розклад</string>
     <plurals name="home_focus_in_days">
         <item quantity="one">через %1$d день</item>
         <item quantity="few">через %1$d дні</item>
@@ -103,6 +106,6 @@
         <item quantity="other">через %1$d дня</item>
     </plurals>
     <string name="home_focus_list_later_today">Далі сьогодні</string>
-    <string name="home_focus_list_day">План дня</string>
+    <string name="home_focus_list_upcoming_date">Найближчі заняття • %1$s</string>
     <string name="home_focus_last_today">Це останнє заняття на сьогодні</string>
 </resources>

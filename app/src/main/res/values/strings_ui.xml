@@ -220,28 +220,28 @@
     <string name="finances_discount">Bonifikata</string>
     <string name="finances_expired">Przedawnienie</string>
     <string name="finances_scholarship_overline">%1$s • %2$s</string>
-    <string name="finances_scholarship_submitted">Data wniosku</string>
+    <string name="finances_scholarship_submitted">Złożony</string>
     <string name="finances_scholarship_decision">Decyzja</string>
-    <string name="finances_scholarship_decision_pending">W toku</string>
     <string name="finances_scholarship_decision_date">Data decyzji</string>
+    <string name="finances_scholarship_number">№ %1$s</string>
+    <string name="finances_scholarship_status">Stan</string>
+    <string name="finances_scholarship_type">Typ</string>
+    <string name="finances_scholarship_variant">Wariant</string>
+    <string name="finances_scholarship_decision_number">Numer decyzji</string>
+    <string name="finances_scholarship_decision_status">Rozstrzygnięcie</string>
+    <string name="finances_scholarship_amount">Kwota</string>
+    <string name="finances_scholarship_payouts">Wypłaty</string>
     <string name="finances_payout_label">%1$s • %2$s</string>
     <string name="finances_scholarship_history">Historia decyzji</string>
 
     <!-- Profile -->
     <string name="profile_section_studies">Studia</string>
-    <string name="profile_field_of_study">Kierunek</string>
     <string name="profile_specialization">Specjalność</string>
     <string name="profile_specialization_general">Ogólna</string>
     <string name="profile_department">Wydział</string>
-    <string name="profile_study_mode">Tryb studiów</string>
     <string name="profile_obtained_title">Otrzymywany tytuł</string>
-    <string name="profile_year_semester">Rok / semestr</string>
-    <string name="profile_year_semester_value">Rok %1$d • Semestr %2$d</string>
     <string name="profile_group">Grupa</string>
-    <string name="profile_no_group">Brak grupy</string>
-    <string name="profile_average_current">Średnia (bieżący sem.)</string>
     <string name="profile_average_previous">Średnia (poprzedni sem.)</string>
-    <string name="profile_average_overall">Średnia ze studiów</string>
     <string name="profile_student_groups">Grupy studenckie</string>
     <string name="profile_study_plan">Plan studiów</string>
     <string name="profile_plan_subject_title">%1$d. %2$s</string>

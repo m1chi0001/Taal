@@ -89,7 +89,6 @@
     <!-- Profile -->
     <string name="profile_group_number">gr. %1$s</string>
     <string name="profile_groups_empty">No groups assigned in the current semester.</string>
-    <string name="profile_study_details">Study details</string>
     <string name="profile_track_title">Study track</string>
     <string name="profile_track_year">Year %1$d</string>
     <string name="profile_track_winter">Winter semester</string>
@@ -98,7 +97,8 @@
     <string name="profile_track_academic_year">Academic year %1$s</string>
     <string name="profile_track_full_time">Full-time</string>
     <string name="profile_track_part_time">Part-time</string>
-    <string name="profile_track_course">Field of study %1$s</string>
+    <string name="profile_stat_no_grades">No grades yet</string>
+    <string name="profile_plan_empty">The study plan is not available yet.</string>
 
     <!-- Subjects -->
     <string name="subjects_semester_number">Semester %1$d</string>

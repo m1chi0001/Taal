@@ -48,6 +48,11 @@
     <!-- Schedule: day list and calendar -->
     <string name="schedule_day_off_title">No classes</string>
     <string name="schedule_day_off_message">There are no classes on this day. Pick another day in the calendar.</string>
+    <string name="schedule_day_off_date_countdown">%1$s (%2$s)</string>
+    <string name="schedule_day_off_next_details">First class at %1$s • %2$s</string>
+    <string name="schedule_day_off_go_to">Go to %1$s</string>
+    <string name="schedule_relative_today">today</string>
+    <string name="schedule_relative_tomorrow">tomorrow</string>
     <string name="schedule_calendar_month_year">%1$s %2$d</string>
     <string name="schedule_calendar_month_view">Month view</string>
     <string name="schedule_calendar_previous_month">Previous month</string>
@@ -80,21 +85,19 @@
 
     <!-- Home: focus card -->
     <string name="home_focus_status_tomorrow">Tomorrow</string>
-    <string name="home_focus_status_later">Session continues</string>
+    <string name="home_focus_status_later">Later this session</string>
     <string name="home_focus_status_next_zjazd">Next weekend session</string>
-    <string name="home_focus_free_now">Done for today</string>
+    <string name="home_focus_free_now">Today\'s classes are over</string>
     <string name="home_focus_free_today">No classes today</string>
     <string name="home_focus_until_start">until it starts</string>
     <string name="home_focus_duration_hours">%1$d h %2$02d min</string>
-    <string name="home_focus_first_class_caption">first class • %1$s</string>
-    <string name="home_focus_message_tomorrow">Rest and recharge — classes again tomorrow.</string>
-    <string name="home_focus_message_later">The session isn\'t over yet — hang in there, the weekend is almost yours!</string>
-    <string name="home_focus_message_next_zjazd">Take a breather before the next weekend session.</string>
+    <string name="home_focus_first_class_label">first class</string>
+    <string name="home_focus_open_schedule">Open schedule</string>
     <plurals name="home_focus_in_days">
         <item quantity="one">in %1$d day</item>
         <item quantity="other">in %1$d days</item>
     </plurals>
     <string name="home_focus_list_later_today">Later today</string>
-    <string name="home_focus_list_day">Day plan</string>
+    <string name="home_focus_list_upcoming_date">Upcoming classes • %1$s</string>
     <string name="home_focus_last_today">This is your last class today</string>
 </resources>

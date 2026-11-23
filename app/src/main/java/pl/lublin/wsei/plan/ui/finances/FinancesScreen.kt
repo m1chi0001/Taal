@@ -66,6 +66,11 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import pl.lublin.wsei.plan.domain.model.FinancialObligation
 import pl.lublin.wsei.plan.domain.model.ScholarshipApplication
+import pl.lublin.wsei.plan.domain.model.ScholarshipStatusKind
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import pl.lublin.wsei.plan.domain.model.formatPolishBankAccount
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiTwoPane
@@ -576,6 +581,34 @@ private fun ObligationCard(
     )
 }
 
+/** Theme colours (container to content) for a scholarship status badge. */
+private data class ScholarshipStatusColors(val container: Color, val content: Color)
+
+@Composable
+private fun scholarshipStatusColors(kind: ScholarshipStatusKind): ScholarshipStatusColors {
+    val colors = MaterialTheme.colorScheme
+    return when (kind) {
+        ScholarshipStatusKind.ACCEPTED -> ScholarshipStatusColors(colors.primaryContainer, colors.onPrimaryContainer)
+        ScholarshipStatusKind.GRANTED -> ScholarshipStatusColors(colors.tertiaryContainer, colors.onTertiaryContainer)
+        ScholarshipStatusKind.REJECTED -> ScholarshipStatusColors(colors.errorContainer, colors.onErrorContainer)
+        ScholarshipStatusKind.UNDER_REVIEW,
+        ScholarshipStatusKind.SUBMITTED -> ScholarshipStatusColors(colors.secondaryContainer, colors.onSecondaryContainer)
+        ScholarshipStatusKind.UNKNOWN -> ScholarshipStatusColors(colors.surfaceVariant, colors.onSurfaceVariant)
+    }
+}
+
+private fun scholarshipStatusIcon(kind: ScholarshipStatusKind): ImageVector? = when (kind) {
+    ScholarshipStatusKind.ACCEPTED, ScholarshipStatusKind.GRANTED -> WseiIcons.CheckCircle
+    ScholarshipStatusKind.REJECTED -> WseiIcons.Info
+    ScholarshipStatusKind.UNDER_REVIEW, ScholarshipStatusKind.SUBMITTED -> WseiIcons.Schedule
+    ScholarshipStatusKind.UNKNOWN -> null
+}
+
+/**
+ * Scholarship application card: "№ 70" + title, a prominent `Stan` badge, application details,
+ * and the decision / amounts only when the backend actually returned them (nothing is invented).
+ * The application number, decision number and amounts are masked in privacy mode.
+ */
 @Composable
 private fun ScholarshipCard(
     scholarship: ScholarshipApplication,
@@ -585,43 +618,112 @@ private fun ScholarshipCard(
     showAllPayouts: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
+    val kind = scholarship.statusKind
+    val statusColors = scholarshipStatusColors(kind)
+    val m: (String) -> String = { wseiMasked(it, maskSensitive) }
+    val numberLabel = scholarship.displayNumber?.let {
+        stringResource(R.string.finances_scholarship_number, m(it.toString()))
+    }
+    val overline = listOfNotNull(numberLabel, scholarship.semesterLabel.ifBlank { null })
+        .takeIf { it.isNotEmpty() }
+        ?.let { parts ->
+            if (parts.size == 2) stringResource(R.string.finances_scholarship_overline, parts[0], parts[1]) else parts[0]
+        }
+
     WseiCard(modifier = modifier, containerColor = colors.surfaceContainer) {
         WseiCardHeader(
             title = scholarship.title,
-            overline = stringResource(R.string.finances_scholarship_overline, scholarship.semesterLabel, scholarship.statusString),
+            overline = overline,
             icon = WseiIcons.WorkspacePremium,
-            iconContainerColor = if (scholarship.isGranted) colors.primary else colors.secondaryContainer,
-            iconContentColor = if (scholarship.isGranted) colors.onPrimary else colors.onSecondaryContainer
+            iconContainerColor = statusColors.container,
+            iconContentColor = statusColors.content,
+            titleMaxLines = 3
         )
-        WseiInset {
-            if (scholarship.typeVariantName.isNotBlank()) {
+
+        scholarship.statusString?.takeIf { it.isNotBlank() }?.let { status ->
+            val statusLabel = stringResource(R.string.finances_scholarship_status)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics(mergeDescendants = true) {},
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+            ) {
                 Text(
-                    text = scholarship.typeVariantName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
+                    text = statusLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.onSurfaceVariant
+                )
+                WseiPill(
+                    text = status,
+                    icon = scholarshipStatusIcon(kind),
+                    containerColor = statusColors.container,
+                    contentColor = statusColors.content,
+                    emphasized = true
                 )
             }
-            WseiInfoRow(stringResource(R.string.finances_scholarship_submitted), scholarship.submissionDateIso)
-            // The decision number is a personal administrative identifier.
-            WseiInfoRow(
-                stringResource(R.string.finances_scholarship_decision),
-                scholarship.decisionNumber?.let { wseiMasked(it, maskSensitive) }
-                    ?: stringResource(R.string.finances_scholarship_decision_pending)
-            )
-            scholarship.decisionDateIso?.let {
-                WseiInfoRow(stringResource(R.string.finances_scholarship_decision_date), it)
+        }
+
+        val typeName = scholarship.typeName.trim()
+        val showType = typeName.isNotEmpty() && !typeName.equals(scholarship.title.trim(), ignoreCase = true)
+        val variant = scholarship.typeVariantName.trim()
+        val submitted = scholarship.submissionDateIso.trim()
+        if (showType || variant.isNotEmpty() || submitted.isNotEmpty()) {
+            WseiInset {
+                if (showType) WseiInfoRow(stringResource(R.string.finances_scholarship_type), typeName)
+                if (variant.isNotEmpty()) WseiInfoRow(stringResource(R.string.finances_scholarship_variant), variant)
+                if (submitted.isNotEmpty()) WseiInfoRow(stringResource(R.string.finances_scholarship_submitted), submitted)
             }
-            val payouts = if (showAllPayouts) scholarship.payouts else scholarship.payouts.take(3)
-            if (payouts.isNotEmpty()) {
-                HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
-                payouts.forEach { payout ->
-                    WseiInfoRow(
-                        label = stringResource(R.string.finances_payout_label, payout.dateIso, payout.status),
-                        value = wseiMasked(payout.amountFormatted, maskSensitive)
-                    )
+        }
+
+        if (scholarship.hasDecision) {
+            WseiInset(containerColor = colors.surfaceContainerHigh) {
+                Text(
+                    text = stringResource(R.string.finances_scholarship_decision),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics { heading() }
+                )
+                // The decision number is a personal administrative identifier.
+                scholarship.decisionNumber?.takeIf { it.isNotBlank() }?.let {
+                    WseiInfoRow(stringResource(R.string.finances_scholarship_decision_number), m(it))
+                }
+                scholarship.decisionDateIso?.takeIf { it.isNotBlank() }?.let {
+                    WseiInfoRow(stringResource(R.string.finances_scholarship_decision_date), it)
+                }
+                scholarship.decisionStatus?.takeIf { it.isNotBlank() }?.let {
+                    WseiInfoRow(stringResource(R.string.finances_scholarship_decision_status), it)
                 }
             }
         }
+
+        val amount = scholarship.amountFormatted?.takeIf { it.isNotBlank() }
+        val payouts = if (showAllPayouts) scholarship.payouts else scholarship.payouts.take(3)
+        if (amount != null || payouts.isNotEmpty()) {
+            WseiInset {
+                amount?.let { WseiInfoRow(stringResource(R.string.finances_scholarship_amount), m(it)) }
+                if (payouts.isNotEmpty()) {
+                    if (amount != null) HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
+                    Text(
+                        text = stringResource(R.string.finances_scholarship_payouts),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.onSurfaceVariant
+                    )
+                    payouts.forEach { payout ->
+                        val label = listOf(payout.dateIso, payout.status).filter { it.isNotBlank() }
+                        WseiInfoRow(
+                            label = when (label.size) {
+                                2 -> stringResource(R.string.finances_payout_label, label[0], label[1])
+                                1 -> label[0]
+                                else -> "—"
+                            },
+                            value = m(payout.amountFormatted)
+                        )
+                    }
+                }
+            }
+        }
+
         if (onOpenHistory != null) {
             OutlinedButton(
                 onClick = onOpenHistory,

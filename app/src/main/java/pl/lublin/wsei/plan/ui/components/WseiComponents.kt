@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -570,11 +571,20 @@ fun WseiStat(
 // -----------------------------------------------------------------------------------------
 
 /**
- * Zdjęcie studenta z Wirtualnego Dziekanatu albo inicjały na kolorowym tle.
+ * Student photo from the dean's office, or initials on a coloured background.
  *
+ * Every frame layer is drawn with `background(color, shape)` (anti-aliased) and only the photo
+ * itself is clipped, so a smooth [shape] such as `CircleShape` gives clean edges even for ID
+ * photos with a bright white background.
+ *
+ * @param shape outline of the frame and of the photo. Prefer `CircleShape` for large photos:
+ *   wavy outlines (cookie) clip the white photo background into jagged edges.
  * @param ringWidth when > 0 the photo sits inside a tonal ring of [ringColor] drawn with the same
  *   [shape], so the (often white) photo background never touches the card behind it.
  * @param photoZoom slight zoom of the photo (≥ 1) that crops the white margins of ID photos.
+ * @param ringGap optional thin gap of [ringGapColor] between the ring and the photo.
+ * @param ringGapColor colour of [ringGap]; also used for the hairline that hides the
+ *   anti-aliasing fringe of the photo edge when a ring or gap is present.
  */
 @Composable
 fun StudentAvatar(
@@ -585,7 +595,9 @@ fun StudentAvatar(
     shape: Shape = M3XCookieShape,
     ringWidth: Dp = 0.dp,
     ringColor: Color = MaterialTheme.colorScheme.primary,
-    photoZoom: Float = 1f
+    photoZoom: Float = 1f,
+    ringGap: Dp = 0.dp,
+    ringGapColor: Color = MaterialTheme.colorScheme.surface
 ) {
     val decodedBitmap = rememberDecodedStudentPhoto(base64Photo)
     val initials = remember(fullName) {
@@ -596,19 +608,22 @@ fun StudentAvatar(
             .joinToString("") { it.first().uppercase() }
             .ifEmpty { "ST" }
     }
-    val outer = if (ringWidth > 0.dp) {
-        modifier
-            .size(size)
-            .clip(shape)
-            .background(ringColor)
-            .padding(ringWidth)
+    var frame = modifier.size(size)
+    if (ringWidth > 0.dp) frame = frame.background(ringColor, shape).padding(ringWidth)
+    if (ringGap > 0.dp) frame = frame.background(ringGapColor, shape).padding(ringGap)
+    val isFramed = ringWidth > 0.dp || ringGap > 0.dp
+    // A hairline in the adjacent frame colour, drawn over the photo edge, hides the white fringe
+    // that anti-aliasing leaves where a bright photo background meets the frame.
+    val photoEdge = if (isFramed && decodedBitmap != null) {
+        Modifier.border(StudentAvatarEdgeWidth, if (ringGap > 0.dp) ringGapColor else ringColor, shape)
     } else {
-        modifier.size(size)
+        Modifier
     }
     Box(
-        modifier = outer
+        modifier = frame
             .clip(shape)
-            .background(MaterialTheme.colorScheme.primary),
+            .background(MaterialTheme.colorScheme.primary)
+            .then(photoEdge),
         contentAlignment = Alignment.Center
     ) {
         if (decodedBitmap != null) {
@@ -643,6 +658,9 @@ fun StudentAvatar(
         }
     }
 }
+
+/** Width of the hairline drawn over a framed photo's edge (see [StudentAvatar]). */
+private val StudentAvatarEdgeWidth: Dp = 1.dp
 
 // -----------------------------------------------------------------------------------------
 // Odświeżanie i karty rozwijane
