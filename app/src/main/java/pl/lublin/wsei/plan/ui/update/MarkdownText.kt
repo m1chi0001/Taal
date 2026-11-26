@@ -5,14 +5,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -27,8 +24,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -42,8 +43,10 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import pl.lublin.wsei.plan.ui.theme.withContrastAgainst
 
 /** Colours used for inline Markdown; resolved from the theme by [rememberMarkdownColors]. */
 @Immutable
@@ -54,13 +57,17 @@ data class MarkdownColors(
 )
 
 @Composable
-fun rememberMarkdownColors(): MarkdownColors {
+fun rememberMarkdownColors(
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface
+): MarkdownColors {
     val colors = MaterialTheme.colorScheme
-    return remember(colors.primary, colors.surfaceContainerHighest, colors.onSurface) {
+    return remember(colors.primary, containerColor, contentColor) {
+        val codeBg = pl.lublin.wsei.plan.ui.theme.tonalLayer(containerColor, contentColor, 0.10f)
         MarkdownColors(
-            link = colors.primary,
-            codeBackground = colors.surfaceContainerHighest,
-            codeContent = colors.onSurface
+            link = colors.primary.withContrastAgainst(containerColor),
+            codeBackground = codeBg,
+            codeContent = contentColor.withContrastAgainst(codeBg)
         )
     }
 }
@@ -102,11 +109,19 @@ fun MarkdownText(
     markdown: String,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.onSurface,
-    secondaryColor: Color = MaterialTheme.colorScheme.onSurfaceVariant
+    secondaryColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    markerColor: Color = MaterialTheme.colorScheme.primary.withContrastAgainst(containerColor)
 ) {
     val blocks = remember(markdown) { MarkdownParser.parse(markdown) }
-    val markdownColors = rememberMarkdownColors()
+    val markdownColors = rememberMarkdownColors(containerColor = containerColor, contentColor = color)
     val typography = MaterialTheme.typography
+    val quoteBarColor = pl.lublin.wsei.plan.ui.theme.mutedContentColor(
+        content = secondaryColor,
+        background = containerColor,
+        emphasis = 0.55f,
+        minRatio = pl.lublin.wsei.plan.ui.theme.WcagNonTextContrast
+    )
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
@@ -137,29 +152,26 @@ fun MarkdownText(
                     item = block,
                     style = typography.bodyMedium,
                     color = color,
-                    markerColor = MaterialTheme.colorScheme.primary,
+                    markerColor = markerColor,
+                    containerColor = containerColor,
                     colors = markdownColors
                 )
-                is MarkdownBlock.Quote -> Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
-                ) {
+                is MarkdownBlock.Quote -> {
+                    val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
                     Box(
                         modifier = Modifier
-                            .width(3.dp)
-                            .fillMaxHeight()
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.outlineVariant)
-                    )
-                    InlineText(
-                        text = block.text,
-                        style = typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
-                        color = secondaryColor,
-                        colors = markdownColors,
-                        modifier = Modifier.weight(1f)
-                    )
+                            .fillMaxWidth()
+                            .drawQuoteBar(quoteBarColor, layoutDirection)
+                            .padding(start = WseiSpacing.m + 3.dp)
+                    ) {
+                        InlineText(
+                            text = block.text,
+                            style = typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                            color = secondaryColor,
+                            colors = markdownColors,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
                 is MarkdownBlock.Code -> Surface(
                     shape = RoundedCornerShape(WseiSpacing.m),
@@ -186,7 +198,7 @@ fun MarkdownText(
 }
 
 /**
- * Compact bullet list of highlights (update prompt). Each line is limited to [maxLinesPerItem].
+ * Compact bullet list of highlights. Each line is limited to [maxLinesPerItem].
  */
 @Composable
 fun MarkdownHighlights(
@@ -194,9 +206,10 @@ fun MarkdownHighlights(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.onSurface,
     markerColor: Color = MaterialTheme.colorScheme.primary,
-    maxLinesPerItem: Int = 2
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    maxLinesPerItem: Int = Int.MAX_VALUE
 ) {
-    val markdownColors = rememberMarkdownColors()
+    val markdownColors = rememberMarkdownColors(containerColor = containerColor, contentColor = color)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)) {
         items.forEach { item ->
             MarkdownListItem(
@@ -204,6 +217,7 @@ fun MarkdownHighlights(
                 style = MaterialTheme.typography.bodyMedium,
                 color = color,
                 markerColor = markerColor,
+                containerColor = containerColor,
                 colors = markdownColors,
                 maxLines = maxLinesPerItem
             )
@@ -217,6 +231,7 @@ private fun MarkdownListItem(
     style: TextStyle,
     color: Color,
     markerColor: Color,
+    containerColor: Color,
     colors: MarkdownColors,
     maxLines: Int = Int.MAX_VALUE
 ) {
@@ -231,6 +246,16 @@ private fun MarkdownListItem(
             // Dot centred on the first text line.
             val density = LocalDensity.current
             val lineHeight = if (style.lineHeight.isSp) with(density) { style.lineHeight.toDp() } else 20.dp
+            val dotColor = if (item.depth == 0) {
+                markerColor
+            } else {
+                pl.lublin.wsei.plan.ui.theme.mutedContentColor(
+                    content = markerColor,
+                    background = containerColor,
+                    emphasis = 0.72f,
+                    minRatio = pl.lublin.wsei.plan.ui.theme.WcagNonTextContrast
+                )
+            }
             Box(
                 modifier = Modifier.height(lineHeight),
                 contentAlignment = Alignment.Center
@@ -239,7 +264,7 @@ private fun MarkdownListItem(
                     modifier = Modifier
                         .size(if (item.depth == 0) 6.dp else 5.dp)
                         .clip(CircleShape)
-                        .background(if (item.depth == 0) markerColor else markerColor.copy(alpha = 0.6f))
+                        .background(dotColor)
                 )
             }
         } else {
@@ -278,5 +303,16 @@ private fun InlineText(
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
+    )
+}
+
+private fun Modifier.drawQuoteBar(color: Color, layoutDirection: LayoutDirection): Modifier = drawBehind {
+    val barWidth = 3.dp.toPx()
+    val x = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - barWidth
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(x, 0f),
+        size = Size(barWidth, size.height),
+        cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
     )
 }

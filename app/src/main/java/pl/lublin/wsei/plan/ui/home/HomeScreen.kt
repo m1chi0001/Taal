@@ -84,6 +84,7 @@ import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import pl.lublin.wsei.plan.ui.theme.mutedContentColor
 import pl.lublin.wsei.plan.ui.theme.tonalLayer
 import pl.lublin.wsei.plan.ui.theme.withContrastAgainst
+import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -698,18 +699,22 @@ private fun FocusDayList(
                 modifier = Modifier.padding(start = WseiSpacing.xs, bottom = WseiSpacing.xs)
             )
         } else {
-            visible.forEachIndexed { index, event ->
-                key(event.id, index) {
-                    WseiClassCard(
-                        event = event,
-                        nowEpochMillis = nowEpochMillis,
-                        // The hero already carries the live/next highlight; rows stay quiet unless
-                        // they are the active or next class of a later-day list.
-                        state = classRowStateOf(event, nowEpochMillis, activeId, nextId?.takeIf { !isToday }),
-                        compact = true,
-                        showContainer = false,
-                        lecturerLabel = uiState.maskLecturer(event.lecturer.localizedNameOrPlaceholder())
-                    )
+            Column(verticalArrangement = Arrangement.spacedBy(WseiSpacing.inGroup)) {
+                visible.forEachIndexed { index, event ->
+                    key(event.id, index) {
+                        WseiClassCard(
+                            event = event,
+                            nowEpochMillis = nowEpochMillis,
+                            // The hero already carries the live/next highlight; rows stay quiet unless
+                            // they are the active or next class of a later-day list.
+                            state = classRowStateOf(event, nowEpochMillis, activeId, nextId?.takeIf { !isToday }),
+                            compact = true,
+                            showContainer = false,
+                            shape = wseiGroupItemShape(index, visible.size, outer = 20.dp, inner = 6.dp),
+                            customContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            lecturerLabel = uiState.maskLecturer(event.lecturer.localizedNameOrPlaceholder())
+                        )
+                    }
                 }
             }
             if (hiddenCount > 0) {

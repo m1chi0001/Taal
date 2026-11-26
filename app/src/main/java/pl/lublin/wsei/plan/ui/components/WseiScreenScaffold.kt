@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
@@ -134,6 +135,7 @@ fun WseiScreenFrame(
         if (onBack != null) {
             FilledTonalIconButton(
                 onClick = onBack,
+                shapes = IconButtonDefaults.shapes(),
                 modifier = Modifier.padding(start = WseiSpacing.xs)
             ) {
                 Icon(
@@ -301,6 +303,7 @@ fun WseiScreenScaffold(
 private fun ProfileShortcutButton(shortcut: WseiProfileShortcut) {
     val interactionSource = remember { MutableInteractionSource() }
     val profileDescription = stringResource(R.string.common_profile_of, shortcut.fullName)
+    val colors = MaterialTheme.colorScheme
     Box(
         modifier = Modifier
             .padding(end = WseiSpacing.m)
@@ -309,7 +312,7 @@ private fun ProfileShortcutButton(shortcut: WseiProfileShortcut) {
         Surface(
             onClick = shortcut.onOpen,
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
+            color = colors.secondaryContainer,
             interactionSource = interactionSource,
             modifier = Modifier
                 .size(44.dp)
@@ -319,7 +322,9 @@ private fun ProfileShortcutButton(shortcut: WseiProfileShortcut) {
                 base64Photo = shortcut.photoBase64,
                 fullName = shortcut.fullName,
                 size = 44.dp,
-                shape = CircleShape
+                shape = CircleShape,
+                ringWidth = 2.dp,
+                ringColor = colors.secondaryContainer
             )
         }
     }

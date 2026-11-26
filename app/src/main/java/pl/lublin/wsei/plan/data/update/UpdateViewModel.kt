@@ -53,35 +53,50 @@ class UpdateViewModel @Inject constructor(
     /** Latest release, changelog and prompt state from the repository. */
     val updateStatus: StateFlow<AppUpdateStatus> = repository.status
 
+    /** Version snoozed ("Później") for the current app session only. */
+    private val _snoozedVersion = MutableStateFlow<String?>(null)
+    val snoozedVersion: StateFlow<String?> = _snoozedVersion.asStateFlow()
+
     val currentVersion: String get() = manager.currentVersion
 
     private var job: Job? = null
-    private var autoCheckStarted = false
     private var refreshJob: Job? = null
 
     init {
-        // A release found by the background/auto check makes "O aplikacji" offer the download
-        // right away, without a second manual check.
+        // Syncs "O aplikacji" with the automatic/background repository state right away, so the
+        // card shows AVAILABLE or UP_TO_DATE without requiring a second manual check.
         viewModelScope.launch {
             repository.status.collect { status ->
-                val info = status.latest?.takeIf { status.isUpdateAvailable }?.toReleaseInfo() ?: return@collect
-                _state.update {
-                    if (it.phase == UpdatePhase.IDLE || it.phase == UpdatePhase.UP_TO_DATE) {
-                        UpdateState(phase = UpdatePhase.AVAILABLE, release = info)
-                    } else {
-                        it
+                val latest = status.latest
+                if (status.isUpdateAvailable && latest != null) {
+                    val info = latest.toReleaseInfo()
+                    _state.update { current ->
+                        if (current.phase == UpdatePhase.IDLE || current.phase == UpdatePhase.UP_TO_DATE) {
+                            UpdateState(phase = UpdatePhase.AVAILABLE, release = info)
+                        } else {
+                            current
+                        }
+                    }
+                } else if (!status.isChecking && status.lastCheckedEpochMillis != null) {
+                    _state.update { current ->
+                        if (current.phase == UpdatePhase.IDLE) {
+                            UpdateState(phase = UpdatePhase.UP_TO_DATE)
+                        } else {
+                            current
+                        }
                     }
                 }
             }
         }
     }
 
-    /** Throttled background check, run once per process when the app shell first appears. */
-    fun autoCheckOnce() {
-        if (autoCheckStarted) return
-        autoCheckStarted = true
+    /** Automatic check triggered on app launch and foreground resume (throttled in repository). */
+    fun autoCheckOnForeground() {
         refreshRepository(force = false)
     }
+
+    /** Kept for compatibility with callers expecting one-shot check. */
+    fun autoCheckOnce() = autoCheckOnForeground()
 
     /** Loads the changelog when the sheet opens and nothing is known yet. */
     fun loadChangelogIfMissing() {
@@ -92,11 +107,18 @@ class UpdateViewModel @Inject constructor(
     /** Re-fetches the changelog (retry button in the sheet). */
     fun reloadChangelog() = refreshRepository(force = true)
 
-    /** Hides the prompt for [version] until a newer release appears. */
+    /** Hides the automatic dialog for the rest of this app session ("Później"). */
+    fun snoozePromptForSession(version: String) {
+        _snoozedVersion.value = VersionComparator.normalize(version)
+    }
+
+    /** Hides the prompt for [version] permanently until a newer release appears. */
     fun dismissPrompt(version: String) {
+        val normalized = VersionComparator.normalize(version)
+        _snoozedVersion.value = normalized
         viewModelScope.launch {
             try {
-                repository.dismiss(version)
+                repository.dismiss(normalized)
             } catch (e: CancellationException) {
                 throw e
             } catch (ignored: Exception) {
@@ -138,7 +160,8 @@ class UpdateViewModel @Inject constructor(
      * the release has no APK — the UI opens its page instead.
      */
     fun download(release: AppRelease) {
-        val info = release.toReleaseInfo() ?: return
+        if (release.apkUrl.isNullOrBlank()) return
+        val info = release.toReleaseInfo()
         val current = _state.value
         if (current.phase == UpdatePhase.DOWNLOADING) return
         if (current.phase == UpdatePhase.READY && current.release?.version == info.version) return
@@ -148,7 +171,7 @@ class UpdateViewModel @Inject constructor(
 
     fun download() {
         val release = _state.value.release ?: return
-        if (_state.value.phase == UpdatePhase.DOWNLOADING) return
+        if (release.apkUrl.isBlank() || _state.value.phase == UpdatePhase.DOWNLOADING) return
         _state.update { it.copy(phase = UpdatePhase.DOWNLOADING, progress = 0f, message = null) }
         job = viewModelScope.launch {
             try {
@@ -189,16 +212,13 @@ class UpdateViewModel @Inject constructor(
 fun UpdateState.isFor(version: String): Boolean =
     release?.let { VersionComparator.compare(it.version, version) == 0 } == true
 
-/** Maps a changelog release to the downloadable form used by [UpdateManager]; null without an APK. */
-private fun AppRelease.toReleaseInfo(): ReleaseInfo? {
-    val url = apkUrl?.takeIf { it.isNotBlank() } ?: return null
-    return ReleaseInfo(
-        tag = tagName,
-        version = version,
-        notes = notesMarkdown,
-        apkUrl = url,
-        apkName = apkName ?: "Taal-$version.apk",
-        apkSize = apkSizeBytes ?: 0L,
-        pageUrl = htmlUrl
-    )
-}
+/** Maps a changelog release to the form used by [UpdateManager] (empty `apkUrl` when no APK asset is attached). */
+private fun AppRelease.toReleaseInfo(): ReleaseInfo = ReleaseInfo(
+    tag = tagName,
+    version = version,
+    notes = notesMarkdown,
+    apkUrl = apkUrl?.trim().orEmpty(),
+    apkName = apkName ?: "Taal-$version.apk",
+    apkSize = apkSizeBytes ?: 0L,
+    pageUrl = htmlUrl
+)

@@ -45,6 +45,10 @@ interface TimetableDataSource {
  */
 interface WseiRemoteDataSource : TimetableDataSource {
 
+    suspend fun refreshStudentProfile(
+        session: StudentSession
+    ): Result<StudentSession>
+
     suspend fun changePassword(
         currentPassword: String,
         newPassword: String
@@ -111,6 +115,8 @@ interface ScheduleRepository {
     ): StudentSession
 
     suspend fun logout()
+
+    suspend fun refreshStudentProfile(): Result<StudentSession>
 
     suspend fun changePassword(
         currentPassword: String,

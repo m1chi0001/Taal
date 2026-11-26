@@ -90,12 +90,62 @@ class ArpApiDataSource @Inject constructor(
         private const val PERSON_TYPE_STUDENT = "Student"
         private const val TAG = "ArpAttachments"
         private const val ATTACHMENT_BYTES_PATH = "/api/services/app/AnnouncementsData/GetAttachmentBytes"
+        private const val DETAILS_UNPROBED = "?"
+        private val ANNOUNCEMENT_DETAILS_PATHS = listOf(
+            "/api/services/app/AnnouncementsData/GetAnnouncementDetails",
+            "/api/services/app/AnnouncementsData/GetAnnouncementDetailsAsync",
+            "/api/services/app/AnnouncementsData/GetAnnouncement"
+        )
         private const val MAX_ATTACHMENT_HOPS = 6
         /** Inline Base64 from the list is kept for the offline snapshot only when reasonably small. */
         private const val MAX_INLINE_BASE64_CHARS = 2 * 1024 * 1024
         private val NOT_FOUND_STATUSES = setOf(400, 404, 405, 410)
         private val SERVER_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+
+        internal fun buildAttachmentAttempts(
+            studId: Int,
+            attachment: AnnouncementAttachment
+        ): List<Pair<String, String>> {
+            val endpoint = "$WSEI_WD_BASE_URL$ATTACHMENT_BYTES_PATH".toHttpUrl()
+            fun url(vararg params: Pair<String, Any>): String = endpoint.newBuilder().apply {
+                params.forEach { (name, value) -> addQueryParameter(name, value.toString()) }
+                addQueryParameter("PersonType", PERSON_TYPE_STUDENT)
+                addQueryParameter("IdLoggedPersonType", studId.toString())
+            }.build().toString()
+
+            val id = attachment.id.takeIf { it > 0 } // ids <= 0 are synthetic (see toDomain)
+            val announcementId = attachment.announcementId.takeIf { it > 0 }
+            val alternativeId = attachment.alternativeFileId?.trim()?.takeIf { it.isNotEmpty() && it != id?.toString() }
+            val direct = AttachmentUrls.resolve("$WSEI_WD_BASE_URL/", attachment.downloadUrl)
+            return buildList {
+                if (id != null) {
+                    add("Id" to url("Id" to id))
+                    add("id" to url("id" to id))
+                    add("attachmentId" to url("attachmentId" to id))
+                    if (announcementId != null) {
+                        add("Id+announcementId" to url("Id" to id, "announcementId" to announcementId))
+                        add("attachmentId+announcementId" to url("attachmentId" to id, "announcementId" to announcementId))
+                    }
+                }
+                if (alternativeId != null) {
+                    add("altId" to url("Id" to alternativeId))
+                    add("fileId" to url("fileId" to alternativeId))
+                }
+                if (direct != null) add("directUrl" to direct)
+                if (announcementId != null) {
+                    add("announcementId" to url("announcementId" to announcementId))
+                    add("AnnouncementId" to url("AnnouncementId" to announcementId))
+                    if (id == null) {
+                        add("Id=announcementId" to url("Id" to announcementId))
+                        add("id=announcementId" to url("id" to announcementId))
+                    }
+                }
+            }.distinctBy { it.second }
+        }
     }
+
+    @Volatile
+    private var announcementDetailsPath: String = DETAILS_UNPROBED
 
     // ---------------------------------------------------------------------------------------------
     // HTTP plumbing
@@ -195,13 +245,56 @@ class ArpApiDataSource @Inject constructor(
         sessionCookieJar.savedLogin = login
         sessionCookieJar.savedPassword = password
 
-        val courses = optional {
+        hydrateStudentSession(
+            userId = authResult.userId,
+            personId = authResult.personId,
+            fallbackStudId = authResult.idLoggedPersonType?.takeIf { it != 0 } ?: authResult.personId,
+            login = login,
+            fallbackFirstName = authResult.firstName.ifBlank { "Student" },
+            fallbackLastName = authResult.surname.ifBlank { "WSEI" },
+            fallbackPictureBase64 = authResult.personPicture?.ifBlank { null },
+            accessToken = accessToken,
+            previous = null,
+            requireAtLeastOneEndpoint = false
+        )
+    }
+
+    /** Re-fetches student metadata, averages, semester, status and ID photo for an active [session]. */
+    override suspend fun refreshStudentProfile(
+        session: StudentSession
+    ): Result<StudentSession> = apiCall {
+        hydrateStudentSession(
+            userId = session.userId,
+            personId = session.personId,
+            fallbackStudId = session.studId,
+            login = session.login,
+            fallbackFirstName = session.firstName,
+            fallbackLastName = session.lastName,
+            fallbackPictureBase64 = session.personPictureBase64,
+            accessToken = sessionCookieJar.bearerToken?.takeIf { it.isNotBlank() } ?: session.accessToken,
+            previous = session,
+            requireAtLeastOneEndpoint = true
+        )
+    }
+
+    private suspend fun hydrateStudentSession(
+        userId: Long,
+        personId: Int,
+        fallbackStudId: Int,
+        login: String,
+        fallbackFirstName: String,
+        fallbackLastName: String,
+        fallbackPictureBase64: String?,
+        accessToken: String,
+        previous: StudentSession?,
+        requireAtLeastOneEndpoint: Boolean
+    ): StudentSession {
+        val coursesDto = optional {
             getAbp<MsCoursesOfStudyDto>("/api/services/app/Login/GetCoursesOfStudy")
-        }?.courseOfStudies.orEmpty()
+        }
+        val courses = coursesDto?.courseOfStudies.orEmpty()
         val activeCourse = courses.firstOrNull { it.aktualny } ?: courses.firstOrNull()
-        val studId = activeCourse?.id?.takeIf { it != 0 }
-            ?: authResult.idLoggedPersonType?.takeIf { it != 0 }
-            ?: authResult.personId
+        val studId = activeCourse?.id?.takeIf { it != 0 } ?: fallbackStudId
 
         val profile = optional {
             getAbp<MsStudentDataDto>("/api/services/app/ProfilePages/GetStudentData") {
@@ -217,60 +310,85 @@ class ArpApiDataSource @Inject constructor(
                 parameter("PersonType", PERSON_TYPE_STUDENT)
             }
         }
+        if (requireAtLeastOneEndpoint && coursesDto == null && profile == null && dashboard == null) {
+            error(strings.get(R.string.error_login_no_data))
+        }
         val loginDetails = optional {
             getAbp<MsStudentLoginDetailsDto>("/api/services/app/Login/GetCourseOfStudyDetails") {
                 parameter("Id", studId)
             }
         }
-        val photoBase64 = fetchPersonPictureBase64(studId = studId, personId = authResult.personId)
-            ?: authResult.personPicture?.ifBlank { null }
+        val photoBase64 = fetchPersonPictureBase64(studId = studId, personId = personId)
             ?: profile?.personalData?.picture?.ifBlank { null }
+            ?: fallbackPictureBase64
 
         val personal = profile?.personalData
         val courseDash = dashboard?.courseOfStudy
         val courseCode = personal?.courseOfStudyName?.ifBlank { null }
             ?: activeCourse?.name?.ifBlank { null }
+            ?: previous?.courseOfStudyCode?.ifBlank { null }
             ?: "Tok podstawowy"
         val mode = personal?.nameOfStudies?.ifBlank { null }
             ?: activeCourse?.nameOfStudies?.ifBlank { null }
+            ?: previous?.studyMode?.ifBlank { null }
             ?: if (courseCode.contains("/N", ignoreCase = true)) "niestacjonarne" else "stacjonarne"
+        val fieldOfStudy = personal?.fieldOfStudy?.ifBlank { null }
+            ?: activeCourse?.fieldOfStudy?.ifBlank { null }
+            ?: previous?.fieldOfStudy?.ifBlank { null }
+            ?: "Kierunek WSEI"
 
-        StudentSession(
-            userId = authResult.userId,
-            personId = authResult.personId,
+        return StudentSession(
+            userId = userId,
+            personId = personId,
             studId = studId,
             login = login,
-            firstName = personal?.firstName?.ifBlank { null } ?: authResult.firstName.ifBlank { "Student" },
-            lastName = personal?.surname?.ifBlank { null } ?: authResult.surname.ifBlank { "WSEI" },
-            albumNumber = personal?.albumNumber?.ifBlank { null } ?: login,
-            fieldOfStudy = personal?.fieldOfStudy?.ifBlank { null }
-                ?: activeCourse?.fieldOfStudy?.ifBlank { null }
-                ?: "Kierunek WSEI",
+            firstName = personal?.firstName?.ifBlank { null } ?: fallbackFirstName,
+            lastName = personal?.surname?.ifBlank { null } ?: fallbackLastName,
+            albumNumber = personal?.albumNumber?.ifBlank { null }
+                ?: previous?.albumNumber?.ifBlank { null }
+                ?: login,
+            fieldOfStudy = fieldOfStudy,
             department = personal?.department?.ifBlank { null }
                 ?: activeCourse?.department?.ifBlank { null }
+                ?: previous?.department?.ifBlank { null }
                 ?: "Wydział Transportu i Informatyki",
             courseOfStudyCode = courseCode,
             studyMode = mode,
             obtainedTitle = personal?.obtainedTitle?.ifBlank { null }
                 ?: activeCourse?.obtainedTitle?.ifBlank { null }
+                ?: previous?.obtainedTitle?.ifBlank { null }
                 ?: "inż.",
             // `nameOfStudies` often carries the mode of study ("niestacjonarne"), not a specialization.
             specialization = activeCourse?.nameOfStudies
                 ?.trim()
                 ?.takeUnless { it.isBlank() || isStudyModeLabel(it, mode) }
                 .orEmpty(),
-            semesterNumber = courseDash?.semestr?.takeIf { it > 0 } ?: personal?.semestr?.takeIf { it > 0 } ?: 1,
-            academicYear = courseDash?.year?.takeIf { it > 0 } ?: personal?.year?.takeIf { it > 0 } ?: 1,
-            statusName = courseDash?.status?.ifBlank { null } ?: personal?.status?.ifBlank { null } ?: "Studiuje",
-            averageCurrentSemester = courseDash?.averageCurrentSemester ?: 0.0,
-            averagePreviousSemester = courseDash?.averagePreviousSemester ?: 0.0,
-            averageGrade = courseDash?.studyAverage ?: 0.0,
+            semesterNumber = courseDash?.semestr?.takeIf { it > 0 }
+                ?: personal?.semestr?.takeIf { it > 0 }
+                ?: previous?.semesterNumber?.takeIf { it > 0 }
+                ?: 1,
+            academicYear = courseDash?.year?.takeIf { it > 0 }
+                ?: personal?.year?.takeIf { it > 0 }
+                ?: previous?.academicYear?.takeIf { it > 0 }
+                ?: 1,
+            statusName = courseDash?.status?.ifBlank { null }
+                ?: personal?.status?.ifBlank { null }
+                ?: previous?.statusName?.ifBlank { null }
+                ?: "Studiuje",
+            averageCurrentSemester = courseDash?.averageCurrentSemester
+                ?: previous?.averageCurrentSemester ?: 0.0,
+            averagePreviousSemester = courseDash?.averagePreviousSemester
+                ?: previous?.averagePreviousSemester ?: 0.0,
+            averageGrade = courseDash?.studyAverage
+                ?: previous?.averageGrade ?: 0.0,
             personPictureBase64 = photoBase64,
-            allowPasswordChanges = personal?.allowPasswordChanges ?: true,
-            unreadAnnouncementCount = loginDetails?.unreadAnnouncementCount ?: 0,
-            accessToken = accessToken,
+            allowPasswordChanges = personal?.allowPasswordChanges
+                ?: previous?.allowPasswordChanges ?: true,
+            unreadAnnouncementCount = loginDetails?.unreadAnnouncementCount
+                ?: previous?.unreadAnnouncementCount ?: 0,
+            accessToken = sessionCookieJar.bearerToken?.takeIf { it.isNotBlank() } ?: accessToken,
             isDebugAccount = false
-        )
+        ).sanitized()
     }
 
     /** `GET /api/UserPhotos/GetPersonPictureAsync?Id=&IdLoggedPersonType=&PersonType=Student` */
@@ -544,6 +662,24 @@ class ArpApiDataSource @Inject constructor(
             val cleanBody = ScheduleNormalizer.stripHtml(item.text)
             val senderName = item.name.ifBlank { "Dziekanat" }
             val priority = parseAnnouncementPriority(item.priority)
+            val inlineAttachments = item.allAttachments()
+            val resolvedDtos = if (item.isAttachment && inlineAttachments.isEmpty() && item.id > 0) {
+                fetchAnnouncementDetailsAttachments(session, item.id)
+            } else {
+                inlineAttachments
+            }
+            val mappedAttachments = resolvedDtos.mapIndexed { attIdx, att -> att.toDomain(item.id, attIdx) }
+            val finalAttachments = if (item.isAttachment && mappedAttachments.isEmpty()) {
+                listOf(
+                    AnnouncementAttachment(
+                        id = -(item.id.coerceAtLeast(1)),
+                        fileName = "",
+                        announcementId = item.id
+                    )
+                )
+            } else {
+                mappedAttachments
+            }
             DeanAnnouncement(
                 id = "${item.id}_$idx",
                 announcementId = item.id,
@@ -554,12 +690,57 @@ class ArpApiDataSource @Inject constructor(
                 priorityLevel = priority,
                 isImportant = priority == 0, // AnnouncementPriority.High = 0
                 isRead = item.readed,
-                hasAttachment = item.isAttachment || item.attachments.isNotEmpty(),
-                attachments = item.attachments.mapIndexed { attIdx, att -> att.toDomain(item.id, attIdx) },
+                hasAttachment = item.isAttachment || finalAttachments.isNotEmpty(),
+                attachments = finalAttachments,
                 authorDepartment = senderName,
                 senderInitial = senderName.firstOrNull()?.uppercaseChar()?.toString() ?: "D"
             )
         }
+    }
+
+    /**
+     * Probes APR announcement-details endpoints when `GetAnnouncementsList` sets `isAttachment = true`
+     * without populating `attachments`. Caches the winning path (or `""` when none exist) so 404s are
+     * probed at most once per process.
+     */
+    private suspend fun fetchAnnouncementDetailsAttachments(
+        session: StudentSession,
+        announcementId: Int
+    ): List<MsAnnouncementAttachmentDto> {
+        val cachedPath = announcementDetailsPath
+        if (cachedPath.isEmpty()) return emptyList()
+        if (cachedPath != DETAILS_UNPROBED) {
+            return optional {
+                getAbp<MsAnnouncementDetailsDto>(cachedPath) {
+                    parameter("Id", announcementId)
+                    parameter("PersonType", PERSON_TYPE_STUDENT)
+                    parameter("IdLoggedPersonType", session.studId)
+                }
+            }?.allAttachments().orEmpty()
+        }
+
+        var allNotFound = true
+        for (candidate in ANNOUNCEMENT_DETAILS_PATHS) {
+            try {
+                val dto = getAbp<MsAnnouncementDetailsDto>(candidate) {
+                    parameter("Id", announcementId)
+                    parameter("PersonType", PERSON_TYPE_STUDENT)
+                    parameter("IdLoggedPersonType", session.studId)
+                }
+                announcementDetailsPath = candidate
+                return dto?.allAttachments().orEmpty()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: AprSessionExpiredException) {
+                throw e
+            } catch (e: AprHttpException) {
+                if (e.statusCode !in NOT_FOUND_STATUSES) allNotFound = false
+            } catch (e: Exception) {
+                allNotFound = false
+            }
+        }
+        if (allNotFound) announcementDetailsPath = ""
+        return emptyList()
     }
 
     /** `PUT /api/services/app/AnnouncementsData/UpdateAnnouncementReaded` */
@@ -626,38 +807,10 @@ class ArpApiDataSource @Inject constructor(
     /** Download client sharing the authenticated engine, with redirects handled in [fetchAttachment]. */
     private val downloadClient: HttpClient by lazy { httpClient.config { followRedirects = false } }
 
-    private fun attachmentAttempts(
+    internal fun attachmentAttempts(
         session: StudentSession,
         attachment: AnnouncementAttachment
-    ): List<Pair<String, String>> {
-        val endpoint = "$WSEI_WD_BASE_URL$ATTACHMENT_BYTES_PATH".toHttpUrl()
-        fun url(vararg params: Pair<String, Any>): String = endpoint.newBuilder().apply {
-            params.forEach { (name, value) -> addQueryParameter(name, value.toString()) }
-            addQueryParameter("PersonType", PERSON_TYPE_STUDENT)
-            addQueryParameter("IdLoggedPersonType", session.studId.toString())
-        }.build().toString()
-
-        val id = attachment.id.takeIf { it > 0 } // ids <= 0 are synthetic (see toDomain)
-        val announcementId = attachment.announcementId.takeIf { it > 0 }
-        val alternativeId = attachment.alternativeFileId?.trim()?.takeIf { it.isNotEmpty() && it != id?.toString() }
-        val direct = AttachmentUrls.resolve("$WSEI_WD_BASE_URL/", attachment.downloadUrl)
-        return buildList {
-            if (id != null) {
-                add("Id" to url("Id" to id))
-                add("id" to url("id" to id))
-                add("attachmentId" to url("attachmentId" to id))
-                if (announcementId != null) {
-                    add("Id+announcementId" to url("Id" to id, "announcementId" to announcementId))
-                    add("attachmentId+announcementId" to url("attachmentId" to id, "announcementId" to announcementId))
-                }
-            }
-            if (alternativeId != null) {
-                add("altId" to url("Id" to alternativeId))
-                add("fileId" to url("fileId" to alternativeId))
-            }
-            if (direct != null) add("directUrl" to direct)
-        }.distinctBy { it.second }
-    }
+    ): List<Pair<String, String>> = Companion.buildAttachmentAttempts(session.studId, attachment)
 
     /**
      * One variant: GET [startUrl], following redirects and links found in the body (ABP `targetUrl`,
@@ -1260,8 +1413,46 @@ data class MsAnnouncementDto(
     @SerialName("date") val date: LString = "",
     @SerialName("priority") val priority: LString = "1",
     @SerialName("isAttachment") val isAttachment: LBool = false,
-    @SerialName("attachments") val attachments: List<MsAnnouncementAttachmentDto> = emptyList()
-)
+    @SerialName("attachmentId") val attachmentId: LInt = 0,
+    @SerialName("attachmentName") val attachmentName: LString = "",
+    @SerialName("fileName") val fileName: LString = "",
+    @SerialName("attachments") val attachments: List<MsAnnouncementAttachmentDto> = emptyList(),
+    @SerialName("announcementAttachments") val announcementAttachments: List<MsAnnouncementAttachmentDto> = emptyList(),
+    @SerialName("files") val files: List<MsAnnouncementAttachmentDto> = emptyList()
+) {
+    fun allAttachments(): List<MsAnnouncementAttachmentDto> {
+        val merged = attachments + announcementAttachments + files
+        if (merged.isNotEmpty()) return merged
+        if (attachmentId > 0 || attachmentName.isNotBlank() || fileName.isNotBlank()) {
+            return listOf(
+                MsAnnouncementAttachmentDto(
+                    id = attachmentId,
+                    name = attachmentName,
+                    fileName = fileName,
+                    announcementId = id
+                )
+            )
+        }
+        return emptyList()
+    }
+}
+
+@Serializable
+data class MsAnnouncementDetailsDto(
+    @SerialName("id") val id: LInt = 0,
+    @SerialName("announcement") val announcement: MsAnnouncementDto? = null,
+    @SerialName("item") val item: MsAnnouncementDto? = null,
+    @SerialName("attachments") val attachments: List<MsAnnouncementAttachmentDto> = emptyList(),
+    @SerialName("announcementAttachments") val announcementAttachments: List<MsAnnouncementAttachmentDto> = emptyList(),
+    @SerialName("files") val files: List<MsAnnouncementAttachmentDto> = emptyList()
+) {
+    fun allAttachments(): List<MsAnnouncementAttachmentDto> =
+        attachments +
+            announcementAttachments +
+            files +
+            announcement?.allAttachments().orEmpty() +
+            item?.allAttachments().orEmpty()
+}
 
 /**
  * Attachment entry of `MsAnnouncementDto.Attachments`. Besides the official `id`/`name`/`fileBytes`,

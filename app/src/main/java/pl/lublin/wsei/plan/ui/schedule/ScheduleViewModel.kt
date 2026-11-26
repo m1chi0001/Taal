@@ -386,8 +386,8 @@ class ScheduleViewModel @Inject constructor(
                             }
                         )
                     }
-                    refreshSchedule()
-                    loadAllAcademicModules()
+                    prefillCachedAcademicModules()
+                    refreshScheduleInternal(includeModules = true)
                 }
             }
         }
@@ -585,7 +585,7 @@ class ScheduleViewModel @Inject constructor(
     fun selectScheduleFilter(filterType: ScheduleFilterType) {
         if (_uiState.value.scheduleFilterType == filterType) return
         _uiState.update { it.copy(scheduleFilterType = filterType) }
-        refreshSchedule()
+        refreshScheduleInternal(includeModules = false)
     }
 
     fun toggleHeroExpanded() {
@@ -608,7 +608,16 @@ class ScheduleViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Universal pull-to-refresh handler across Start, Schedule, Subjects, Finances, Announcements,
+     * More and Profile: refreshes the 4-month timetable window, student profile (including photo
+     * and averages) and all academic modules in parallel.
+     */
     fun refreshSchedule() {
+        refreshScheduleInternal(includeModules = true)
+    }
+
+    private fun refreshScheduleInternal(includeModules: Boolean) {
         viewModelScope.launch {
             val state = _uiState.value
             val session = state.currentSession ?: return@launch
@@ -622,12 +631,20 @@ class ScheduleViewModel @Inject constructor(
             val start = LocalDate(startYm.year, startYm.monthValue, 1)
             val end = LocalDate(endYm.year, endYm.monthValue, endYm.lengthOfMonth())
 
-            val result = scheduleRepository.syncSchedule(
-                startDate = start,
-                endDate = end,
-                scheduleType = currentFilter,
-                forceRefresh = true
-            )
+            val result = coroutineScope {
+                val scheduleDef = async {
+                    scheduleRepository.syncSchedule(
+                        startDate = start,
+                        endDate = end,
+                        scheduleType = currentFilter,
+                        forceRefresh = true
+                    )
+                }
+                if (includeModules) {
+                    launch { refreshAcademicModulesAndProfile() }
+                }
+                scheduleDef.await()
+            }
             result.fold(
                 onSuccess = { report ->
                     _uiState.update {
@@ -791,9 +808,9 @@ class ScheduleViewModel @Inject constructor(
         }
     }
 
-    private fun loadAllAcademicModules() {
+    private fun prefillCachedAcademicModules() {
         viewModelScope.launch {
-            // Offline-first: show the last cached modules immediately, then refresh from the network.
+            // Offline-first: show the last cached modules immediately while network sync runs.
             val cached = scheduleRepository.loadCachedAcademicModules()
             _uiState.update { state ->
                 state.copy(
@@ -805,31 +822,36 @@ class ScheduleViewModel @Inject constructor(
                     announcements = cached.announcements ?: state.announcements
                 )
             }
-            coroutineScope {
-                val groupsDef = async { scheduleRepository.fetchStudentGroups() }
-                val plansDef = async { scheduleRepository.fetchStudyPlans() }
-                val gradesDef = async { scheduleRepository.fetchGrades() }
-                val scholarshipsDef = async { scheduleRepository.fetchScholarships() }
-                val financialsDef = async { scheduleRepository.fetchFinancials() }
-                val announcementsDef = async { scheduleRepository.fetchAnnouncements() }
+        }
+    }
 
-                val groupsRes = groupsDef.await()
-                val plansRes = plansDef.await()
-                val gradesRes = gradesDef.await()
-                val scholarshipsRes = scholarshipsDef.await()
-                val financialsRes = financialsDef.await()
-                val announcementsRes = announcementsDef.await()
+    private suspend fun refreshAcademicModulesAndProfile() {
+        coroutineScope {
+            val profileDef = async { scheduleRepository.refreshStudentProfile() }
+            val groupsDef = async { scheduleRepository.fetchStudentGroups() }
+            val plansDef = async { scheduleRepository.fetchStudyPlans() }
+            val gradesDef = async { scheduleRepository.fetchGrades() }
+            val scholarshipsDef = async { scheduleRepository.fetchScholarships() }
+            val financialsDef = async { scheduleRepository.fetchFinancials() }
+            val announcementsDef = async { scheduleRepository.fetchAnnouncements() }
 
-                _uiState.update { state ->
-                    state.copy(
-                        studentGroups = groupsRes.getOrDefault(state.studentGroups),
-                        studyPlans = plansRes.getOrDefault(state.studyPlans),
-                        grades = gradesRes.getOrDefault(state.grades),
-                        scholarships = scholarshipsRes.getOrDefault(state.scholarships),
-                        financials = financialsRes.getOrDefault(state.financials),
-                        announcements = announcementsRes.getOrDefault(state.announcements)
-                    )
-                }
+            profileDef.await()
+            val groupsRes = groupsDef.await()
+            val plansRes = plansDef.await()
+            val gradesRes = gradesDef.await()
+            val scholarshipsRes = scholarshipsDef.await()
+            val financialsRes = financialsDef.await()
+            val announcementsRes = announcementsDef.await()
+
+            _uiState.update { state ->
+                state.copy(
+                    studentGroups = groupsRes.getOrDefault(state.studentGroups),
+                    studyPlans = plansRes.getOrDefault(state.studyPlans),
+                    grades = gradesRes.getOrDefault(state.grades),
+                    scholarships = scholarshipsRes.getOrDefault(state.scholarships),
+                    financials = financialsRes.getOrDefault(state.financials),
+                    announcements = announcementsRes.getOrDefault(state.announcements)
+                )
             }
         }
     }

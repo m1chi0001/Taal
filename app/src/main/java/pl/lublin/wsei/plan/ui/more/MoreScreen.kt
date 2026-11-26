@@ -41,6 +41,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -124,7 +125,6 @@ import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import pl.lublin.wsei.plan.ui.theme.isWseiDarkTheme
 import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
 import pl.lublin.wsei.plan.ui.theme.wseiPaletteSwatch
-import pl.lublin.wsei.plan.ui.update.UpdateChangelogSheet
 import androidx.compose.ui.res.pluralStringResource
 
 private const val LINK_VIRTUAL_DEAN = "https://dziekanat.wsei.lublin.pl/"
@@ -558,7 +558,7 @@ private fun MoreDetailPlaceholder(unreadCount: Int, onOpenAnnouncements: () -> U
                 color = colors.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            FilledTonalButton(onClick = onOpenAnnouncements, shape = CircleShape) {
+            FilledTonalButton(onClick = onOpenAnnouncements, shapes = ButtonDefaults.shapes()) {
                 Icon(
                     imageVector = WseiIcons.Campaign,
                     contentDescription = null,
@@ -591,7 +591,6 @@ private fun SettingsScreen(
     onToggleLiveNotification: (Boolean) -> Unit,
     onToggleHideSensitiveData: (Boolean) -> Unit
 ) {
-    var showChangelog by rememberSaveable { mutableStateOf(false) }
     MorePage(title = stringResource(R.string.settings_title), onBack = onBack, embedded = embedded) { itemModifier ->
         item(key = "section_theme", contentType = "section") {
             WseiSectionTitle(stringResource(R.string.settings_section_theme), modifier = itemModifier)
@@ -651,27 +650,6 @@ private fun SettingsScreen(
                 )
             }
         }
-
-        item(key = "section_app", contentType = "section") {
-            WseiSectionTitle(stringResource(R.string.about_section_app), modifier = itemModifier)
-        }
-        item(key = "app_changelog", contentType = "app_row") {
-            WseiListItem(
-                title = stringResource(R.string.about_whats_new_title),
-                supporting = stringResource(R.string.about_whats_new_supporting),
-                icon = WseiIcons.AutoAwesome,
-                iconContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                iconContentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                shape = wseiGroupItemShape(0, 1),
-                onClick = { showChangelog = true },
-                trailing = { WseiChevron() },
-                modifier = itemModifier
-            )
-        }
-    }
-
-    if (showChangelog) {
-        UpdateChangelogSheet(onDismiss = { showChangelog = false })
     }
 }
 

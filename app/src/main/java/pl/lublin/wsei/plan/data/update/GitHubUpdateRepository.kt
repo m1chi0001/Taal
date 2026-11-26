@@ -68,6 +68,8 @@ class GitHubUpdateRepository @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val refreshMutex = Mutex()
+    private var cachedEtag: String? = null
+    private var checkedInCurrentProcess = false
 
     /** Restores the cached state at startup, so the changelog is visible before (or without) a network check. */
     private val loadJob = scope.launch { restore() }
@@ -77,11 +79,15 @@ class GitHubUpdateRepository @Inject constructor(
         refreshMutex.withLock {
             val now = System.currentTimeMillis()
             val last = _status.value.lastCheckedEpochMillis
-            if (!force && last != null && now - last in 0 until THROTTLE_MILLIS) return
+            // Every fresh app launch checks GitHub (with a short debounce so Application + UI
+            // startup share one call); subsequent foreground resumes throttle to 10 minutes.
+            val cooldown = if (checkedInCurrentProcess) THROTTLE_MILLIS else STARTUP_DEBOUNCE_MILLIS
+            if (!force && last != null && now - last in 0 until cooldown) return
 
             _status.update { it.copy(isChecking = true, errorMessage = null) }
             try {
-                applyResult(fetchReleases(), now)
+                val ifNoneMatch = cachedEtag?.takeIf { !force && _status.value.releases.isNotEmpty() }
+                applyResult(fetchReleases(ifNoneMatch), now)
             } finally {
                 // Also when the caller (worker, ViewModel) is cancelled mid-request.
                 _status.update { it.copy(isChecking = false) }
@@ -92,7 +98,9 @@ class GitHubUpdateRepository @Inject constructor(
     private suspend fun applyResult(result: FetchResult, now: Long) {
         when (result) {
             is FetchResult.Success -> {
+                checkedInCurrentProcess = true
                 val releases = result.releases
+                if (!result.etag.isNullOrBlank()) cachedEtag = result.etag
                 _status.update {
                     it.copy(
                         latest = releases.firstOrNull(),
@@ -105,7 +113,19 @@ class GitHubUpdateRepository @Inject constructor(
                 persist { prefs ->
                     prefs[KEY_LAST_CHECKED] = now
                     prefs[KEY_RELEASES] = GitHubReleaseParser.encodeCache(releases)
+                    if (!result.etag.isNullOrBlank()) prefs[KEY_ETAG] = result.etag
                 }
+            }
+            FetchResult.NotModified -> {
+                checkedInCurrentProcess = true
+                _status.update {
+                    it.copy(
+                        isChecking = false,
+                        lastCheckedEpochMillis = now,
+                        errorMessage = null
+                    )
+                }
+                persist { prefs -> prefs[KEY_LAST_CHECKED] = now }
             }
             is FetchResult.Failure -> _status.update {
                 it.copy(isChecking = false, errorMessage = result.message)
@@ -129,6 +149,7 @@ class GitHubUpdateRepository @Inject constructor(
             if (e is CancellationException) throw e
             emptyPreferences()
         }
+        cachedEtag = prefs[KEY_ETAG]
         val cached = prefs[KEY_RELEASES]?.let(GitHubReleaseParser::decodeCache).orEmpty()
         _status.update {
             // A refresh may only start after this load, so the cached values never overwrite fresh ones.
@@ -150,11 +171,12 @@ class GitHubUpdateRepository @Inject constructor(
     }
 
     private sealed interface FetchResult {
-        data class Success(val releases: List<AppRelease>) : FetchResult
+        data class Success(val releases: List<AppRelease>, val etag: String?) : FetchResult
+        data object NotModified : FetchResult
         data class Failure(val message: String) : FetchResult
     }
 
-    private suspend fun fetchReleases(): FetchResult = withContext(Dispatchers.IO) {
+    private suspend fun fetchReleases(ifNoneMatch: String?): FetchResult = withContext(Dispatchers.IO) {
         try {
             val connection = (URL(RELEASES_API).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 15_000
@@ -164,13 +186,18 @@ class GitHubUpdateRepository @Inject constructor(
                 setRequestProperty("Accept", "application/vnd.github+json")
                 setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
                 setRequestProperty("User-Agent", "Taal-Android/${BuildConfig.VERSION_NAME}")
+                if (!ifNoneMatch.isNullOrBlank()) {
+                    setRequestProperty("If-None-Match", ifNoneMatch)
+                }
             }
             try {
                 when (val code = connection.responseCode) {
                     HttpURLConnection.HTTP_OK -> {
                         val body = connection.inputStream.bufferedReader().use { it.readText() }
-                        FetchResult.Success(GitHubReleaseParser.parseReleases(body))
+                        val etag = connection.getHeaderField("ETag")?.trim()?.takeIf { it.isNotEmpty() }
+                        FetchResult.Success(GitHubReleaseParser.parseReleases(body), etag)
                     }
+                    HttpURLConnection.HTTP_NOT_MODIFIED -> FetchResult.NotModified
                     HttpURLConnection.HTTP_NOT_FOUND ->
                         FetchResult.Failure(strings.get(R.string.update_error_no_release))
                     HttpURLConnection.HTTP_FORBIDDEN, 429 ->
@@ -190,12 +217,14 @@ class GitHubUpdateRepository @Inject constructor(
     }
 
     companion object {
-        const val THROTTLE_MILLIS: Long = 6L * 60 * 60 * 1000
+        const val THROTTLE_MILLIS: Long = 10L * 60 * 1000
+        private const val STARTUP_DEBOUNCE_MILLIS: Long = 30_000L
         private const val RELEASES_API = "https://api.github.com/repos/${UpdateManager.REPO}/releases?per_page=50"
 
         private val KEY_LAST_CHECKED = longPreferencesKey("last_checked_epoch_millis")
         private val KEY_DISMISSED = stringPreferencesKey("dismissed_version")
         private val KEY_RELEASES = stringPreferencesKey("cached_releases_json_v1")
+        private val KEY_ETAG = stringPreferencesKey("cached_releases_etag_v1")
     }
 }
 

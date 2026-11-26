@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -44,6 +45,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -51,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -64,6 +67,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -529,6 +533,79 @@ fun WseiEmptyState(
     }
 }
 
+/**
+ * One cell of [WseiEqualHeightRow]: its card [shape]/[containerColor] fills the height of the
+ * tallest cell in the row while [content] is measured with unbounded height, so wrapping children
+ * (such as `FlowRow` chips) are never clipped by `IntrinsicSize.Min`.
+ */
+class WseiEqualHeightCell(
+    val shape: Shape = WseiCardShape,
+    val containerColor: Color,
+    val contentColor: Color,
+    val content: @Composable () -> Unit
+)
+
+/**
+ * Single-pass equal-height multi-column row without `IntrinsicSize.Min`: measures every cell body
+ * at the column width with unbounded height first, then stretches every background surface in the
+ * row to the tallest measured height. Incomplete trailing rows stay aligned with the columns above.
+ */
+@Composable
+fun WseiEqualHeightRow(
+    columns: Int,
+    cells: List<WseiEqualHeightCell>,
+    modifier: Modifier = Modifier,
+    horizontalSpacing: Dp = WseiSpacing.betweenCards,
+    minCellHeight: Dp = 0.dp
+) {
+    if (cells.isEmpty() || columns <= 0) return
+    val surfaces: @Composable () -> Unit = {
+        cells.forEach { cell ->
+            Surface(
+                shape = cell.shape,
+                color = cell.containerColor,
+                contentColor = cell.contentColor,
+                content = {}
+            )
+        }
+    }
+    val bodies: @Composable () -> Unit = {
+        cells.forEach { cell ->
+            CompositionLocalProvider(LocalContentColor provides cell.contentColor) {
+                Box { cell.content() }
+            }
+        }
+    }
+    Layout(
+        contents = listOf(surfaces, bodies),
+        modifier = modifier.fillMaxWidth()
+    ) { (surfaceMeasurables, bodyMeasurables), constraints ->
+        val cols = columns.coerceAtLeast(1)
+        val gapPx = horizontalSpacing.roundToPx()
+        val cellWidth = ((constraints.maxWidth - gapPx * (cols - 1)) / cols).coerceAtLeast(0)
+        val bodyConstraints = Constraints(
+            minWidth = cellWidth,
+            maxWidth = cellWidth,
+            minHeight = 0,
+            maxHeight = Constraints.Infinity
+        )
+        val bodyPlaceables = bodyMeasurables.map { it.measure(bodyConstraints) }
+        val rowHeight = maxOf(
+            minCellHeight.roundToPx(),
+            bodyPlaceables.maxOfOrNull { it.height } ?: 0
+        ).coerceIn(constraints.minHeight, constraints.maxHeight)
+        val surfaceConstraints = Constraints.fixed(cellWidth, rowHeight)
+        val surfacePlaceables = surfaceMeasurables.map { it.measure(surfaceConstraints) }
+        layout(constraints.maxWidth, rowHeight) {
+            for (i in bodyPlaceables.indices) {
+                val x = i * (cellWidth + gapPx)
+                surfacePlaceables.getOrNull(i)?.placeRelative(x, 0)
+                bodyPlaceables[i].placeRelative(x, 0)
+            }
+        }
+    }
+}
+
 /** Big figure with a caption — statistics on summary cards. */
 @Composable
 fun WseiStat(
@@ -536,10 +613,11 @@ fun WseiStat(
     label: String,
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
-    contentColor: Color = MaterialTheme.colorScheme.onSurface
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    shape: Shape = WseiInsetShape
 ) {
     Surface(
-        shape = WseiInsetShape,
+        shape = shape,
         color = containerColor,
         contentColor = contentColor,
         modifier = modifier
@@ -554,6 +632,7 @@ fun WseiStat(
             Text(
                 text = value,
                 style = valueStyle,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 autoSize = TextAutoSize.StepBased(
                     minFontSize = 14.sp,
@@ -582,15 +661,6 @@ fun WseiStat(
  * Every frame layer is drawn with `background(color, shape)` (anti-aliased) and only the photo
  * itself is clipped, so a smooth [shape] such as `CircleShape` gives clean edges even for ID
  * photos with a bright white background.
- *
- * @param shape outline of the frame and of the photo. Prefer `CircleShape` for large photos:
- *   wavy outlines (cookie) clip the white photo background into jagged edges.
- * @param ringWidth when > 0 the photo sits inside a tonal ring of [ringColor] drawn with the same
- *   [shape], so the (often white) photo background never touches the card behind it.
- * @param photoZoom slight zoom of the photo (≥ 1) that crops the white margins of ID photos.
- * @param ringGap optional thin gap of [ringGapColor] between the ring and the photo.
- * @param ringGapColor colour of [ringGap]; also used for the hairline that hides the
- *   anti-aliasing fringe of the photo edge when a ring or gap is present.
  */
 @Composable
 fun StudentAvatar(
@@ -603,7 +673,8 @@ fun StudentAvatar(
     ringColor: Color = MaterialTheme.colorScheme.primary,
     photoZoom: Float = 1f,
     ringGap: Dp = 0.dp,
-    ringGapColor: Color = MaterialTheme.colorScheme.surface
+    ringGapColor: Color = MaterialTheme.colorScheme.surface,
+    alignment: Alignment = Alignment.Center
 ) {
     val decodedBitmap = rememberDecodedStudentPhoto(base64Photo)
     val initials = remember(fullName) {
@@ -638,6 +709,8 @@ fun StudentAvatar(
                 bitmap = decodedBitmap,
                 contentDescription = stringResource(R.string.common_photo_of, fullName),
                 contentScale = ContentScale.Crop,
+                alignment = alignment,
+                filterQuality = if (size >= 64.dp) FilterQuality.High else FilterQuality.Medium,
                 modifier = Modifier
                     .fillMaxSize()
                     .then(

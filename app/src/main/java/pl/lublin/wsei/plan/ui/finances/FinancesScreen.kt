@@ -95,6 +95,8 @@ import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import pl.lublin.wsei.plan.ui.theme.mutedContentColor
+import pl.lublin.wsei.plan.ui.theme.tonalLayer
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import pl.lublin.wsei.plan.R
@@ -372,12 +374,13 @@ private fun BalanceHeroCard(
     val colors = MaterialTheme.colorScheme
     val settled = unpaidCount == 0
     val accountClipLabel = stringResource(R.string.finances_account_number_clip_label)
+    val heroContainer = if (settled) colors.primaryContainer else colors.tertiaryContainer
     val contentColor = if (settled) colors.onPrimaryContainer else colors.onTertiaryContainer
 
     WseiCard(
         modifier = modifier,
         shape = WseiHeroShape,
-        containerColor = if (settled) colors.primaryContainer else colors.tertiaryContainer,
+        containerColor = heroContainer,
         contentColor = contentColor,
         verticalSpacing = WseiSpacing.l
     ) {
@@ -403,15 +406,16 @@ private fun BalanceHeroCard(
                 WseiPill(
                     text = stringResource(R.string.finances_all_settled),
                     icon = WseiIcons.CheckCircle,
-                    containerColor = colors.primary,
-                    contentColor = colors.onPrimary,
+                    containerColor = colors.onPrimaryContainer,
+                    contentColor = colors.primaryContainer,
                     emphasized = true
                 )
             }
         }
 
         if (accountNumber != null) {
-            WseiInset(containerColor = contentColor.copy(alpha = 0.08f)) {
+            val insetContainer = tonalLayer(heroContainer, contentColor, 0.09f)
+            WseiInset(containerColor = insetContainer) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
@@ -423,7 +427,7 @@ private fun BalanceHeroCard(
                         Text(
                             text = stringResource(R.string.finances_account_number),
                             style = MaterialTheme.typography.labelMedium,
-                            color = contentColor.copy(alpha = 0.8f)
+                            color = mutedContentColor(contentColor, insetContainer)
                         )
                         Text(
                             text = wseiMasked(accountNumber, mask),
@@ -438,9 +442,10 @@ private fun BalanceHeroCard(
                         onClick = {
                             copied = copySensitiveText(context, accountClipLabel, accountNumber)
                         },
+                        shapes = IconButtonDefaults.shapes(),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = contentColor,
-                            contentColor = if (settled) colors.primaryContainer else colors.tertiaryContainer
+                            contentColor = heroContainer
                         )
                     ) {
                         AnimatedContent(
@@ -503,8 +508,8 @@ private fun ObligationCard(
                 PayOnlineAction(
                     amount = amount,
                     prominent = isNearestDue || expanded,
-                    // On the error-tinted card the button is a tonal overlay of the card's content colour.
-                    tonalContainer = if (dueThisMonth) contentColor.copy(alpha = 0.12f) else colors.secondaryContainer,
+                    // On the error-tinted card the button is an opaque tonal overlay of the card's content colour.
+                    tonalContainer = if (dueThisMonth) tonalLayer(containerColor, contentColor, 0.14f) else colors.secondaryContainer,
                     tonalContent = if (dueThisMonth) contentColor else colors.onSecondaryContainer,
                     textColor = if (dueThisMonth) contentColor else colors.primary,
                     onClick = onPayOnline
@@ -517,12 +522,12 @@ private fun ObligationCard(
             WseiIconBadge(
                 icon = if (item.isPaid) WseiIcons.CheckCircle else WseiIcons.AccountBalanceWallet,
                 containerColor = when {
-                    dueThisMonth -> colors.error
+                    dueThisMonth -> colors.onErrorContainer
                     item.isPaid -> colors.surfaceContainerHighest
                     else -> colors.primaryContainer
                 },
                 contentColor = when {
-                    dueThisMonth -> colors.onError
+                    dueThisMonth -> colors.errorContainer
                     item.isPaid -> colors.onSurfaceVariant
                     else -> colors.onPrimaryContainer
                 }
@@ -561,14 +566,13 @@ private fun ObligationCard(
             }
         },
         body = {
-            WseiInset(
-                containerColor = if (dueThisMonth) contentColor.copy(alpha = 0.08f) else colors.surfaceContainerLow
-            ) {
+            val insetContainer = if (dueThisMonth) tonalLayer(containerColor, contentColor, 0.08f) else colors.surfaceContainerLow
+            WseiInset(containerColor = insetContainer) {
                 val m: (String) -> String = { wseiMasked(formatMoneyText(it), maskSensitive) }
                 WseiInfoRow(stringResource(R.string.finances_status), item.statusLabel)
                 WseiInfoRow(stringResource(R.string.finances_due_date), item.dueDateIso)
                 item.paymentDateIso?.let { WseiInfoRow(stringResource(R.string.finances_payment_date), it) }
-                HorizontalDivider(color = contentColor.copy(alpha = 0.12f))
+                HorizontalDivider(color = tonalLayer(insetContainer, contentColor, 0.14f))
                 WseiInfoRow(stringResource(R.string.finances_amount_charged), m(item.amountFormatted))
                 // Interest, write-offs and discounts are almost always zero: only real values are listed.
                 listOf(
@@ -604,7 +608,7 @@ private fun PayOnlineAction(
     if (prominent) {
         FilledTonalButton(
             onClick = onClick,
-            shape = CircleShape,
+            shapes = ButtonDefaults.shapes(),
             colors = ButtonDefaults.filledTonalButtonColors(
                 containerColor = tonalContainer,
                 contentColor = tonalContent
@@ -632,8 +636,8 @@ private fun PayOnlineAction(
             Spacer(modifier = Modifier.weight(1f))
             TextButton(
                 onClick = onClick,
-                shape = CircleShape,
-                colors = ButtonDefaults.textButtonColors(contentColor = textColor),
+                shapes = ButtonDefaults.shapes(),
+                colors = ButtonDefaults.textButtonColors(contentColor = textColor)
             ) {
                 Text(
                     text = stringResource(R.string.finances_pay_online_short),
@@ -773,7 +777,7 @@ private fun ScholarshipCard(
             WseiInset {
                 amount?.let { WseiInfoRow(stringResource(R.string.finances_scholarship_amount), m(formatMoneyText(it))) }
                 if (payouts.isNotEmpty()) {
-                    if (amount != null) HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
+                    if (amount != null) HorizontalDivider(color = colors.outlineVariant)
                     Text(
                         text = stringResource(R.string.finances_scholarship_payouts),
                         style = MaterialTheme.typography.labelLarge,
@@ -797,7 +801,7 @@ private fun ScholarshipCard(
         if (onOpenHistory != null) {
             OutlinedButton(
                 onClick = onOpenHistory,
-                shape = CircleShape,
+                shapes = ButtonDefaults.shapes(),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.finances_scholarship_history), style = MaterialTheme.typography.labelLarge)

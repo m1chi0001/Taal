@@ -12,12 +12,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
@@ -66,8 +69,8 @@ import java.util.Locale
 import pl.lublin.wsei.plan.l10n.appLocale
 
 /**
- * "Historia zmian" sheet wired to the shared [UpdateViewModel]. Opened from the update prompt,
- * "O aplikacji" and the settings. Loads the changelog when nothing is cached yet.
+ * "Historia zmian" sheet wired to the shared [UpdateViewModel]. Opened from the update prompt
+ * and "O aplikacji". Loads the changelog when nothing is cached yet.
  */
 @Composable
 fun UpdateChangelogSheet(
@@ -93,17 +96,22 @@ fun ChangelogSheet(
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
     val locale = appLocale()
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     // The newest release is open by default; the rest stay compact until tapped.
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = colors.surfaceContainerLow
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(start = WseiSpacing.l, end = WseiSpacing.l, bottom = 32.dp),
+            contentPadding = PaddingValues(
+                start = WseiSpacing.l,
+                end = WseiSpacing.l,
+                bottom = 32.dp + navBarBottom
+            ),
             verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
         ) {
             item(key = "changelog_header", contentType = "header") {
@@ -139,7 +147,10 @@ fun ChangelogSheet(
                 }
                 item(key = "changelog_footer", contentType = "footer") {
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        TextButton(onClick = { openExternalLink(context, UpdateManager.RELEASES_PAGE) }) {
+                        TextButton(
+                            onClick = { openExternalLink(context, UpdateManager.RELEASES_PAGE) },
+                            shapes = ButtonDefaults.shapes()
+                        ) {
                             Text(stringResource(R.string.changelog_open_github))
                         }
                     }
@@ -160,8 +171,8 @@ private fun ChangelogHeader(modifier: Modifier = Modifier) {
         WseiIconBadge(
             icon = UpdateIcons.History,
             shape = MaterialShapes.Cookie9Sided.toShape(),
-            containerColor = colors.primary,
-            contentColor = colors.onPrimary,
+            containerColor = colors.primaryContainer,
+            contentColor = colors.onPrimaryContainer,
             size = 48.dp,
             iconSize = 24.dp
         )
@@ -210,10 +221,10 @@ private fun ChangelogEmpty(isLoading: Boolean, onRetry: () -> Unit, onOpenGitHub
                     horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s, Alignment.CenterHorizontally),
                     verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
                 ) {
-                    FilledTonalButton(onClick = onRetry, shape = CircleShape) {
+                    FilledTonalButton(onClick = onRetry, shapes = ButtonDefaults.shapes()) {
                         Text(stringResource(R.string.changelog_retry))
                     }
-                    OutlinedButton(onClick = onOpenGitHub, shape = CircleShape) {
+                    OutlinedButton(onClick = onOpenGitHub, shapes = ButtonDefaults.shapes()) {
                         Text(stringResource(R.string.changelog_open_github))
                     }
                 }
@@ -234,10 +245,11 @@ private fun ReleaseCard(
 ) {
     val colors = MaterialTheme.colorScheme
     val title = release.title.trim().takeUnless { isJustVersion(it, release) }
+    val cardContainer = if (isLatest) colors.surfaceContainerHigh else colors.surfaceContainer
     WseiExpandableCard(
         expanded = expanded,
         onToggle = onToggle,
-        containerColor = if (isLatest) colors.surfaceContainerHigh else colors.surfaceContainer,
+        containerColor = cardContainer,
         header = {
             Column(
                 modifier = Modifier.weight(1f),
@@ -250,8 +262,8 @@ private fun ReleaseCard(
                 ) {
                     WseiPill(
                         text = stringResource(R.string.changelog_version_badge, release.version),
-                        containerColor = if (isLatest) colors.primary else colors.secondaryContainer,
-                        contentColor = if (isLatest) colors.onPrimary else colors.onSecondaryContainer,
+                        containerColor = if (isLatest) colors.primaryContainer else colors.secondaryContainer,
+                        contentColor = if (isLatest) colors.onPrimaryContainer else colors.onSecondaryContainer,
                         emphasized = true
                     )
                     if (isLatest) {
@@ -274,7 +286,7 @@ private fun ReleaseCard(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 2,
+                        maxLines = if (expanded) Int.MAX_VALUE else 3,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -295,10 +307,15 @@ private fun ReleaseCard(
                     color = colors.onSurfaceVariant
                 )
             } else {
-                MarkdownText(markdown = release.notesMarkdown, modifier = Modifier.fillMaxWidth())
+                MarkdownText(
+                    markdown = release.notesMarkdown,
+                    containerColor = cardContainer,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
             TextButton(
                 onClick = onOpenRelease,
+                shapes = ButtonDefaults.shapes(),
                 modifier = Modifier.align(Alignment.End)
             ) {
                 Text(stringResource(R.string.changelog_open_release))

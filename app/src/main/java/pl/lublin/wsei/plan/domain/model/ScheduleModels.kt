@@ -291,7 +291,34 @@ data class StudentSession(
     val isDebugAccount: Boolean
 ) {
     val fullName: String get() = "$firstName $lastName"
+
+    /**
+     * Real specialization, or `null` when missing, identical to [fieldOfStudy], or polluted with a
+     * study-mode label ("niestacjonarne", "stacjonarne") — including sessions restored from
+     * encrypted storage written by older app versions.
+     */
+    val cleanSpecialization: String?
+        get() = specialization.trim().takeUnless { raw ->
+            raw.isEmpty() ||
+                raw.equals(fieldOfStudy.trim(), ignoreCase = true) ||
+                isStudyModeSpecializationNoise(raw, studyMode)
+        }
+
+    fun sanitized(): StudentSession = copy(specialization = cleanSpecialization.orEmpty())
 }
+
+internal fun isStudyModeSpecializationNoise(value: String, studyMode: String = ""): Boolean {
+    val normalized = value.lowercase().replace(Regex("[^\\p{L}]"), "")
+    if (normalized.isEmpty()) return true
+    val normalizedMode = studyMode.lowercase().replace(Regex("[^\\p{L}]"), "")
+    return normalized == normalizedMode || normalized in KNOWN_STUDY_MODE_WORDS
+}
+
+private val KNOWN_STUDY_MODE_WORDS = setOf(
+    "stacjonarne", "niestacjonarne", "stacjonarny", "niestacjonarny",
+    "studiastacjonarne", "studianiestacjonarne", "zaoczne", "dzienne", "wieczorowe",
+    "studiazaoczne", "studiadzienne", "parttime", "fulltime"
+)
 
 /**
  * Student Groups (`Grupy` tab in Profile) mapped from `MsGroupsDto` -> `MsCollegeSemesterDto` -> `MsGroupDto`.

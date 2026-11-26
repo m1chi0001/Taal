@@ -11,22 +11,20 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,9 +35,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -55,10 +55,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -85,8 +88,9 @@ import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiTwoPane
 import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
 import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
-import pl.lublin.wsei.plan.ui.components.StudentAvatar
 import pl.lublin.wsei.plan.ui.components.WseiCard
+import pl.lublin.wsei.plan.ui.components.WseiEqualHeightCell
+import pl.lublin.wsei.plan.ui.components.WseiEqualHeightRow
 import pl.lublin.wsei.plan.ui.components.WseiExpandableCard
 import pl.lublin.wsei.plan.ui.components.WseiIconBadge
 import pl.lublin.wsei.plan.ui.components.WseiInfoRow
@@ -100,10 +104,14 @@ import pl.lublin.wsei.plan.ui.components.WseiSectionTitle
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
-import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import pl.lublin.wsei.plan.ui.theme.mutedContentColor
+import pl.lublin.wsei.plan.ui.theme.rememberDecodedStudentPhoto
+import pl.lublin.wsei.plan.ui.theme.tonalLayer
+import pl.lublin.wsei.plan.ui.theme.withContrastAgainst
 import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
+import pl.lublin.wsei.plan.ui.theme.wseiHorizontalGroupItemShape
 import java.util.Locale
 
 /** Local UI state of the profile screen, shared by the single- and two-pane layouts. */
@@ -118,11 +126,13 @@ private class ProfileSectionsState(
     val onTogglePasswordForm: () -> Unit
 )
 
-/** Hero avatar footprint, the scalloped accent behind the photo included. */
-private val HeroAvatarSize = 136.dp
+/** Portrait student-ID photo size (4:5 Polish ELS aspect ratio) in the profile hero. */
+private val HeroPortraitWidth = 112.dp
+private val HeroPortraitHeight = 140.dp
 
-/** Circular photo (tonal ring and gap included) centred on the scalloped accent. */
-private val HeroPhotoSize = 118.dp
+/** Square fallback size for 1:1 avatars (e.g. demo account) and the Expressive monogram. */
+private val HeroSquarePhotoSize = 120.dp
+private val HeroMonogramSize = 108.dp
 
 /**
  * Student profile: identity hero, study track (with expandable details), groups, study plan
@@ -588,6 +598,10 @@ private fun IdentityCard(uiState: ScheduleUiState, averages: ProfileAverages, mo
     val colors = MaterialTheme.colorScheme
     val fullName = session?.fullName ?: stringResource(R.string.common_student)
     val displayAlbum = uiState.maskSensitive(session?.albumNumber?.takeIf { it.isNotBlank() } ?: "—")
+    val statusPillBg = tonalLayer(colors.primaryContainer, colors.onPrimaryContainer, 0.14f)
+    val statusPillFg = colors.onPrimaryContainer.withContrastAgainst(statusPillBg)
+    val statBg = tonalLayer(colors.primaryContainer, colors.onPrimaryContainer, 0.12f)
+    val statFg = colors.onPrimaryContainer.withContrastAgainst(statBg)
 
     WseiCard(
         modifier = modifier,
@@ -621,7 +635,7 @@ private fun IdentityCard(uiState: ScheduleUiState, averages: ProfileAverages, mo
                         text = fieldOfStudy,
                         style = MaterialTheme.typography.bodyLarge,
                         textAlign = TextAlign.Center,
-                        color = colors.onPrimaryContainer.copy(alpha = 0.8f)
+                        color = mutedContentColor(colors.onPrimaryContainer, colors.primaryContainer)
                     )
                 }
             }
@@ -633,138 +647,193 @@ private fun IdentityCard(uiState: ScheduleUiState, averages: ProfileAverages, mo
                 WseiPill(
                     text = stringResource(R.string.home_album_number, displayAlbum),
                     icon = WseiIcons.Badge,
-                    containerColor = colors.primary,
-                    contentColor = colors.onPrimary,
+                    containerColor = colors.onPrimaryContainer,
+                    contentColor = colors.primaryContainer,
                     emphasized = true
                 )
                 WseiPill(
                     text = session?.statusName?.takeIf { it.isNotBlank() }
                         ?: stringResource(R.string.profile_status_default),
                     icon = WseiIcons.CheckCircle,
-                    containerColor = colors.surfaceContainerLowest,
-                    contentColor = colors.primary,
+                    containerColor = statusPillBg,
+                    contentColor = statusPillFg,
                     emphasized = true
                 )
             }
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
-        ) {
-            val statModifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-            val noGrades = stringResource(R.string.profile_stat_no_grades)
-            val isHidden = uiState.isHideSensitiveData
-            ProfileStatCard(
-                value = formatAverage(uiState, averages.currentSemester),
-                label = stringResource(R.string.profile_stat_semester_average),
-                icon = WseiIcons.AutoAwesome,
-                valueDescription = noGrades.takeIf { averages.currentSemester == null && !isHidden },
-                modifier = statModifier
-            )
-            ProfileStatCard(
-                value = formatAverage(uiState, averages.overall),
-                label = stringResource(R.string.profile_stat_overall_average),
-                icon = WseiIcons.WorkspacePremium,
-                valueDescription = noGrades.takeIf { averages.overall == null && !isHidden },
-                modifier = statModifier
-            )
-            ProfileStatCard(
-                value = session?.semesterNumber?.takeIf { it > 0 }?.toString() ?: "—",
-                label = stringResource(R.string.profile_stat_semester),
-                icon = WseiIcons.CalendarMonth,
-                modifier = statModifier
-            )
-        }
-    }
-}
+        val noGrades = stringResource(R.string.profile_stat_no_grades)
+        val isHidden = uiState.isHideSensitiveData
+        val semAvgValue = formatAverage(uiState, averages.currentSemester)
+        val semAvgLabel = stringResource(R.string.profile_stat_semester_average)
+        val overallValue = formatAverage(uiState, averages.overall)
+        val overallLabel = stringResource(R.string.profile_stat_overall_average)
+        val semNumberValue = session?.semesterNumber?.takeIf { it > 0 }?.toString() ?: "—"
+        val semNumberLabel = stringResource(R.string.profile_stat_semester)
 
-/**
- * Hero photo: a smooth circular photo inside a tonal ring (`primaryContainer`) and a thin
- * `surface` gap, so the white background of ID photos ends in a clean edge on light and dark
- * themes. The expressive accent is a scalloped Material shape *behind* the ring; it never
- * clips the photo.
- */
-@Composable
-private fun ProfilePhoto(base64Photo: String?, fullName: String) {
-    val colors = MaterialTheme.colorScheme
-    val accentShape = MaterialShapes.Cookie12Sided.toShape()
-    Box(
-        modifier = Modifier
-            .size(HeroAvatarSize)
-            .background(colors.primary, accentShape),
-        contentAlignment = Alignment.Center
-    ) {
-        StudentAvatar(
-            base64Photo = base64Photo,
-            fullName = fullName,
-            size = HeroPhotoSize,
-            shape = CircleShape,
-            ringWidth = 4.dp,
-            ringColor = colors.primaryContainer,
-            ringGap = 2.dp,
-            ringGapColor = colors.surface,
-            photoZoom = 1.1f
+        WseiEqualHeightRow(
+            columns = 3,
+            horizontalSpacing = WseiSpacing.inGroup,
+            cells = listOf(
+                WseiEqualHeightCell(
+                    shape = wseiHorizontalGroupItemShape(0, 3),
+                    containerColor = statBg,
+                    contentColor = statFg
+                ) {
+                    ProfileStatContent(
+                        value = semAvgValue,
+                        label = semAvgLabel,
+                        icon = WseiIcons.AutoAwesome,
+                        containerColor = statBg,
+                        contentColor = statFg,
+                        valueDescription = noGrades.takeIf { averages.currentSemester == null && !isHidden }
+                    )
+                },
+                WseiEqualHeightCell(
+                    shape = wseiHorizontalGroupItemShape(1, 3),
+                    containerColor = statBg,
+                    contentColor = statFg
+                ) {
+                    ProfileStatContent(
+                        value = overallValue,
+                        label = overallLabel,
+                        icon = WseiIcons.WorkspacePremium,
+                        containerColor = statBg,
+                        contentColor = statFg,
+                        valueDescription = noGrades.takeIf { averages.overall == null && !isHidden }
+                    )
+                },
+                WseiEqualHeightCell(
+                    shape = wseiHorizontalGroupItemShape(2, 3),
+                    containerColor = statBg,
+                    contentColor = statFg
+                ) {
+                    ProfileStatContent(
+                        value = semNumberValue,
+                        label = semNumberLabel,
+                        icon = WseiIcons.CalendarMonth,
+                        containerColor = statBg,
+                        contentColor = statFg
+                    )
+                }
+            )
         )
     }
 }
 
-/** One of the three hero statistics: small icon, large value, short label. */
+/**
+ * Student photo in the profile hero.
+ *
+ * Dean's-office student ID (ELS) photos are 4:5 portraits on a light studio background: forcing
+ * them into a zoomed circle with nested dark/scalloped rings cropped the hair and chin and looked
+ * like a jagged cogwheel. Real portrait photos sit in a clean 4:5 rounded portrait frame with a
+ * single tonal cushion (1:1 avatars keep a square squircle), while accounts without a photo get an
+ * Expressive 9-sided cookie monogram.
+ */
 @Composable
-private fun ProfileStatCard(
+private fun ProfilePhoto(base64Photo: String?, fullName: String) {
+    val colors = MaterialTheme.colorScheme
+    val decodedBitmap = rememberDecodedStudentPhoto(base64Photo)
+    if (decodedBitmap != null) {
+        val isPortrait = decodedBitmap.height > (decodedBitmap.width * 1.08f)
+        val width = if (isPortrait) HeroPortraitWidth else HeroSquarePhotoSize
+        val height = if (isPortrait) HeroPortraitHeight else HeroSquarePhotoSize
+        val outerShape = RoundedCornerShape(32.dp)
+        val innerShape = RoundedCornerShape(26.dp)
+        val frameColor = tonalLayer(colors.primaryContainer, colors.onPrimaryContainer, 0.22f)
+        Box(
+            modifier = Modifier
+                .size(width = width + 8.dp, height = height + 8.dp)
+                .background(frameColor, outerShape)
+                .padding(4.dp)
+                .clip(innerShape)
+                .background(colors.surfaceContainerLowest),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                bitmap = decodedBitmap,
+                contentDescription = stringResource(R.string.common_photo_of, fullName),
+                contentScale = ContentScale.Crop,
+                alignment = if (isPortrait) androidx.compose.ui.BiasAlignment(0f, -0.15f) else Alignment.Center,
+                filterQuality = FilterQuality.High,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    } else {
+        val initials = remember(fullName) {
+            fullName
+                .split(" ")
+                .filter { it.isNotBlank() }
+                .take(2)
+                .joinToString("") { it.first().uppercase() }
+                .ifEmpty { "ST" }
+        }
+        val badgeBg = tonalLayer(colors.primaryContainer, colors.onPrimaryContainer, 0.16f)
+        val badgeFg = colors.onPrimaryContainer.withContrastAgainst(badgeBg)
+        Box(
+            modifier = Modifier
+                .size(HeroMonogramSize)
+                .clip(MaterialShapes.Cookie9Sided.toShape())
+                .background(badgeBg),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = initials,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = badgeFg
+            )
+        }
+    }
+}
+
+/** Content of one hero statistic inside the connected 3-segment strip. */
+@Composable
+private fun ProfileStatContent(
     value: String,
     label: String,
     icon: ImageVector,
-    modifier: Modifier = Modifier,
+    containerColor: Color,
+    contentColor: Color,
     valueDescription: String? = null
 ) {
-    val colors = MaterialTheme.colorScheme
-    Surface(
-        shape = WseiInsetShape,
-        color = colors.surfaceContainerLowest,
-        contentColor = colors.onSurface,
-        modifier = modifier
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(WseiSpacing.m),
+        verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
     ) {
-        Column(
-            modifier = Modifier.padding(WseiSpacing.m),
-            verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = colors.primary,
-                modifier = Modifier.size(18.dp)
-            )
-            val valueStyle = MaterialTheme.typography.headlineSmall
-            // Narrow columns (three stats on a small phone) shrink the value instead of clipping it.
-            Text(
-                text = value,
-                style = valueStyle,
-                fontWeight = FontWeight.Bold,
-                color = colors.primary,
-                maxLines = 1,
-                autoSize = TextAutoSize.StepBased(
-                    minFontSize = 14.sp,
-                    maxFontSize = valueStyle.fontSize,
-                    stepSize = 1.sp
-                ),
-                modifier = if (valueDescription != null) {
-                    Modifier.semantics { contentDescription = valueDescription }
-                } else {
-                    Modifier
-                }
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier.size(18.dp)
+        )
+        val valueStyle = MaterialTheme.typography.headlineSmall
+        // Narrow columns (three stats on a small phone) shrink the value instead of clipping it.
+        Text(
+            text = value,
+            style = valueStyle,
+            fontWeight = FontWeight.Bold,
+            color = contentColor,
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = 14.sp,
+                maxFontSize = valueStyle.fontSize,
+                stepSize = 1.sp
+            ),
+            modifier = if (valueDescription != null) {
+                Modifier.semantics { contentDescription = valueDescription }
+            } else {
+                Modifier
+            }
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = mutedContentColor(contentColor, containerColor),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -789,8 +858,8 @@ private fun StudyCard(
     val details = listOfNotNull(
         session?.department?.trim()?.takeIf { it.isNotEmpty() }
             ?.let { stringResource(R.string.profile_department) to it },
-        // Blank when the dean's office has no specialization: the row is omitted, not guessed.
-        session?.specialization?.trim()?.takeIf { it.isNotEmpty() }
+        // Blank when the dean's office has no specialization (or sent the study mode there).
+        session?.cleanSpecialization
             ?.let { stringResource(R.string.profile_specialization) to it },
         session?.obtainedTitle?.trim()?.takeIf { it.isNotEmpty() }
             ?.let { stringResource(R.string.profile_obtained_title) to it }
@@ -974,7 +1043,10 @@ private fun PasswordChangeForm(onSubmit: (String, String) -> Unit, modifier: Mod
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
             trailingIcon = {
-                IconButton(onClick = { showPasswords = !showPasswords }) {
+                IconButton(
+                    onClick = { showPasswords = !showPasswords },
+                    shapes = IconButtonDefaults.shapes()
+                ) {
                     Icon(
                         imageVector = if (showPasswords) WseiIcons.VisibilityOff else WseiIcons.Visibility,
                         contentDescription = stringResource(
@@ -992,7 +1064,7 @@ private fun PasswordChangeForm(onSubmit: (String, String) -> Unit, modifier: Mod
                 newPass = ""
             },
             enabled = oldPass.isNotBlank() && newPass.isNotBlank(),
-            shape = CircleShape,
+            shapes = ButtonDefaults.shapes(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = WseiSpacing.xs)

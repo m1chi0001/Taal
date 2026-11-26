@@ -75,9 +75,24 @@ fun wseiGroupItemShape(
     outer: Dp = WseiCorners.groupOuter,
     inner: Dp = WseiCorners.groupInner
 ): RoundedCornerShape {
-    val top = if (index == 0) outer else inner
-    val bottom = if (index == count - 1) outer else inner
+    val top = if (index <= 0) outer else inner
+    val bottom = if (index >= count - 1) outer else inner
     return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
+}
+
+/**
+ * Shape of a horizontal connected group item (e.g. a 3-stat strip): large outer start/end
+ * corners, small inner ones.
+ */
+fun wseiHorizontalGroupItemShape(
+    index: Int,
+    count: Int,
+    outer: Dp = 22.dp,
+    inner: Dp = WseiCorners.groupInner
+): RoundedCornerShape {
+    val start = if (index <= 0) outer else inner
+    val end = if (index >= count - 1) outer else inner
+    return RoundedCornerShape(topStart = start, bottomStart = start, topEnd = end, bottomEnd = end)
 }
 
 /**

@@ -57,7 +57,6 @@
     <string name="about_update_check_again">Check again</string>
     <string name="about_update_permission_hint">Android will ask for permission to install apps from Taal. Once you grant it, come back and tap “Install”.</string>
 
-    <string name="about_section_app">App</string>
     <string name="about_whats_new_title">What\'s new</string>
     <string name="about_whats_new_supporting">Change history for every version</string>
     <string name="about_github">GitHub</string>
@@ -71,6 +70,7 @@
     <string name="update_prompt_download">Download update</string>
     <string name="update_prompt_open_release">Open release page</string>
     <string name="update_prompt_changes">See what\'s changed</string>
+    <string name="update_prompt_later">Later</string>
     <string name="update_prompt_dismiss">Hide the notice for this version</string>
     <string name="update_prompt_downloading">Downloading… %1$d%%</string>
 

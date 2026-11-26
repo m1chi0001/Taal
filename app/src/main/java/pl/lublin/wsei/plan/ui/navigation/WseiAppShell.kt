@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.window.core.layout.WindowSizeClass
 import kotlinx.datetime.LocalDate
 import pl.lublin.wsei.plan.R
@@ -157,9 +158,10 @@ fun WseiAppShell(
 
     // Activity-scoped: the prompt, "O aplikacji" and the changelog share one update state.
     val updateViewModel: UpdateViewModel = hiltViewModel()
-    LaunchedEffect(updateViewModel) {
-        // Throttled by the repository; the 12 h background worker covers the rest.
-        updateViewModel.autoCheckOnce()
+    LifecycleResumeEffect(updateViewModel) {
+        // Checks on cold start and when returning to the app (debounced/throttled with ETag).
+        updateViewModel.autoCheckOnForeground()
+        onPauseOrDispose { }
     }
 
     fun openProfile() {
@@ -360,14 +362,6 @@ fun WseiAppShell(
                                         ),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    // The About page has its own update card, so the prompt
-                                    // steps aside there instead of repeating it.
-                                    UpdatePromptHost(
-                                        viewModel = updateViewModel,
-                                        allowed = !(currentDestination == WseiDestination.MORE &&
-                                            moreSubView == MoreSubView.ABOUT),
-                                        onShowChanges = { showChangelog = true }
-                                    )
                                     StatusMessage(
                                         message = scheduleUiState.statusBannerMessage,
                                         onDismiss = onDismissStatusBanner
@@ -387,15 +381,27 @@ fun WseiAppShell(
                             }
                         }
                     }
-
-                    if (showChangelog) {
-                        UpdateChangelogSheet(
-                            onDismiss = { showChangelog = false },
-                            viewModel = updateViewModel
-                        )
-                    }
                 }
             }
+        }
+
+        // The About page has its own update card, so the modal prompt steps aside there
+        // (and while the full changelog sheet is open).
+        UpdatePromptHost(
+            viewModel = updateViewModel,
+            allowed = (phase == AuthPhase.APP || phase == AuthPhase.LOGIN) &&
+                !showChangelog &&
+                !(phase == AuthPhase.APP &&
+                    currentDestination == WseiDestination.MORE &&
+                    moreSubView == MoreSubView.ABOUT),
+            onShowChanges = { showChangelog = true }
+        )
+
+        if (showChangelog) {
+            UpdateChangelogSheet(
+                onDismiss = { showChangelog = false },
+                viewModel = updateViewModel
+            )
         }
     }
 }

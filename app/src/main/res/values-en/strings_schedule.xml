@@ -102,4 +102,5 @@
     <string name="home_focus_list_later_today">Later today</string>
     <string name="home_focus_list_upcoming_date">Upcoming classes • %1$s</string>
     <string name="home_focus_last_today">This is your last class today</string>
+    <string name="announcements_attachment_unnamed">Announcement attachment</string>
 </resources>

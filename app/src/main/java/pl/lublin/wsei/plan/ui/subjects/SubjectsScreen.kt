@@ -13,13 +13,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,9 +26,11 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.R
@@ -51,6 +52,8 @@ import pl.lublin.wsei.plan.domain.model.GradeItem
 import pl.lublin.wsei.plan.l10n.rememberLocalizedDateFormatter
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiEmptyState
+import pl.lublin.wsei.plan.ui.components.WseiEqualHeightCell
+import pl.lublin.wsei.plan.ui.components.WseiEqualHeightRow
 import pl.lublin.wsei.plan.ui.components.WseiPill
 import pl.lublin.wsei.plan.ui.components.WseiScreenFrame
 import pl.lublin.wsei.plan.ui.components.WseiSectionTitle
@@ -59,10 +62,15 @@ import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
-import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
+import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
+import pl.lublin.wsei.plan.ui.theme.WseiCardShape
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import pl.lublin.wsei.plan.ui.theme.mutedContentColor
+import pl.lublin.wsei.plan.ui.theme.tonalLayer
+import pl.lublin.wsei.plan.ui.theme.withContrastAgainst
+import pl.lublin.wsei.plan.ui.theme.wseiHorizontalGroupItemShape
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -168,26 +176,24 @@ fun SubjectsScreen(
                     key = { row -> "grades_row_${row.first().id}" },
                     contentType = { "grade_row" }
                 ) { row ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Min),
-                        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
-                    ) {
-                        val cellModifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                        row.forEach { grade ->
-                            GradeCard(
-                                grade = grade,
-                                lecturer = uiState.maskLecturer(grade.lecturerName.trim()),
-                                maskSensitive = uiState.isHideSensitiveData,
-                                modifier = cellModifier
-                            )
+                    val colors = MaterialTheme.colorScheme
+                    WseiEqualHeightRow(
+                        columns = columns,
+                        horizontalSpacing = WseiSpacing.betweenCards,
+                        cells = row.map { grade ->
+                            WseiEqualHeightCell(
+                                shape = WseiCardShape,
+                                containerColor = colors.surfaceContainer,
+                                contentColor = colors.onSurface
+                            ) {
+                                GradeCardContent(
+                                    grade = grade,
+                                    lecturer = uiState.maskLecturer(grade.lecturerName.trim()),
+                                    maskSensitive = uiState.isHideSensitiveData
+                                )
+                            }
                         }
-                        // Keeps the last, incomplete row aligned with the columns above it.
-                        repeat(columns - row.size) { Spacer(cellModifier) }
-                    }
+                    )
                 }
             }
         }
@@ -267,6 +273,9 @@ private fun SemesterSummaryCard(
         animationSpec = WseiMotion.size(),
         label = "gradedProgress"
     )
+    val statColor = tonalLayer(colors.primaryContainer, colors.onPrimaryContainer, 0.12f)
+    val statContent = colors.onPrimaryContainer.withContrastAgainst(statColor)
+
     WseiCard(
         shape = WseiHeroShape,
         containerColor = colors.primaryContainer,
@@ -282,7 +291,7 @@ private fun SemesterSummaryCard(
                 Text(
                     text = overline,
                     style = MaterialTheme.typography.labelLarge,
-                    color = colors.onPrimaryContainer.copy(alpha = 0.8f)
+                    color = mutedContentColor(colors.onPrimaryContainer, colors.primaryContainer)
                 )
             }
             val fieldOfStudy = session?.fieldOfStudy?.takeIf { it.isNotBlank() }
@@ -297,24 +306,31 @@ private fun SemesterSummaryCard(
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.inGroup)
         ) {
-            val statColor = colors.onPrimaryContainer.copy(alpha = 0.1f)
-            val statContent = colors.onPrimaryContainer
-            WseiStat(average, averageLabel, Modifier.weight(1f), statColor, statContent)
             WseiStat(
-                (semester?.totalEcts ?: 0).toString(),
-                stringResource(R.string.subjects_ects),
-                Modifier.weight(1f),
-                statColor,
-                statContent
+                value = average,
+                label = averageLabel,
+                modifier = Modifier.weight(1f),
+                containerColor = statColor,
+                contentColor = statContent,
+                shape = wseiHorizontalGroupItemShape(0, 3)
             )
             WseiStat(
-                stringResource(R.string.subjects_graded_value, gradedCount, subjectCount),
-                stringResource(R.string.subjects_graded),
-                Modifier.weight(1f),
-                statColor,
-                statContent
+                value = (semester?.totalEcts ?: 0).toString(),
+                label = stringResource(R.string.subjects_ects),
+                modifier = Modifier.weight(1f),
+                containerColor = statColor,
+                contentColor = statContent,
+                shape = wseiHorizontalGroupItemShape(1, 3)
+            )
+            WseiStat(
+                value = stringResource(R.string.subjects_graded_value, gradedCount, subjectCount),
+                label = stringResource(R.string.subjects_graded),
+                modifier = Modifier.weight(1f),
+                containerColor = statColor,
+                contentColor = statContent,
+                shape = wseiHorizontalGroupItemShape(2, 3)
             )
         }
         // Grading progress (counts only, no grade values). Hidden until something is graded:
@@ -330,7 +346,7 @@ private fun SemesterSummaryCard(
                         contentDescription = gradedDescription
                     },
                 color = colors.onPrimaryContainer,
-                trackColor = colors.onPrimaryContainer.copy(alpha = 0.16f),
+                trackColor = tonalLayer(colors.primaryContainer, colors.onPrimaryContainer, 0.16f),
                 stopSize = 0.dp
             )
         }
@@ -341,15 +357,19 @@ private fun SemesterSummaryCard(
 private fun parseGrade(raw: String): Double? =
     raw.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in 2.0..5.5 }
 
-/** Grade badge colours: high — primary, good — primary container, sufficient — tertiary container, 2 — error. */
+private fun isPassingWord(raw: String): Boolean =
+    raw.trim().lowercase(Locale.ROOT).let { it == "zal" || it == "zal." || it == "zaliczone" }
+
+/** Grade badge container pairs: high — primaryContainer, good — secondaryContainer, 3 — tertiaryContainer, 2 — errorContainer. */
 private fun gradeColors(raw: String, colors: ColorScheme): Pair<Color, Color> {
+    if (isPassingWord(raw)) return colors.primaryContainer to colors.onPrimaryContainer
     val value = parseGrade(raw)
     return when {
         value == null -> colors.surfaceContainerHighest to colors.onSurfaceVariant
-        value >= 4.5 -> colors.primary to colors.onPrimary
-        value >= 3.5 -> colors.primaryContainer to colors.onPrimaryContainer
+        value >= 4.5 -> colors.primaryContainer to colors.onPrimaryContainer
+        value >= 3.5 -> colors.secondaryContainer to colors.onSecondaryContainer
         value >= 3.0 -> colors.tertiaryContainer to colors.onTertiaryContainer
-        else -> colors.error to colors.onError
+        else -> colors.errorContainer to colors.onErrorContainer
     }
 }
 
@@ -407,90 +427,96 @@ private fun formatAwardedDate(raw: String, formatter: DateTimeFormatter): String
 }
 
 @Composable
-private fun GradeCard(
+private fun GradeCardContent(
     grade: GradeItem,
     lecturer: String,
-    maskSensitive: Boolean,
-    modifier: Modifier = Modifier
+    maskSensitive: Boolean
 ) {
+    val hasGrade = !maskSensitive && (parseGrade(grade.gradeValue) != null || isPassingWord(grade.gradeValue))
     val gradeText = if (maskSensitive) "••" else grade.gradeValue.ifBlank { "—" }
     val (badgeColor, badgeContent) = if (maskSensitive) {
         MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurfaceVariant
     } else {
         gradeColors(grade.gradeValue, MaterialTheme.colorScheme)
     }
-
+    val badgeShape = if (hasGrade) MaterialShapes.Cookie9Sided.toShape() else M3XSquircleShape
     val dateFormatter = rememberLocalizedDateFormatter("ddMMyyyy")
 
-    WseiCard(modifier = modifier, verticalSpacing = WseiSpacing.s) {
-        Row(horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)) {
-            Surface(
-                shape = M3XCookieShape,
-                color = badgeColor,
-                contentColor = badgeContent,
-                modifier = Modifier.size(60.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = gradeText,
-                        style = if (gradeText.length > 3) {
-                            MaterialTheme.typography.labelLarge
-                        } else {
-                            MaterialTheme.typography.titleLarge
-                        },
-                        maxLines = 1
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
-            ) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(WseiSpacing.xl),
+        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)
+    ) {
+        Surface(
+            shape = badgeShape,
+            color = badgeColor,
+            contentColor = badgeContent,
+            modifier = Modifier.size(60.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
                 Text(
-                    text = grade.subjectName,
-                    style = MaterialTheme.typography.titleMedium,
+                    text = gradeText,
+                    style = if (gradeText.length > 3) {
+                        MaterialTheme.typography.labelLarge
+                    } else {
+                        MaterialTheme.typography.titleLarge
+                    },
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+        ) {
+            Text(
+                text = grade.subjectName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                WseiPill(stringResource(R.string.subjects_ects_value, grade.ects), emphasized = true)
+                val formLabel = readableFormLabel(grade.formLabel)
+                if (formLabel.isNotEmpty()) WseiPill(formLabel)
+                if (grade.passingForm.isNotBlank()) WseiPill(grade.passingForm)
+            }
+            if (lecturer.isNotBlank()) {
+                Text(
+                    text = lecturer,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    WseiPill(stringResource(R.string.subjects_ects_value, grade.ects), emphasized = true)
-                    val formLabel = readableFormLabel(grade.formLabel)
-                    if (formLabel.isNotEmpty()) WseiPill(formLabel)
-                    if (grade.passingForm.isNotBlank()) WseiPill(grade.passingForm)
-                }
-                if (lecturer.isNotBlank()) {
-                    Text(
-                        text = lecturer,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                val partialLabel = if (grade.partialGrades.isNotEmpty()) {
-                    stringResource(
-                        R.string.subjects_partial_grades,
-                        if (maskSensitive) "••••" else grade.partialGrades.joinToString(", ")
-                    )
-                } else {
-                    null
-                }
-                val awardedLabel = if (grade.dateAwarded.isNotBlank()) {
-                    stringResource(R.string.subjects_grade_awarded, formatAwardedDate(grade.dateAwarded, dateFormatter))
-                } else {
-                    null
-                }
-                val details = listOfNotNull(partialLabel, awardedLabel).joinToString(" • ")
-                if (details.isNotEmpty()) {
-                    Text(
-                        text = details,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            }
+            val partialLabel = if (grade.partialGrades.isNotEmpty()) {
+                stringResource(
+                    R.string.subjects_partial_grades,
+                    if (maskSensitive) "••••" else grade.partialGrades.joinToString(", ")
+                )
+            } else {
+                null
+            }
+            val awardedLabel = if (grade.dateAwarded.isNotBlank()) {
+                stringResource(R.string.subjects_grade_awarded, formatAwardedDate(grade.dateAwarded, dateFormatter))
+            } else {
+                null
+            }
+            val details = listOfNotNull(partialLabel, awardedLabel).joinToString(" • ")
+            if (details.isNotEmpty()) {
+                Text(
+                    text = details,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

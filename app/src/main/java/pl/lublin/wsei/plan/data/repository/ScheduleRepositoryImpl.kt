@@ -130,12 +130,13 @@ class ScheduleRepositoryImpl @Inject constructor(
         // Szybki start: gdy mamy zaszyfrowaną sesję, pokazujemy ją od razu (bez czekania na sieć);
         // token odświeża w tle ArpAutoReauthInterceptor na podstawie zapisanych poświadczeń.
         vault.savedSession?.let { cached ->
-            sessionCookieJar.bearerToken = cached.accessToken
+            val sanitized = cached.sanitized()
+            sessionCookieJar.bearerToken = sanitized.accessToken
             sessionCookieJar.savedLogin = vault.login
             sessionCookieJar.savedPassword = vault.password
-            _currentSession.value = cached
+            _currentSession.value = sanitized
             syncScheduler.schedulePeriodic()
-            return cached
+            return sanitized
         }
         // Try silent re-authentication with decrypted credentials for fresh token & photo
         val liveAuth = arpApiDataSource.authenticate(
@@ -143,7 +144,7 @@ class ScheduleRepositoryImpl @Inject constructor(
             password = vault.password
         )
         if (liveAuth.isSuccess) {
-            val freshSession = liveAuth.getOrThrow()
+            val freshSession = liveAuth.getOrThrow().sanitized()
             encryptedCredentialStore.saveEncryptedCredentials(
                 login = vault.login,
                 password = vault.password,
@@ -155,7 +156,7 @@ class ScheduleRepositoryImpl @Inject constructor(
             return freshSession
         }
         // Offline fallback using encrypted cached session
-        val cachedSession = vault.savedSession ?: return null
+        val cachedSession = vault.savedSession?.sanitized() ?: return null
         sessionCookieJar.bearerToken = cachedSession.accessToken
         sessionCookieJar.savedLogin = vault.login
         sessionCookieJar.savedPassword = vault.password
@@ -186,7 +187,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         )
 
         if (wdResult.isSuccess) {
-            val session = wdResult.getOrThrow()
+            val session = wdResult.getOrThrow().sanitized()
             // Strict account isolation: wipe another student's cache only once the new login succeeded
             // (a failed login used to destroy the offline cache).
             if (previousStudId == null || previousStudId != session.studId) {
@@ -201,6 +202,7 @@ class ScheduleRepositoryImpl @Inject constructor(
             )
             _currentSession.value = session
             syncScheduler.schedulePeriodic()
+            return Result.success(session)
         }
 
         return wdResult
@@ -240,6 +242,34 @@ class ScheduleRepositoryImpl @Inject constructor(
         scheduleDao.clearAllEvents()
         snapshotStore.clearAll()
         _currentSession.value = null
+    }
+
+    override suspend fun refreshStudentProfile(): Result<StudentSession> {
+        val session = _currentSession.value ?: return Result.failure(notLoggedIn())
+        if (session.isDebugAccount) return Result.success(session)
+        val refreshed = arpApiDataSource.refreshStudentProfile(session)
+        refreshed.getOrNull()?.let { fresh ->
+            val sanitized = fresh.sanitized()
+            // Guard against overwriting after a concurrent logout or account switch.
+            if (_currentSession.value?.studId == session.studId) {
+                _currentSession.value = sanitized
+                if (encryptedCredentialStore.isRememberMeEnabled()) {
+                    val vault = encryptedCredentialStore.loadDecryptedCredentials()
+                    val login = sessionCookieJar.savedLogin ?: vault?.login ?: sanitized.login
+                    val password = sessionCookieJar.savedPassword ?: vault?.password
+                    if (!password.isNullOrEmpty()) {
+                        encryptedCredentialStore.saveEncryptedCredentials(
+                            login = login,
+                            password = password,
+                            session = sanitized,
+                            rememberCredentials = true
+                        )
+                    }
+                }
+            }
+            return Result.success(sanitized)
+        }
+        return refreshed
     }
 
     override suspend fun changePassword(
@@ -450,6 +480,7 @@ class ScheduleRepositoryImpl @Inject constructor(
     override suspend fun refreshAcademicSnapshots(): Boolean {
         val session = _currentSession.value ?: return false
         if (session.isDebugAccount) return true
+        refreshStudentProfile()
         val results = listOf(
             fetchStudentGroups().isSuccess,
             fetchStudyPlans().isSuccess,

@@ -43,6 +43,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -50,12 +52,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
@@ -69,6 +71,7 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
@@ -140,6 +143,7 @@ import pl.lublin.wsei.plan.ui.adaptive.WseiReadableContentMaxWidth
 import pl.lublin.wsei.plan.ui.adaptive.WseiTwoPane
 import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
 import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
+import pl.lublin.wsei.plan.ui.components.ClassRowState
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiClassCard
 import pl.lublin.wsei.plan.ui.components.WseiIconBadge
@@ -152,6 +156,8 @@ import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.ActiveHeroCardAsymmetricShape
 import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
+import pl.lublin.wsei.plan.ui.theme.WseiCardShape
+import pl.lublin.wsei.plan.ui.theme.WseiCorners
 import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
@@ -560,15 +566,21 @@ private fun LazyListScope.dayTimeline(
         val now = uiState.nowEpochMillis
         val activeId = uiState.activeClass?.id
         val nextId = uiState.nextClassPreview?.nextEvent?.id
-        items(
+        itemsIndexed(
             items = rows,
-            key = { it.key },
-            contentType = { "timeline_class_row" }
-        ) { row ->
+            key = { _, row -> row.key },
+            contentType = { _, _ -> "timeline_class_row" }
+        ) { index, row ->
+            val rowState = classRowStateOf(row.event, now, activeId, nextId)
             WseiClassCard(
                 event = row.event,
                 nowEpochMillis = now,
-                state = classRowStateOf(row.event, now, activeId, nextId),
+                state = rowState,
+                shape = if (rowState == ClassRowState.ONGOING) {
+                    WseiCardShape
+                } else {
+                    wseiGroupItemShape(index, rows.size, outer = WseiCorners.card, inner = 14.dp)
+                },
                 lecturerLabel = uiState.maskLecturer(row.event.lecturer.localizedNameOrPlaceholder()),
                 modifier = itemModifier.animateItem(
                     fadeInSpec = WseiMotion.effects(),
@@ -597,8 +609,8 @@ private fun ScheduleFilterButtonGroup(
     val colors = ToggleButtonDefaults.colors(
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        checkedContainerColor = MaterialTheme.colorScheme.primary,
-        checkedContentColor = MaterialTheme.colorScheme.onPrimary
+        checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+        checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer
     )
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -707,7 +719,11 @@ private fun ExpandableCalendarCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            FilledTonalIconButton(onClick = onPreviousPeriod, modifier = Modifier.size(40.dp)) {
+            FilledTonalIconButton(
+                onClick = onPreviousPeriod,
+                shapes = IconButtonDefaults.shapes(),
+                modifier = Modifier.size(40.dp)
+            ) {
                 Icon(
                     imageVector = WseiIcons.ChevronLeft,
                     contentDescription = stringResource(
@@ -716,7 +732,11 @@ private fun ExpandableCalendarCard(
                     modifier = Modifier.size(20.dp)
                 )
             }
-            FilledTonalIconButton(onClick = onNextPeriod, modifier = Modifier.size(40.dp)) {
+            FilledTonalIconButton(
+                onClick = onNextPeriod,
+                shapes = IconButtonDefaults.shapes(),
+                modifier = Modifier.size(40.dp)
+            ) {
                 Icon(
                     imageVector = WseiIcons.ChevronRight,
                     contentDescription = stringResource(
@@ -732,7 +752,7 @@ private fun ExpandableCalendarCard(
             )
             FilledTonalButton(
                 onClick = onToggleExpanded,
-                shape = CircleShape,
+                shapes = ButtonDefaults.shapes(),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                 // A fixed minimum width keeps the title column from resizing when the label flips.
                 modifier = Modifier
@@ -1849,6 +1869,7 @@ private fun CalendarSyncSheet(
         else -> SyncSheetStage.LIST
     }
 
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -1862,7 +1883,7 @@ private fun CalendarSyncSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = WseiSpacing.xxl)
-                .padding(bottom = WseiSpacing.xxl),
+                .padding(bottom = WseiSpacing.xxl + navBarBottom),
             verticalArrangement = Arrangement.spacedBy(WseiSpacing.l)
         ) {
             Row(
@@ -1949,18 +1970,19 @@ private fun CalendarSyncSheet(
             ) {
                 when (stage) {
                     SyncSheetStage.LOADING, SyncSheetStage.LIST -> {
-                        TextButton(onClick = animateDismiss) {
+                        TextButton(onClick = animateDismiss, shapes = ButtonDefaults.shapes()) {
                             Text(text = stringResource(R.string.calendar_sync_cancel))
                         }
                         Button(
                             onClick = { selectedId?.let(onConfirm) },
-                            enabled = stage == SyncSheetStage.LIST && selectedId != null
+                            enabled = stage == SyncSheetStage.LIST && selectedId != null,
+                            shapes = ButtonDefaults.shapes()
                         ) {
                             Text(text = stringResource(R.string.calendar_sync_confirm))
                         }
                     }
                     SyncSheetStage.EMPTY, SyncSheetStage.DONE, SyncSheetStage.FAILED -> {
-                        FilledTonalButton(onClick = animateDismiss) {
+                        FilledTonalButton(onClick = animateDismiss, shapes = ButtonDefaults.shapes()) {
                             Text(text = stringResource(R.string.calendar_sync_close))
                         }
                     }
@@ -2159,7 +2181,10 @@ private fun CalendarPermissionDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = if (permanentlyDenied) onOpenSettings else onRetry) {
+            TextButton(
+                onClick = if (permanentlyDenied) onOpenSettings else onRetry,
+                shapes = ButtonDefaults.shapes()
+            ) {
                 Text(
                     text = stringResource(
                         if (permanentlyDenied) R.string.calendar_permission_open_settings else R.string.calendar_permission_retry
@@ -2168,7 +2193,10 @@ private fun CalendarPermissionDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                shapes = ButtonDefaults.shapes()
+            ) {
                 Text(text = stringResource(R.string.calendar_sync_cancel))
             }
         }

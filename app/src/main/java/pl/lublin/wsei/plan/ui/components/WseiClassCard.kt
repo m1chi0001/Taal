@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
@@ -89,6 +90,8 @@ fun WseiClassCard(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     showContainer: Boolean = true,
+    shape: Shape? = null,
+    customContainerColor: Color? = null,
     lecturerLabel: String = event.lecturer.localizedNameOrPlaceholder()
 ) {
     val ongoing = state == ClassRowState.ONGOING
@@ -99,12 +102,14 @@ fun WseiClassCard(
     val containerColor by animateColorAsState(
         targetValue = when {
             ongoing -> colors.primaryContainer
+            customContainerColor != null -> customContainerColor
             showContainer -> colors.surfaceContainer
             else -> colors.surfaceContainer.copy(alpha = 0f)
         },
         animationSpec = WseiMotion.effects(),
         label = "classCardContainer"
     )
+    val hasFilledCard = ongoing || showContainer || customContainerColor != null
     val contentColor = if (ongoing) colors.onPrimaryContainer else colors.onSurface
     val mutedColor = if (ongoing) {
         mutedContentColor(colors.onPrimaryContainer, colors.primaryContainer)
@@ -146,7 +151,7 @@ fun WseiClassCard(
     )
 
     Surface(
-        shape = if (showContainer || ongoing) WseiCardShape else RoundedCornerShape(20.dp),
+        shape = shape ?: if (hasFilledCard) WseiCardShape else RoundedCornerShape(20.dp),
         color = containerColor,
         contentColor = contentColor,
         modifier = modifier
@@ -157,8 +162,8 @@ fun WseiClassCard(
     ) {
         Column(
             modifier = Modifier.padding(
-                horizontal = if (showContainer || ongoing) WseiSpacing.l else WseiSpacing.s,
-                vertical = if (showContainer || ongoing) WseiSpacing.l else WseiSpacing.s
+                horizontal = if (compact) WseiSpacing.m else if (hasFilledCard) WseiSpacing.l else WseiSpacing.s,
+                vertical = if (compact) WseiSpacing.s else if (hasFilledCard) WseiSpacing.l else WseiSpacing.s
             ),
             verticalArrangement = Arrangement.spacedBy(WseiSpacing.m)
         ) {

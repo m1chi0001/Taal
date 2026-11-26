@@ -114,12 +114,12 @@ private fun NavigationPillItem(
 ) {
     val colors = MaterialTheme.colorScheme
     val containerColor by animateColorAsState(
-        targetValue = if (selected) colors.primary else colors.primary.copy(alpha = 0f),
+        targetValue = if (selected) colors.primaryContainer else colors.primaryContainer.copy(alpha = 0f),
         animationSpec = WseiMotion.effects(),
         label = "navItemContainer"
     )
     val contentColor by animateColorAsState(
-        targetValue = if (selected) colors.onPrimary else colors.onSurfaceVariant,
+        targetValue = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant,
         animationSpec = WseiMotion.effects(),
         label = "navItemContent"
     )
@@ -159,7 +159,7 @@ private fun NavigationPillItem(
                             .align(Alignment.TopEnd)
                             .size(9.dp)
                             .clip(CircleShape)
-                            .background(if (selected) colors.onPrimary else colors.error)
+                            .background(if (selected) colors.onPrimaryContainer else colors.error)
                     )
                 }
             }
@@ -182,7 +182,7 @@ private fun NavigationPillItem(
 
 /**
  * Side navigation for tablets, unfolded foldables and landscape phones (M3 Expressive
- * `WideNavigationRail`). Its container is the window background, like the unscrolled top bars.
+ * `WideNavigationRail`) on a subtle `surfaceContainerLow` rail surface.
  *
  * @param expanded `true` on wide windows: the rail expands into a list with icon and full name;
  *   the change (e.g. after unfolding) animates on the theme spring.
@@ -206,12 +206,11 @@ internal fun WseiNavigationRail(
     }
     val railExpanded = railState.targetValue == WideNavigationRailValue.Expanded
     val colors = MaterialTheme.colorScheme
-    // Same roles as the floating bar: the active tab sits on a primary indicator.
     val itemColors = WideNavigationRailItemDefaults.colors(
-        selectedIconColor = colors.onPrimary,
-        selectedTextColorTopIconPosition = colors.primary,
-        selectedTextColorStartIconPosition = colors.onPrimary,
-        selectedIndicatorColor = colors.primary,
+        selectedIconColor = colors.onSecondaryContainer,
+        selectedTextColorTopIconPosition = colors.onSurface,
+        selectedTextColorStartIconPosition = colors.onSecondaryContainer,
+        selectedIndicatorColor = colors.secondaryContainer,
         unselectedIconColor = colors.onSurfaceVariant,
         unselectedTextColor = colors.onSurfaceVariant
     )
@@ -230,7 +229,7 @@ internal fun WseiNavigationRail(
     WideNavigationRail(
         modifier = modifier,
         state = railState,
-        colors = WideNavigationRailDefaults.colors(containerColor = colors.background),
+        colors = WideNavigationRailDefaults.colors(containerColor = colors.surfaceContainerLow),
         header = header,
         // Without a header (short landscape window) the tabs are centred vertically.
         arrangement = if (header != null) Arrangement.Top else Arrangement.Center,
@@ -289,12 +288,12 @@ private fun RailProfileHeader(
         label = "railHeaderPadding"
     )
     val containerColor by animateColorAsState(
-        targetValue = if (selected) colors.primary else colors.surfaceContainerHigh,
+        targetValue = if (selected) colors.primaryContainer else colors.surfaceContainerHigh,
         animationSpec = WseiMotion.effects(),
         label = "railHeaderContainer"
     )
     val contentColor by animateColorAsState(
-        targetValue = if (selected) colors.onPrimary else colors.onSurface,
+        targetValue = if (selected) colors.onPrimaryContainer else colors.onSurface,
         animationSpec = WseiMotion.effects(),
         label = "railHeaderContent"
     )
@@ -322,7 +321,9 @@ private fun RailProfileHeader(
                 base64Photo = shortcut.photoBase64,
                 fullName = shortcut.fullName,
                 size = 40.dp,
-                shape = CircleShape
+                shape = CircleShape,
+                ringWidth = 1.5.dp,
+                ringColor = containerColor
             )
             AnimatedVisibility(
                 visible = expanded,

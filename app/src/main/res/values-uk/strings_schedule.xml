@@ -110,4 +110,5 @@
     <string name="home_focus_list_later_today">Далі сьогодні</string>
     <string name="home_focus_list_upcoming_date">Найближчі заняття • %1$s</string>
     <string name="home_focus_last_today">Це останнє заняття на сьогодні</string>
+    <string name="announcements_attachment_unnamed">Вкладення до оголошення</string>
 </resources>

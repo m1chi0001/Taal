@@ -1,29 +1,31 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class
+)
 
 package pl.lublin.wsei.plan.ui.update
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,12 +37,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pl.lublin.wsei.plan.R
@@ -49,20 +54,20 @@ import pl.lublin.wsei.plan.data.update.UpdateState
 import pl.lublin.wsei.plan.data.update.UpdateViewModel
 import pl.lublin.wsei.plan.data.update.isFor
 import pl.lublin.wsei.plan.domain.update.AppRelease
+import pl.lublin.wsei.plan.domain.update.VersionComparator
 import pl.lublin.wsei.plan.ui.components.WseiIconBadge
 import pl.lublin.wsei.plan.ui.components.WseiPill
 import pl.lublin.wsei.plan.ui.more.openExternalLink
-import pl.lublin.wsei.plan.ui.theme.WseiCardShape
+import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
+import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
-import pl.lublin.wsei.plan.ui.theme.mutedContentColor
-import pl.lublin.wsei.plan.ui.theme.withContrastAgainst
 
 /**
- * Non-intrusive "update available" prompt wired to [viewModel]. Springs in when the repository
- * says [pl.lublin.wsei.plan.domain.update.AppUpdateStatus.shouldPrompt] and [allowed] is true
- * (e.g. hidden on the About page, which has its own update card). Dismissing hides it for this
- * version only.
+ * Automatic "update available" dialog wired to [viewModel]. Appears when the repository reports
+ * [pl.lublin.wsei.plan.domain.update.AppUpdateStatus.shouldPrompt], the user has not snoozed this
+ * version for the current session, and [allowed] is true (hidden on "O aplikacji", which already
+ * shows its own update card, and while the full changelog sheet is open).
  */
 @Composable
 fun UpdatePromptHost(
@@ -73,6 +78,7 @@ fun UpdatePromptHost(
 ) {
     val status by viewModel.updateStatus.collectAsStateWithLifecycle()
     val download by viewModel.state.collectAsStateWithLifecycle()
+    val snoozedVersion by viewModel.snoozedVersion.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // Re-checked on every resume: the user may have just granted "install unknown apps".
     var needsInstallPermission by remember { mutableStateOf(viewModel.needsInstallPermission()) }
@@ -81,43 +87,51 @@ fun UpdatePromptHost(
         onPauseOrDispose { }
     }
 
-    // The last release stays in memory for the exit animation after "dismiss".
-    val latest = status.latest
-    val lastRelease = remember { arrayOfNulls<AppRelease>(1) }
-    if (latest != null) lastRelease[0] = latest
+    val latest = status.latest ?: return
+    val normalizedLatest = VersionComparator.normalize(latest.version)
+    val isDownloadingLatest = download.isFor(latest.version) && download.phase == UpdatePhase.DOWNLOADING
+    val shouldShow = allowed && status.shouldPrompt && snoozedVersion != normalizedLatest
 
-    AnimatedVisibility(
-        visible = allowed && status.shouldPrompt && latest != null,
-        modifier = modifier,
-        enter = fadeIn(WseiMotion.effects()) +
-            slideInVertically(WseiMotion.spatial()) { it / 3 } +
-            scaleIn(WseiMotion.spatial(), initialScale = 0.92f, transformOrigin = TransformOrigin(0.5f, 1f)),
-        exit = fadeOut(WseiMotion.fastEffects()) +
-            slideOutVertically(WseiMotion.size()) { it / 3 } +
-            scaleOut(WseiMotion.size(), targetScale = 0.96f, transformOrigin = TransformOrigin(0.5f, 1f))
+    if (!shouldShow) return
+
+    Dialog(
+        onDismissRequest = {
+            if (!isDownloadingLatest) {
+                viewModel.snoozePromptForSession(latest.version)
+            }
+        },
+        properties = DialogProperties(
+            dismissOnBackPress = !isDownloadingLatest,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
+        )
     ) {
-        val release = lastRelease[0] ?: return@AnimatedVisibility
         UpdatePromptCard(
-            release = release,
+            release = latest,
             currentVersion = status.currentVersion,
             download = download,
             needsInstallPermission = needsInstallPermission,
             onDownload = {
-                if (release.apkUrl.isNullOrBlank()) {
-                    openExternalLink(context, release.htmlUrl)
+                if (latest.apkUrl.isNullOrBlank()) {
+                    openExternalLink(context, latest.htmlUrl)
                 } else {
-                    viewModel.download(release)
+                    viewModel.download(latest)
                 }
             },
             onCancelDownload = viewModel::cancelDownload,
             onInstall = { viewModel.installIntent()?.let { runCatching { context.startActivity(it) } } },
             onShowChanges = onShowChanges,
-            onDismiss = { viewModel.dismissPrompt(release.version) }
+            onSnooze = { viewModel.snoozePromptForSession(latest.version) },
+            onDismiss = { viewModel.dismissPrompt(latest.version) },
+            modifier = modifier
         )
     }
 }
 
-/** The banner itself: version badge, 2–3 highlights and the actions. */
+/**
+ * Material 3 Expressive update card: header with version pills, scrollable full Markdown release
+ * notes (never truncated at 3 bullets or 2 lines), live download progress, and action buttons.
+ */
 @Composable
 fun UpdatePromptCard(
     release: AppRelease,
@@ -129,76 +143,85 @@ fun UpdatePromptCard(
     onInstall: () -> Unit,
     onShowChanges: () -> Unit,
     onDismiss: () -> Unit,
+    onSnooze: () -> Unit = onDismiss,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val highlights = remember(release.notesMarkdown) { MarkdownParser.highlights(release.notesMarkdown, max = 3) }
     val ownsDownload = download.isFor(release.version)
     val phase = if (ownsDownload) download.phase else UpdatePhase.AVAILABLE
     val hasApk = !release.apkUrl.isNullOrBlank()
+    val releaseTitle = remember(release.title, release.version, release.tagName) {
+        release.title.trim().takeUnless { raw ->
+            raw.isBlank() ||
+                raw == release.tagName ||
+                VersionComparator.normalize(raw.removePrefix("Taal").trim()) == release.version
+        }
+    }
 
     Surface(
-        shape = WseiCardShape,
-        color = colors.primaryContainer,
-        contentColor = colors.onPrimaryContainer,
-        shadowElevation = 6.dp,
+        shape = WseiHeroShape,
+        color = colors.surfaceContainerHigh,
+        contentColor = colors.onSurface,
+        tonalElevation = 6.dp,
+        shadowElevation = 12.dp,
         modifier = modifier
-            .widthIn(max = 560.dp)
+            .padding(horizontal = WseiSpacing.l, vertical = WseiSpacing.l)
+            .widthIn(max = 520.dp)
             .fillMaxWidth()
-            .padding(bottom = WseiSpacing.m)
+            .heightIn(max = 560.dp)
     ) {
-        // One size animation for the whole card (progress / install rows swapping in).
         Column(
             modifier = Modifier
                 .animateContentSize(WseiMotion.size())
-                .padding(start = WseiSpacing.l, end = WseiSpacing.xs, top = WseiSpacing.m, bottom = WseiSpacing.m),
+                .padding(WseiSpacing.xl),
             verticalArrangement = Arrangement.spacedBy(WseiSpacing.m)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
             ) {
-                // Banner on primaryContainer: the badge and the version pill use the inverted
-                // container pair, so they stand out on any palette (also high-chroma wallpapers).
                 WseiIconBadge(
                     icon = UpdateIcons.NewReleases,
                     shape = MaterialShapes.Cookie9Sided.toShape(),
-                    containerColor = colors.onPrimaryContainer,
-                    contentColor = colors.primaryContainer,
-                    size = 44.dp,
-                    iconSize = 22.dp
+                    containerColor = colors.primaryContainer,
+                    contentColor = colors.onPrimaryContainer,
+                    size = 48.dp,
+                    iconSize = 24.dp
                 )
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
+                    verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
                 ) {
                     Text(
                         text = stringResource(R.string.update_prompt_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics { heading() }
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s),
+                        verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs),
+                        itemVerticalAlignment = Alignment.CenterVertically
                     ) {
                         WseiPill(
                             text = stringResource(R.string.changelog_version_badge, release.version),
-                            containerColor = colors.onPrimaryContainer,
-                            contentColor = colors.primaryContainer,
+                            containerColor = colors.primaryContainer,
+                            contentColor = colors.onPrimaryContainer,
                             emphasized = true
                         )
                         Text(
                             text = stringResource(R.string.update_prompt_installed, currentVersion),
                             style = MaterialTheme.typography.labelMedium,
-                            color = mutedContentColor(colors.onPrimaryContainer, colors.primaryContainer),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            color = colors.onSurfaceVariant
                         )
                     }
                 }
-                IconButton(onClick = onDismiss) {
+                IconButton(
+                    onClick = onDismiss,
+                    shapes = IconButtonDefaults.shapes()
+                ) {
                     Icon(
                         imageVector = UpdateIcons.Close,
                         contentDescription = stringResource(R.string.update_prompt_dismiss),
@@ -207,18 +230,42 @@ fun UpdatePromptCard(
                 }
             }
 
-            if (highlights.isNotEmpty() && phase != UpdatePhase.DOWNLOADING) {
-                MarkdownHighlights(
-                    items = highlights,
-                    color = colors.onPrimaryContainer,
-                    markerColor = colors.onPrimaryContainer,
-                    modifier = Modifier.padding(end = WseiSpacing.m)
+            if (releaseTitle != null) {
+                Text(
+                    text = releaseTitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.onSurface
                 )
+            }
+
+            if (release.notesMarkdown.isNotBlank()) {
+                val notesScroll = rememberScrollState()
+                Surface(
+                    shape = WseiInsetShape,
+                    color = colors.surfaceContainer,
+                    contentColor = colors.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(notesScroll)
+                            .padding(WseiSpacing.l)
+                    ) {
+                        MarkdownText(
+                            markdown = release.notesMarkdown,
+                            containerColor = colors.surfaceContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             }
 
             when (phase) {
                 UpdatePhase.DOWNLOADING -> Column(
-                    modifier = Modifier.padding(end = WseiSpacing.m),
                     verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
                 ) {
                     Text(
@@ -230,46 +277,94 @@ fun UpdatePromptCard(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                UpdatePhase.ERROR -> Text(
-                    text = download.message ?: stringResource(R.string.about_update_error),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.error.withContrastAgainst(colors.primaryContainer),
-                    modifier = Modifier.padding(end = WseiSpacing.m)
-                )
+                UpdatePhase.ERROR -> Surface(
+                    shape = WseiInsetShape,
+                    color = colors.errorContainer,
+                    contentColor = colors.onErrorContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = download.message ?: stringResource(R.string.about_update_error),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(WseiSpacing.m)
+                    )
+                }
+                UpdatePhase.READY -> if (needsInstallPermission) {
+                    Text(
+                        text = stringResource(R.string.about_update_permission_hint),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.onSurfaceVariant
+                    )
+                }
                 else -> Unit
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs),
+                itemVerticalAlignment = Alignment.CenterVertically
             ) {
                 when (phase) {
-                    UpdatePhase.DOWNLOADING -> TextButton(onClick = onCancelDownload) {
-                        Text(stringResource(R.string.about_update_cancel))
+                    UpdatePhase.DOWNLOADING -> {
+                        TextButton(
+                            onClick = onShowChanges,
+                            shapes = ButtonDefaults.shapes()
+                        ) {
+                            Text(stringResource(R.string.update_prompt_changes))
+                        }
+                        OutlinedButton(
+                            onClick = onCancelDownload,
+                            shapes = ButtonDefaults.shapes()
+                        ) {
+                            Text(stringResource(R.string.about_update_cancel))
+                        }
                     }
-                    UpdatePhase.READY -> Button(onClick = onInstall, shape = CircleShape) {
-                        Text(
-                            stringResource(
-                                if (needsInstallPermission) R.string.about_update_allow_and_install else R.string.about_update_install
-                            )
-                        )
+                    else -> {
+                        TextButton(
+                            onClick = onSnooze,
+                            shapes = ButtonDefaults.shapes()
+                        ) {
+                            Text(stringResource(R.string.update_prompt_later))
+                        }
+                        TextButton(
+                            onClick = onShowChanges,
+                            shapes = ButtonDefaults.shapes()
+                        ) {
+                            Text(stringResource(R.string.update_prompt_changes))
+                        }
+                        if (phase == UpdatePhase.READY) {
+                            Button(
+                                onClick = onInstall,
+                                shapes = ButtonDefaults.shapes()
+                            ) {
+                                Text(
+                                    stringResource(
+                                        if (needsInstallPermission) {
+                                            R.string.about_update_allow_and_install
+                                        } else {
+                                            R.string.about_update_install
+                                        }
+                                    )
+                                )
+                            }
+                        } else {
+                            Button(
+                                onClick = onDownload,
+                                shapes = ButtonDefaults.shapes()
+                            ) {
+                                Text(
+                                    stringResource(
+                                        if (hasApk) {
+                                            R.string.update_prompt_download
+                                        } else {
+                                            R.string.update_prompt_open_release
+                                        }
+                                    )
+                                )
+                            }
+                        }
                     }
-                    else -> Button(onClick = onDownload, shape = CircleShape) {
-                        Text(
-                            text = stringResource(
-                                if (hasApk) R.string.update_prompt_download else R.string.update_prompt_open_release
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                TextButton(onClick = onShowChanges) {
-                    Text(
-                        text = stringResource(R.string.update_prompt_changes),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
         }

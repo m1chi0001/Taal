@@ -57,7 +57,6 @@
     <string name="about_update_check_again">Перевірити ще раз</string>
     <string name="about_update_permission_hint">Android попросить дозвіл на встановлення застосунків із Taal. Після надання дозволу поверніться й торкніться «Встановити».</string>
 
-    <string name="about_section_app">Застосунок</string>
     <string name="about_whats_new_title">Що нового</string>
     <string name="about_whats_new_supporting">Історія змін усіх версій</string>
     <string name="about_github">GitHub</string>
@@ -71,6 +70,7 @@
     <string name="update_prompt_download">Завантажити оновлення</string>
     <string name="update_prompt_open_release">Відкрити сторінку випуску</string>
     <string name="update_prompt_changes">Переглянути зміни</string>
+    <string name="update_prompt_later">Пізніше</string>
     <string name="update_prompt_dismiss">Приховати сповіщення про цю версію</string>
     <string name="update_prompt_downloading">Завантаження… %1$d%%</string>
 

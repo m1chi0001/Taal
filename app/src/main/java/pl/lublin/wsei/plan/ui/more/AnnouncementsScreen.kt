@@ -10,53 +10,31 @@ import android.net.Uri
 import android.os.Build
 import android.text.format.Formatter
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.TextAutoSize
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearWavyProgressIndicator
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedListItem
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,58 +45,34 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.LifecycleResumeEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import pl.lublin.wsei.plan.data.update.UpdatePhase
-import pl.lublin.wsei.plan.data.update.UpdateViewModel
-import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
-import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
-import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
-import pl.lublin.wsei.plan.ui.adaptive.WseiTwoPane
-import pl.lublin.wsei.plan.ui.adaptive.wseiBottomClearance
-import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
-import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
-import pl.lublin.wsei.plan.ui.components.WseiCard
-import pl.lublin.wsei.plan.ui.components.WseiChevron
-import pl.lublin.wsei.plan.ui.components.WseiEmptyState
-import pl.lublin.wsei.plan.ui.components.WseiIconBadge
-import pl.lublin.wsei.plan.ui.components.WseiInfoRow
-import pl.lublin.wsei.plan.ui.components.WseiInset
-import pl.lublin.wsei.plan.ui.components.WseiListEntry
-import pl.lublin.wsei.plan.ui.components.WseiListGroup
-import pl.lublin.wsei.plan.ui.components.WseiListItem
-import pl.lublin.wsei.plan.ui.components.WseiPill
-import pl.lublin.wsei.plan.ui.components.WseiScreenFrame
-import pl.lublin.wsei.plan.ui.components.WseiSectionTitle
-import pl.lublin.wsei.plan.ui.components.WseiSwitch
-import pl.lublin.wsei.plan.ui.icons.WseiIcons
-import pl.lublin.wsei.plan.ui.navigation.MoreSubView
-import pl.lublin.wsei.plan.ui.schedule.AppThemeMode
-import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
-import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
-import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
-import pl.lublin.wsei.plan.ui.theme.WseiMotion
-import pl.lublin.wsei.plan.ui.theme.WseiSpacing
-import androidx.compose.animation.scaleIn
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.R
-import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
+import pl.lublin.wsei.plan.data.attachments.AttachmentFileNames
+import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
+import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
+import pl.lublin.wsei.plan.ui.components.WseiCard
+import pl.lublin.wsei.plan.ui.components.WseiEmptyState
+import pl.lublin.wsei.plan.ui.components.WseiIconBadge
+import pl.lublin.wsei.plan.ui.components.WseiPill
+import pl.lublin.wsei.plan.ui.icons.WseiIcons
+import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
+import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
+import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
+import pl.lublin.wsei.plan.ui.theme.WseiMotion
+import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import pl.lublin.wsei.plan.ui.theme.mutedContentColor
 
 @Composable
 internal fun AnnouncementsScreen(
@@ -179,7 +133,26 @@ private fun AnnouncementCard(
     var expanded by rememberSaveable(announcement.id) { mutableStateOf(false) }
     val unread = !announcement.isRead
     val colors = MaterialTheme.colorScheme
-    val attachments = announcement.attachments
+    // Even if an older offline snapshot stored `hasAttachment = true` without attachment entries,
+    // synthesize a fallback entry so the student always gets the attachment pill and download button.
+    val attachments = remember(announcement.attachments, announcement.hasAttachment, announcement.announcementId) {
+        if (announcement.attachments.isNotEmpty() || !announcement.hasAttachment) {
+            announcement.attachments
+        } else {
+            listOf(
+                AnnouncementAttachment(
+                    id = -(announcement.announcementId.coerceAtLeast(1)),
+                    fileName = "",
+                    announcementId = announcement.announcementId
+                )
+            )
+        }
+    }
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = WseiMotion.spatial(),
+        label = "announcementChevron"
+    )
 
     WseiCard(
         onClick = {
@@ -198,8 +171,8 @@ private fun AnnouncementCard(
             WseiIconBadge(
                 icon = if (announcement.hasAttachment || attachments.isNotEmpty()) WseiIcons.AttachFile else WseiIcons.Campaign,
                 shape = if (unread) M3XCookieShape else CircleShape,
-                containerColor = if (unread) colors.primary else colors.surfaceContainerHighest,
-                contentColor = if (unread) colors.onPrimary else colors.onSurfaceVariant
+                containerColor = if (unread) colors.primaryContainer else colors.surfaceContainerHighest,
+                contentColor = if (unread) colors.onPrimaryContainer else colors.onSurfaceVariant
             )
             Column(
                 modifier = Modifier.weight(1f),
@@ -232,6 +205,22 @@ private fun AnnouncementCard(
                         .clip(CircleShape)
                         .background(colors.primary)
                 )
+            }
+            Surface(
+                shape = if (expanded) M3XSquircleShape else CircleShape,
+                color = if (expanded) colors.secondaryContainer else colors.surfaceContainerHighest,
+                contentColor = if (expanded) colors.onSecondaryContainer else colors.onSurfaceVariant,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = WseiIcons.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .graphicsLayer { rotationZ = chevronRotation }
+                    )
+                }
             }
         }
 
@@ -287,7 +276,16 @@ private fun AttachmentButton(
 ) {
     val colors = MaterialTheme.colorScheme
     val context = LocalContext.current
-    val openDescription = stringResource(R.string.announcements_attachment_open_cd, attachment.fileName)
+    val unnamedLabel = stringResource(R.string.announcements_attachment_unnamed)
+    val displayName = remember(attachment.fileName, unnamedLabel) {
+        val raw = attachment.fileName.trim()
+        if (raw.isEmpty() || raw.equals(AttachmentFileNames.DEFAULT_BASE_NAME, ignoreCase = true)) {
+            unnamedLabel
+        } else {
+            raw
+        }
+    }
+    val openDescription = stringResource(R.string.announcements_attachment_open_cd, displayName)
     val openingDescription = stringResource(R.string.announcements_attachment_opening)
     val extension = remember(attachment.fileName) { attachmentExtension(attachment.fileName) }
     val details = remember(extension, attachment.sizeBytes, context) {
@@ -299,7 +297,7 @@ private fun AttachmentButton(
     FilledTonalButton(
         onClick = onClick,
         enabled = enabled,
-        shape = WseiInsetShape,
+        shapes = ButtonDefaults.shapes(),
         contentPadding = PaddingValues(start = WseiSpacing.l, end = WseiSpacing.m, top = WseiSpacing.s, bottom = WseiSpacing.s),
         modifier = Modifier
             .fillMaxWidth()
@@ -320,7 +318,7 @@ private fun AttachmentButton(
                 .padding(horizontal = WseiSpacing.s)
         ) {
             Text(
-                text = attachment.fileName,
+                text = displayName,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
                 overflow = TextOverflow.MiddleEllipsis
@@ -329,7 +327,7 @@ private fun AttachmentButton(
                 Text(
                     text = details,
                     style = MaterialTheme.typography.labelSmall,
-                    color = LocalContentColor.current.copy(alpha = 0.72f),
+                    color = mutedContentColor(colors.onSecondaryContainer, colors.secondaryContainer),
                     maxLines = 1
                 )
             }
