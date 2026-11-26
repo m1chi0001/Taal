@@ -233,7 +233,11 @@ class ArpApiDataSource @Inject constructor(
             obtainedTitle = personal?.obtainedTitle?.ifBlank { null }
                 ?: activeCourse?.obtainedTitle?.ifBlank { null }
                 ?: "inż.",
-            specialization = activeCourse?.nameOfStudies.orEmpty(),
+            // `nameOfStudies` often carries the mode of study ("niestacjonarne"), not a specialization.
+            specialization = activeCourse?.nameOfStudies
+                ?.trim()
+                ?.takeUnless { it.isBlank() || isStudyModeLabel(it, mode) }
+                .orEmpty(),
             semesterNumber = courseDash?.semestr?.takeIf { it > 0 } ?: personal?.semestr?.takeIf { it > 0 } ?: 1,
             academicYear = courseDash?.year?.takeIf { it > 0 } ?: personal?.year?.takeIf { it > 0 } ?: 1,
             statusName = courseDash?.status?.ifBlank { null } ?: personal?.status?.ifBlank { null } ?: "Studiuje",
@@ -578,6 +582,13 @@ class ArpApiDataSource @Inject constructor(
     // ---------------------------------------------------------------------------------------------
     // Mapping
     // ---------------------------------------------------------------------------------------------
+
+    /** True when [value] names a mode of study (e.g. "niestacjonarne") rather than a specialization. */
+    private fun isStudyModeLabel(value: String, mode: String): Boolean {
+        val normalized = value.lowercase().replace(Regex("[^a-ząćęłńóśźż]"), "")
+        return normalized == mode.lowercase().replace(Regex("[^a-ząćęłńóśźż]"), "") ||
+            normalized in STUDY_MODE_LABELS
+    }
 
     /**
      * Returns null for items whose date/time can't be parsed. The previous version fell back to
@@ -1090,4 +1101,9 @@ data class MsAnnouncementReadedUpdateInputDto(
     @SerialName("PersonId") val personId: Int,
     @SerialName("Readed") val readed: Boolean = true,
     @SerialName("ReadedDate") val readedDate: String
+)
+
+private val STUDY_MODE_LABELS = setOf(
+    "stacjonarne", "niestacjonarne", "stacjonarny", "niestacjonarny",
+    "studiastacjonarne", "studianiestacjonarne", "zaoczne", "dzienne", "wieczorowe"
 )
