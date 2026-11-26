@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,6 +55,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -92,12 +96,9 @@ import pl.lublin.wsei.plan.ui.components.WseiListGroup
 import pl.lublin.wsei.plan.ui.components.WseiListItem
 import pl.lublin.wsei.plan.ui.components.WseiPill
 import pl.lublin.wsei.plan.ui.components.WseiScreenFrame
-import pl.lublin.wsei.plan.ui.components.WseiScreenScaffold
 import pl.lublin.wsei.plan.ui.components.WseiSectionTitle
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
-import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
-import pl.lublin.wsei.plan.ui.theme.WseiCorners
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
 import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
@@ -161,14 +162,20 @@ fun ProfileScreen(
         showPasswordForm = false
     }
 
-    if (windowLayout.supportsTwoPane) {
-        WseiScreenFrame(
-            title = stringResource(R.string.nav_profile),
-            onBack = onBack,
-            onRefresh = onRefresh,
-            isRefreshing = uiState.isRefreshing
-        ) { scrollModifier ->
-            val screenPadding = wseiScreenContentPadding()
+    // On wide layouts Profil is a destination of the navigation rail, so a back button would be
+    // misleading; on compact layouts it is opened from the top bar avatar and keeps it.
+    val backAction = onBack.takeUnless { windowLayout.useNavigationRail }
+
+    WseiScreenFrame(
+        title = stringResource(R.string.nav_profile),
+        onBack = backAction,
+        onRefresh = onRefresh,
+        isRefreshing = uiState.isRefreshing,
+        // This is the profile itself: never show the avatar shortcut to it.
+        showProfileShortcut = false
+    ) { scrollModifier ->
+        val screenPadding = wseiScreenContentPadding()
+        if (windowLayout.supportsTwoPane) {
             val direction = LocalLayoutDirection.current
             val paneListPadding = PaddingValues(
                 top = screenPadding.calculateTopPadding(),
@@ -206,19 +213,20 @@ fun ProfileScreen(
                     }
                 }
             )
-        }
-    } else {
-        WseiScreenScaffold(
-            title = stringResource(R.string.nav_profile),
-            onBack = onBack,
-            onRefresh = onRefresh,
-            isRefreshing = uiState.isRefreshing,
-            contentPadding = wseiScreenContentPadding()
-        ) {
-            val itemModifier = Modifier.wseiReadableWidth()
-            identityItems(uiState, averages, itemModifier)
-            studyItems(uiState, averages, sections, itemModifier)
-            accountItems(uiState.currentSession, sections, onLogout, submitPassword, itemModifier)
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(scrollModifier),
+                contentPadding = screenPadding,
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+            ) {
+                // Cards are capped to a readable width on medium windows instead of stretching.
+                val itemModifier = Modifier.wseiReadableWidth()
+                identityItems(uiState, averages, itemModifier)
+                studyItems(uiState, averages, sections, itemModifier)
+                accountItems(uiState.currentSession, sections, onLogout, submitPassword, itemModifier)
+            }
         }
     }
 }
@@ -413,22 +421,24 @@ private fun LazyListScope.studyItems(
         val semesters = uiState.classGroupsBySemester
         val semesterGroups = semesters.firstOrNull { it.groups.isNotEmpty() } ?: semesters.firstOrNull()
         val groups = semesterGroups?.groups.orEmpty()
-        ProfileAccordion(
-            title = stringResource(R.string.profile_student_groups),
-            badge = if (groups.isEmpty()) "—" else "${groups.size}",
-            isBadgeNeutral = groups.isEmpty(),
-            icon = WseiIcons.Groups,
-            expanded = sections.isGroupsExpanded,
-            onToggle = sections.onToggleGroups,
-            modifier = itemModifier
-        ) {
-            val semesterLabel = semesterGroups?.semesterLabel?.takeIf { it.isNotBlank() }
-            if (semesterLabel != null) {
-                AccordionCaption(semesterLabel)
-            }
-            if (groups.isEmpty()) {
-                AccordionEmptyText(stringResource(R.string.profile_groups_empty))
-            } else {
+        val title = stringResource(R.string.profile_student_groups)
+        if (groups.isEmpty()) {
+            ProfileStaticRow(
+                title = title,
+                supporting = stringResource(R.string.profile_groups_empty),
+                icon = WseiIcons.Groups,
+                modifier = itemModifier
+            )
+        } else {
+            ProfileAccordion(
+                title = title,
+                supporting = semesterGroups?.semesterLabel?.trim()?.takeIf { it.isNotEmpty() },
+                icon = WseiIcons.Groups,
+                expanded = sections.isGroupsExpanded,
+                onToggle = sections.onToggleGroups,
+                modifier = itemModifier,
+                trailing = { CountBadge(groups.size) }
+            ) {
                 WseiListGroup(
                     entries = groups.mapIndexed { index, group ->
                         WseiListEntry(key = "group_${group.id}_${group.groupCode}_$index") { shape ->
@@ -451,23 +461,33 @@ private fun LazyListScope.studyItems(
         val plan = uiState.studyPlans.firstOrNull()
         val planSubjects = remember(plan) { plan?.semesters?.flatMap { it.subjects }.orEmpty() }
         val totalPlanEcts = remember(planSubjects) { planSubjects.sumOf { it.ects.toDouble() }.toInt() }
-        val isPlanEmpty = planSubjects.isEmpty()
-        ProfileAccordion(
-            title = stringResource(R.string.profile_study_plan),
-            badge = if (isPlanEmpty) "—" else stringResource(R.string.subjects_ects_value, totalPlanEcts),
-            isBadgeNeutral = isPlanEmpty,
-            icon = WseiIcons.AutoAwesome,
-            expanded = sections.isPlanExpanded,
-            onToggle = sections.onTogglePlan,
-            modifier = itemModifier
-        ) {
-            val planName = plan?.planName?.trim()?.takeIf { it.isNotEmpty() }
-            if (planName != null) {
-                AccordionCaption(planName)
-            }
-            if (isPlanEmpty) {
-                AccordionEmptyText(stringResource(R.string.profile_plan_empty))
-            } else {
+        val title = stringResource(R.string.profile_study_plan)
+        if (planSubjects.isEmpty()) {
+            // Nothing to expand: a calm row with the reason instead of an empty accordion and a "—" pill.
+            ProfileStaticRow(
+                title = title,
+                supporting = stringResource(R.string.profile_plan_empty),
+                icon = WseiIcons.AutoAwesome,
+                modifier = itemModifier
+            )
+        } else {
+            val colors = MaterialTheme.colorScheme
+            ProfileAccordion(
+                title = title,
+                supporting = plan?.planName?.trim()?.takeIf { it.isNotEmpty() },
+                icon = WseiIcons.AutoAwesome,
+                expanded = sections.isPlanExpanded,
+                onToggle = sections.onTogglePlan,
+                modifier = itemModifier,
+                trailing = {
+                    WseiPill(
+                        text = stringResource(R.string.subjects_ects_value, totalPlanEcts),
+                        containerColor = colors.secondaryContainer,
+                        contentColor = colors.onSecondaryContainer,
+                        emphasized = true
+                    )
+                }
+            ) {
                 WseiListGroup(
                     entries = planSubjects.mapIndexed { index, subject ->
                         WseiListEntry(key = "plan_${subject.id}_$index") { shape ->
@@ -481,7 +501,7 @@ private fun LazyListScope.studyItems(
                                 ),
                                 icon = WseiIcons.forSubject(subject.subjectName, ClassType.fromRawCode(subject.form)),
                                 shape = shape,
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                containerColor = colors.surfaceContainerLow,
                                 trailing = { WseiPill(stringResource(R.string.subjects_ects_value, subject.ects.toInt())) }
                             )
                         }
@@ -511,21 +531,38 @@ private fun LazyListScope.accountItems(
             verticalArrangement = Arrangement.spacedBy(WseiSpacing.inGroup)
         ) {
             if (canChangePassword) {
-                WseiListItem(
-                    title = stringResource(R.string.profile_change_password),
-                    supporting = stringResource(R.string.profile_change_password_supporting),
-                    icon = WseiIcons.Lock,
+                // The row and its form share one segment, so the expanded form reads as part of it.
+                Surface(
                     shape = wseiGroupItemShape(0, count),
-                    selected = sections.showPasswordForm,
-                    onClick = sections.onTogglePasswordForm,
-                    trailing = { ExpandIndicator(expanded = sections.showPasswordForm) }
-                )
-                AnimatedVisibility(
-                    visible = sections.showPasswordForm,
-                    enter = expandVertically(WseiMotion.size(), expandFrom = Alignment.Top) + fadeIn(WseiMotion.effects()),
-                    exit = shrinkVertically(WseiMotion.size(), shrinkTowards = Alignment.Top) + fadeOut(WseiMotion.fastEffects())
+                    color = colors.surfaceContainer,
+                    contentColor = colors.onSurface,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    PasswordChangeForm(onSubmit = onSubmitPassword)
+                    Column {
+                        WseiListItem(
+                            title = stringResource(R.string.profile_change_password),
+                            supporting = stringResource(R.string.profile_change_password_supporting),
+                            icon = WseiIcons.Lock,
+                            shape = RectangleShape,
+                            containerColor = Color.Transparent,
+                            onClick = sections.onTogglePasswordForm,
+                            trailing = { ExpandIndicator(expanded = sections.showPasswordForm) }
+                        )
+                        AnimatedVisibility(
+                            visible = sections.showPasswordForm,
+                            enter = expandVertically(WseiMotion.size(), expandFrom = Alignment.Top) + fadeIn(WseiMotion.effects()),
+                            exit = shrinkVertically(WseiMotion.size(), shrinkTowards = Alignment.Top) + fadeOut(WseiMotion.fastEffects())
+                        ) {
+                            PasswordChangeForm(
+                                onSubmit = onSubmitPassword,
+                                modifier = Modifier.padding(
+                                    start = WseiSpacing.l,
+                                    end = WseiSpacing.l,
+                                    bottom = WseiSpacing.l
+                                )
+                            )
+                        }
+                    }
                 }
             }
             WseiListItem(
@@ -733,8 +770,9 @@ private fun ProfileStatCard(
 
 /**
  * The single study card: title and track summary ("Rok 1 · Semestr zimowy 2026/2027 ·
- * Niestacjonarne") are always visible; the remaining details expand below. Nothing here repeats
- * the hero (course name, semester number, current and overall averages).
+ * Niestacjonarne") are always visible; the known details (department, specialization, title,
+ * previous semester average) expand below. Unknown values are left out instead of showing "—"
+ * placeholders; without any detail the card is a static row. Nothing here repeats the hero.
  */
 @Composable
 private fun StudyCard(
@@ -746,126 +784,144 @@ private fun StudyCard(
 ) {
     val session = uiState.currentSession
     val colors = MaterialTheme.colorScheme
-    val summary = studySummary(uiState.studyTrack, session)
+    val title = stringResource(R.string.profile_track_title)
+    val summary = studySummary(uiState.studyTrack, session).joinToString(" · ").takeIf { it.isNotEmpty() }
+    val details = listOfNotNull(
+        session?.department?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { stringResource(R.string.profile_department) to it },
+        // Blank when the dean's office has no specialization: the row is omitted, not guessed.
+        session?.specialization?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { stringResource(R.string.profile_specialization) to it },
+        session?.obtainedTitle?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { stringResource(R.string.profile_obtained_title) to it }
+    )
+    val showPrevious = averages.hasPreviousSemester
 
-    WseiExpandableCard(
+    if (details.isEmpty() && !showPrevious) {
+        ProfileStaticRow(title = title, supporting = summary, icon = WseiIcons.School, modifier = modifier)
+        return
+    }
+    ProfileAccordion(
+        title = title,
+        supporting = summary,
+        icon = WseiIcons.School,
         expanded = expanded,
         onToggle = onToggle,
-        modifier = modifier,
-        header = {
-            WseiIconBadge(
-                icon = WseiIcons.School,
-                shape = M3XCookieShape,
-                containerColor = colors.tertiaryContainer,
-                contentColor = colors.onTertiaryContainer
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
-            ) {
-                Text(
-                    text = stringResource(R.string.profile_track_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (summary.isNotEmpty()) {
-                    Text(
-                        text = summary.joinToString(" · "),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.onSurfaceVariant
-                    )
-                }
-            }
-        },
-        body = {
-            WseiInset {
-                WseiInfoRow(
-                    stringResource(R.string.profile_department),
-                    session?.department?.takeIf { it.isNotBlank() } ?: "—"
-                )
-                WseiInfoRow(
-                    stringResource(R.string.profile_specialization),
-                    session?.specialization?.takeIf { it.isNotBlank() }
-                        ?: stringResource(R.string.profile_specialization_general)
-                )
-                WseiInfoRow(
-                    stringResource(R.string.profile_obtained_title),
-                    session?.obtainedTitle?.takeIf { it.isNotBlank() } ?: "—"
-                )
-                if (averages.hasPreviousSemester) {
+        modifier = modifier
+    ) {
+        WseiInset {
+            details.forEach { (label, value) -> WseiInfoRow(label, value) }
+            if (showPrevious) {
+                if (details.isNotEmpty()) {
                     HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
-                    WseiInfoRow(
-                        stringResource(R.string.profile_average_previous),
-                        formatAverage(uiState, averages.previousSemester)
-                    )
                 }
+                WseiInfoRow(
+                    stringResource(R.string.profile_average_previous),
+                    formatAverage(uiState, averages.previousSemester)
+                )
             }
         }
-    )
+    }
 }
 
 /**
- * Accordion used by the study sections. The header mirrors [StudyCard] (icon badge, title,
- * trailing pill) so all cards align; [isBadgeNeutral] gives empty sections a quiet pill.
+ * Header shared by every study section (icon badge, title, optional supporting line), so the
+ * accordions and the static rows line up exactly.
  */
+@Composable
+private fun RowScope.SectionHeaderContent(title: String, supporting: String?, icon: ImageVector) {
+    WseiIconBadge(icon = icon)
+    Column(
+        modifier = Modifier.weight(1f),
+        verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (supporting != null) {
+            Text(
+                text = supporting,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/** Expandable study section; [trailing] (count badge, ECTS pill) sits just before the chevron. */
 @Composable
 private fun ProfileAccordion(
     title: String,
-    badge: String,
+    supporting: String?,
     icon: ImageVector,
     expanded: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
-    isBadgeNeutral: Boolean = false,
+    trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
-    val colors = MaterialTheme.colorScheme
     WseiExpandableCard(
         expanded = expanded,
         onToggle = onToggle,
         modifier = modifier,
         header = {
-            WseiIconBadge(icon = icon)
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            WseiPill(
-                text = badge,
-                containerColor = if (isBadgeNeutral) colors.surfaceContainerHighest else colors.secondaryContainer,
-                contentColor = if (isBadgeNeutral) colors.onSurfaceVariant else colors.onSecondaryContainer,
-                emphasized = !isBadgeNeutral
-            )
+            SectionHeaderContent(title = title, supporting = supporting, icon = icon)
+            trailing?.invoke()
         },
         body = { content() }
     )
 }
 
-/** Small caption above accordion content (semester label, plan name). */
+/**
+ * Non-expandable study section with the same geometry as [ProfileAccordion] (card shape, padding,
+ * header), used when there is nothing to reveal — e.g. no study plan yet.
+ */
 @Composable
-private fun AccordionCaption(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = WseiSpacing.xs)
-    )
+private fun ProfileStaticRow(
+    title: String,
+    supporting: String?,
+    icon: ImageVector,
+    modifier: Modifier = Modifier
+) {
+    WseiCard(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
+        ) {
+            SectionHeaderContent(title = title, supporting = supporting, icon = icon)
+        }
+    }
 }
 
-/** Neutral message for an accordion without content. */
+/** Round count badge ("7") centred on the header row, the same height as the chevron container. */
 @Composable
-private fun AccordionEmptyText(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = WseiSpacing.xs)
-    )
+private fun CountBadge(count: Int) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        shape = CircleShape,
+        color = colors.secondaryContainer,
+        contentColor = colors.onSecondaryContainer
+    ) {
+        Box(
+            modifier = Modifier
+                .defaultMinSize(minWidth = 32.dp, minHeight = 32.dp)
+                .padding(horizontal = WseiSpacing.s),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+        }
+    }
 }
 
 /** Small chevron for list rows that reveal content below them. */
@@ -885,8 +941,9 @@ private fun ExpandIndicator(expanded: Boolean) {
     )
 }
 
+/** Password change fields; rendered inside the "Zmień hasło" segment, not as a separate card. */
 @Composable
-private fun PasswordChangeForm(onSubmit: (String, String) -> Unit) {
+private fun PasswordChangeForm(onSubmit: (String, String) -> Unit, modifier: Modifier = Modifier) {
     // Passwords are deliberately kept out of the saved-instance-state Bundle (plain `remember`).
     var oldPass by remember { mutableStateOf("") }
     var newPass by remember { mutableStateOf("") }
@@ -894,10 +951,9 @@ private fun PasswordChangeForm(onSubmit: (String, String) -> Unit) {
     val transformation = if (showPasswords) VisualTransformation.None else PasswordVisualTransformation()
     val passwordKeyboard = KeyboardOptions(keyboardType = KeyboardType.Password)
 
-    WseiCard(
-        shape = RoundedCornerShape(WseiCorners.groupInner),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentPadding = PaddingValues(WseiSpacing.l)
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(WseiSpacing.m)
     ) {
         OutlinedTextField(
             value = oldPass,

@@ -13,15 +13,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
-import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -45,7 +46,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.domain.model.ClassType
 import pl.lublin.wsei.plan.domain.model.GradeItem
+import pl.lublin.wsei.plan.l10n.rememberLocalizedDateFormatter
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiEmptyState
 import pl.lublin.wsei.plan.ui.components.WseiPill
@@ -60,6 +63,8 @@ import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.WseiHeroShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import androidx.compose.ui.res.pluralStringResource
 
@@ -80,9 +85,9 @@ private class SemesterGrades(
 }
 
 /**
- * Przedmioty i oceny z podziałem na semestry. Domyślnie pokazany jest bieżący semestr
- * (wcześniej oceny wszystkich semestrów były zlewane w jedną listę, a ECTS sumowane razem).
- * Na szerszych oknach oceny układają się w siatkę (2–3 kolumny) zamiast rozciągniętych kart.
+ * Subjects and grades split by semester; the current semester is shown by default. On wider
+ * windows the grade cards form a balanced grid (2–3 columns, equal heights per row) instead of
+ * stretched cards.
  */
 @Composable
 fun SubjectsScreen(
@@ -114,21 +119,17 @@ fun SubjectsScreen(
         onRefresh = onRefresh,
         isRefreshing = uiState.isRefreshing
     ) { scrollModifier ->
-        // With a single column the staggered grid lays out exactly like the previous list.
-        LazyVerticalStaggeredGrid(
-            columns = StaggeredGridCells.Fixed(columns),
+        // Cards are laid out in rows of [columns]; every card in a row takes the height of the
+        // tallest one, so the grid stays balanced without staggered gaps.
+        val gradeRows = remember(grades, columns) { grades.chunked(columns.coerceAtLeast(1)) }
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .then(scrollModifier),
             contentPadding = wseiScreenContentPadding(),
-            verticalItemSpacing = WseiSpacing.betweenCards,
-            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+            verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
         ) {
-            item(
-                key = "semester_summary",
-                contentType = "semester_summary",
-                span = StaggeredGridItemSpan.FullLine
-            ) {
+            item(key = "semester_summary", contentType = "semester_summary") {
                 SemesterSummaryCard(
                     uiState = uiState,
                     semester = selected,
@@ -137,11 +138,7 @@ fun SubjectsScreen(
             }
 
             if (semesters.size > 1) {
-                item(
-                    key = "semester_picker",
-                    contentType = "semester_picker",
-                    span = StaggeredGridItemSpan.FullLine
-                ) {
+                item(key = "semester_picker", contentType = "semester_picker") {
                     SemesterPicker(
                         semesters = semesters,
                         selected = selected,
@@ -152,11 +149,7 @@ fun SubjectsScreen(
             }
 
             if (grades.isEmpty()) {
-                item(
-                    key = "grades_empty",
-                    contentType = "grades_empty",
-                    span = StaggeredGridItemSpan.FullLine
-                ) {
+                item(key = "grades_empty", contentType = "grades_empty") {
                     WseiEmptyState(
                         icon = WseiIcons.School,
                         title = stringResource(R.string.subjects_empty_title),
@@ -164,26 +157,37 @@ fun SubjectsScreen(
                     )
                 }
             } else {
-                item(
-                    key = "grades_title",
-                    contentType = "grades_title",
-                    span = StaggeredGridItemSpan.FullLine
-                ) {
+                item(key = "grades_title", contentType = "grades_title") {
                     WseiSectionTitle(
                         text = stringResource(R.string.subjects_grades_title),
                         trailing = pluralStringResource(R.plurals.subjects_count_short, grades.size, grades.size)
                     )
                 }
                 items(
-                    items = grades,
-                    key = { it.id },
-                    contentType = { "grade_item_card" }
-                ) { grade ->
-                    GradeCard(
-                        grade = grade,
-                        lecturer = uiState.maskLecturer(grade.lecturerName.trim()),
-                        maskSensitive = uiState.isHideSensitiveData
-                    )
+                    items = gradeRows,
+                    key = { row -> "grades_row_${row.first().id}" },
+                    contentType = { "grade_row" }
+                ) { row ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
+                        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+                    ) {
+                        val cellModifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                        row.forEach { grade ->
+                            GradeCard(
+                                grade = grade,
+                                lecturer = uiState.maskLecturer(grade.lecturerName.trim()),
+                                maskSensitive = uiState.isHideSensitiveData,
+                                modifier = cellModifier
+                            )
+                        }
+                        // Keeps the last, incomplete row aligned with the columns above it.
+                        repeat(columns - row.size) { Spacer(cellModifier) }
+                    }
                 }
             }
         }
@@ -278,7 +282,7 @@ private fun SemesterSummaryCard(
                 Text(
                     text = overline,
                     style = MaterialTheme.typography.labelLarge,
-                    color = colors.primary
+                    color = colors.onPrimaryContainer.copy(alpha = 0.8f)
                 )
             }
             val fieldOfStudy = session?.fieldOfStudy?.takeIf { it.isNotBlank() }
@@ -313,9 +317,10 @@ private fun SemesterSummaryCard(
                 statContent
             )
         }
-        if (subjectCount > 0) {
+        // Grading progress (counts only, no grade values). Hidden until something is graded:
+        // an empty track with a lone stop dot reads like a glitch rather than "0 of 7".
+        if (subjectCount > 0 && gradedCount > 0) {
             val gradedDescription = stringResource(R.string.subjects_graded_cd, gradedCount, subjectCount)
-            // How far the semester's grading has progressed — counts only, no grade values.
             LinearWavyProgressIndicator(
                 progress = { animatedGraded },
                 modifier = Modifier
@@ -324,18 +329,19 @@ private fun SemesterSummaryCard(
                     .semantics {
                         contentDescription = gradedDescription
                     },
-                color = colors.primary,
-                trackColor = colors.onPrimaryContainer.copy(alpha = 0.16f)
+                color = colors.onPrimaryContainer,
+                trackColor = colors.onPrimaryContainer.copy(alpha = 0.16f),
+                stopSize = 0.dp
             )
         }
     }
 }
 
-/** Liczbowa wartość oceny („4,5”, „5.0”, „zal” → null). */
+/** Numeric grade value ("4,5", "5.0"; "zal" → null). */
 private fun parseGrade(raw: String): Double? =
     raw.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in 2.0..5.5 }
 
-/** Kolor plakietki oceny: wysoka — kolor główny, dostateczna — trzeciorzędny, 2 — błąd. */
+/** Grade badge colours: high — primary, good — primary container, sufficient — tertiary container, 2 — error. */
 private fun gradeColors(raw: String, colors: ColorScheme): Pair<Color, Color> {
     val value = parseGrade(raw)
     return when {
@@ -347,8 +353,66 @@ private fun gradeColors(raw: String, colors: ColorScheme): Pair<Color, Color> {
     }
 }
 
+/**
+ * Readable class form for the raw APR text. Common dean's office abbreviations ("Prakt zaw
+ * zajęcia", "Lab", "Ćw") map to a [ClassType]; anything unknown returns null and is shown as is.
+ */
+internal fun readableClassForm(raw: String): ClassType? {
+    val key = raw.trim()
+        .lowercase(Locale.ROOT)
+        .replace('.', ' ')
+        .split(Regex("\\s+"))
+        .filter { it.isNotEmpty() }
+        .joinToString(" ")
+    return when (key) {
+        "wykład", "wykl", "wykł", "wyk" -> ClassType.LECTURE
+        "laboratorium", "lab", "labor" -> ClassType.LAB
+        "ćwiczenia", "ćw", "cw", "ćwicz", "ćwiczenia audytoryjne" -> ClassType.EXERCISE
+        "projekt", "proj" -> ClassType.PROJECT
+        "seminarium", "sem", "semin" -> ClassType.SEMINAR
+        "e-learning", "elearning", "elrn" -> ClassType.ELEARNING
+        "egzamin / zaliczenie", "egzamin", "egz" -> ClassType.EXAM
+        "prakt zaw zajęcia", "prakt zaw zaj", "praktyczne zajęcia zawodowe", "pzz" -> ClassType.PRACTICE
+        else -> null
+    }
+}
+
+/** Localised label of a mapped class form. */
 @Composable
-private fun GradeCard(grade: GradeItem, lecturer: String, maskSensitive: Boolean) {
+private fun classFormLabel(type: ClassType): String = when (type) {
+    ClassType.LECTURE -> stringResource(R.string.class_type_lecture)
+    ClassType.LAB -> stringResource(R.string.class_type_lab)
+    ClassType.EXERCISE -> stringResource(R.string.class_type_exercise)
+    ClassType.PROJECT -> stringResource(R.string.class_type_project)
+    ClassType.ELEARNING -> stringResource(R.string.class_type_elearning)
+    ClassType.PRACTICE -> stringResource(R.string.class_type_practice)
+    ClassType.SEMINAR -> stringResource(R.string.class_type_seminar)
+    ClassType.EXAM -> stringResource(R.string.class_type_exam)
+}
+
+/** "Wykład + Lab" → "Wykład + Laboratorium": each part is mapped, unknown parts stay verbatim. */
+@Composable
+private fun readableFormLabel(raw: String): String =
+    raw.split('+')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .map { part -> readableClassForm(part)?.let { classFormLabel(it) } ?: part }
+        .joinToString(" + ")
+
+/** ISO "2027-02-26" (optionally with a time part) → localised date; other text is returned unchanged. */
+private fun formatAwardedDate(raw: String, formatter: DateTimeFormatter): String {
+    val trimmed = raw.trim()
+    val date = runCatching { LocalDate.parse(trimmed.take(10)) }.getOrNull() ?: return trimmed
+    return formatter.format(date)
+}
+
+@Composable
+private fun GradeCard(
+    grade: GradeItem,
+    lecturer: String,
+    maskSensitive: Boolean,
+    modifier: Modifier = Modifier
+) {
     val gradeText = if (maskSensitive) "••" else grade.gradeValue.ifBlank { "—" }
     val (badgeColor, badgeContent) = if (maskSensitive) {
         MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurfaceVariant
@@ -356,7 +420,9 @@ private fun GradeCard(grade: GradeItem, lecturer: String, maskSensitive: Boolean
         gradeColors(grade.gradeValue, MaterialTheme.colorScheme)
     }
 
-    WseiCard(verticalSpacing = WseiSpacing.s) {
+    val dateFormatter = rememberLocalizedDateFormatter("ddMMyyyy")
+
+    WseiCard(modifier = modifier, verticalSpacing = WseiSpacing.s) {
         Row(horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)) {
             Surface(
                 shape = M3XCookieShape,
@@ -391,7 +457,8 @@ private fun GradeCard(grade: GradeItem, lecturer: String, maskSensitive: Boolean
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     WseiPill(stringResource(R.string.subjects_ects_value, grade.ects), emphasized = true)
-                    WseiPill(grade.formLabel)
+                    val formLabel = readableFormLabel(grade.formLabel)
+                    if (formLabel.isNotEmpty()) WseiPill(formLabel)
                     if (grade.passingForm.isNotBlank()) WseiPill(grade.passingForm)
                 }
                 if (lecturer.isNotBlank()) {
@@ -412,7 +479,7 @@ private fun GradeCard(grade: GradeItem, lecturer: String, maskSensitive: Boolean
                     null
                 }
                 val awardedLabel = if (grade.dateAwarded.isNotBlank()) {
-                    stringResource(R.string.subjects_grade_awarded, grade.dateAwarded)
+                    stringResource(R.string.subjects_grade_awarded, formatAwardedDate(grade.dateAwarded, dateFormatter))
                 } else {
                     null
                 }
