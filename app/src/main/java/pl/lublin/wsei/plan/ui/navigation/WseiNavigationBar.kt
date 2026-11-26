@@ -60,7 +60,7 @@ import pl.lublin.wsei.plan.ui.components.wseiPressScale
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 
-/** Zakładki widoczne na pasku nawigacji (Profil otwiera się z awatara w górnym pasku). */
+/** Tabs shown in the navigation bar (Profile opens from the avatar in the top bar). */
 internal val WseiNavigationTabs: List<WseiDestination> = listOf(
     WseiDestination.START,
     WseiDestination.SCHEDULE,
@@ -70,9 +70,9 @@ internal val WseiNavigationTabs: List<WseiDestination> = listOf(
 )
 
 /**
- * Pływający pasek nawigacji w stylu M3 Expressive (floating toolbar):
- * aktywna zakładka rozszerza się w pigułkę z ikoną i podpisem, pozostałe są samymi ikonami.
- * Szerokość, kolor i wciśnięcie animują się na sprężynach.
+ * Floating navigation bar in the M3 Expressive style (floating toolbar): the active tab expands
+ * into a pill with icon and label, the others are icons only. Width, colour and press animate
+ * on springs. The selected indicator is a small accent: `primary` with `onPrimary`.
  */
 @Composable
 internal fun WseiFloatingNavigationBar(
@@ -181,13 +181,13 @@ private fun NavigationPillItem(
 }
 
 /**
- * Boczna nawigacja dla tabletów, rozłożonych składanych i telefonów w poziomie
- * (M3 Expressive `WideNavigationRail`).
+ * Side navigation for tablets, unfolded foldables and landscape phones (M3 Expressive
+ * `WideNavigationRail`). Its container is the window background, like the unscrolled top bars.
  *
- * @param expanded `true` na szerokich oknach: szyna rozwija się w listę z ikoną i pełną nazwą;
- *   zmiana (np. po rozłożeniu urządzenia) animuje się sprężyną motywu.
- * @param profileShortcut gdy podany, awatar w nagłówku szyny otwiera Profil (wtedy górny pasek
- *   ekranów nie powiela skrótu). Na niskich oknach pomijany, żeby zmieścić pięć zakładek.
+ * @param expanded `true` on wide windows: the rail expands into a list with icon and full name;
+ *   the change (e.g. after unfolding) animates on the theme spring.
+ * @param profileShortcut when given, the avatar in the rail header opens Profile (screen top bars
+ *   then do not repeat the shortcut). Omitted on short windows to fit five tabs.
  */
 @Composable
 internal fun WseiNavigationRail(
@@ -206,7 +206,7 @@ internal fun WseiNavigationRail(
     }
     val railExpanded = railState.targetValue == WideNavigationRailValue.Expanded
     val colors = MaterialTheme.colorScheme
-    // Te same role co w pływającym pasku: aktywna zakładka na kolorze primary.
+    // Same roles as the floating bar: the active tab sits on a primary indicator.
     val itemColors = WideNavigationRailItemDefaults.colors(
         selectedIconColor = colors.onPrimary,
         selectedTextColorTopIconPosition = colors.primary,
@@ -232,7 +232,7 @@ internal fun WseiNavigationRail(
         state = railState,
         colors = WideNavigationRailDefaults.colors(containerColor = colors.background),
         header = header,
-        // Bez nagłówka (niskie okno w poziomie) zakładki są wyśrodkowane w pionie.
+        // Without a header (short landscape window) the tabs are centred vertically.
         arrangement = if (header != null) Arrangement.Top else Arrangement.Center,
         contentPadding = PaddingValues(top = if (header != null) WseiSpacing.l else 0.dp)
     ) {
@@ -271,7 +271,7 @@ internal fun WseiNavigationRail(
     }
 }
 
-/** Nagłówek szyny: awatar studenta (i na szerokiej szynie podpis „Profil”) otwierający Profil. */
+/** Rail header: the student avatar (plus the "Profil" label on a wide rail) opening Profile. */
 @Composable
 private fun RailProfileHeader(
     shortcut: WseiProfileShortcut,
@@ -282,7 +282,7 @@ private fun RailProfileHeader(
     val interactionSource = remember { MutableInteractionSource() }
     val profileLabel = stringResource(WseiDestination.PROFILE.labelRes)
     val profileDescription = stringResource(R.string.common_profile_of, shortcut.fullName)
-    // Zwinięta szyna ma 96 dp — awatar (48 dp z obwódką) ląduje dokładnie na środku.
+    // The collapsed rail is 96 dp wide — the avatar (48 dp with its ring) lands in the centre.
     val startPadding by animateDpAsState(
         targetValue = if (expanded) WseiSpacing.xl else WseiSpacing.xxl,
         animationSpec = WseiMotion.spatial(),

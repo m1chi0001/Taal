@@ -207,6 +207,7 @@
     <string name="finances_account_copy_cd">Копіювати номер рахунку</string>
     <string name="finances_account_copied_cd">Номер рахунку скопійовано</string>
     <string name="finances_pay_online">Оплатити онлайн • %1$s</string>
+    <string name="finances_pay_online_short">Оплатити онлайн</string>
     <string name="finances_due_this_month">Термін цього місяця • %1$s</string>
     <string name="finances_paid_on">Сплачено • %1$s</string>
     <string name="finances_due_on">Термін %1$s</string>
@@ -237,7 +238,6 @@
     <!-- Profile -->
     <string name="profile_section_studies">Навчання</string>
     <string name="profile_specialization">Спеціалізація</string>
-    <string name="profile_specialization_general">Загальна</string>
     <string name="profile_department">Факультет</string>
     <string name="profile_obtained_title">Ступінь, що присвоюється</string>
     <string name="profile_group">Група</string>

@@ -20,6 +20,20 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
+    <!-- Attachment opening: lets the app see viewers and share targets on Android 11+ (package
+         visibility), so it can fall back to an app chooser / the share sheet before reporting
+         that no app can open a file. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
+    </queries>
+
     <application
         android:name=".WseiPlanApp"
         android:allowBackup="true"

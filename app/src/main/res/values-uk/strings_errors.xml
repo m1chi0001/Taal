@@ -28,6 +28,12 @@
     <string name="error_payment_no_link">Немає посилання на онлайн-оплату BlueMedia.</string>
     <string name="error_attachment_no_viewer">Немає застосунку, який відкриє файл «%1$s».</string>
     <string name="error_attachment_download">Не вдалося завантажити вкладення.</string>
+    <string name="error_attachment_not_found">Вкладення не знайдено на сервері. Можливо, деканат його видалив.</string>
+    <string name="error_attachment_html_page">Сервер повернув вебсторінку замість файлу. Спробуйте пізніше.</string>
+    <string name="error_attachment_login_page">Сервер повернув сторінку входу замість файлу — можливо, сесія завершилася. Увійдіть знову й повторіть спробу.</string>
+    <string name="error_attachment_too_large">Вкладення завелике, щоб завантажити його в застосунку.</string>
+    <string name="error_attachment_save_failed">Не вдалося зберегти вкладення на пристрої.</string>
+    <string name="error_attachment_open_failed">Не вдалося передати завантажений файл іншому застосунку.</string>
     <string name="error_schedule_refresh">Не вдалося оновити розклад занять.</string>
 
     <!-- App updates (GitHub releases) -->

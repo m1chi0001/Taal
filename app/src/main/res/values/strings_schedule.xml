@@ -84,7 +84,9 @@
     <string name="schedule_class_ongoing_badge">Trwa • jeszcze %1$d min</string>
     <string name="schedule_focus_today_done">Dzisiejsze zajęcia zakończone</string>
     <string name="schedule_focus_today_free">Dzisiaj bez zajęć</string>
-    <string name="schedule_focus_next_tomorrow">Następne zajęcia: jutro o %1$s</string>
+    <string name="schedule_focus_showing_tomorrow">poniżej plan na jutro</string>
+    <string name="schedule_focus_showing_later">poniżej kolejny dzień zjazdu</string>
+    <string name="schedule_focus_showing_next_zjazd">poniżej najbliższy zjazd</string>
     <string name="schedule_focus_next_later">Kolejny dzień zjazdu: %1$s</string>
     <string name="schedule_focus_next_zjazd">Następny zjazd: %1$s</string>
     <string name="schedule_day_date_count">%1$s • %2$s</string>

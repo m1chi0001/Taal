@@ -10,8 +10,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Wspólne tokeny odstępów, zaokrągleń i ruchu. Jedno miejsce zamiast „magicznych liczb”
- * rozsianych po ekranach — zmiana tutaj zmienia wygląd całej aplikacji.
+ * Shared spacing, corner and motion tokens: one place instead of "magic numbers" spread over
+ * the screens — a change here restyles the whole app.
  */
 object WseiSpacing {
     val xxs: Dp = 2.dp
@@ -22,19 +22,19 @@ object WseiSpacing {
     val xl: Dp = 20.dp
     val xxl: Dp = 24.dp
 
-    /** Margines boczny ekranu. */
+    /** Horizontal screen margin. */
     val screen: Dp = 16.dp
 
-    /** Odstęp między kartami na liście. */
+    /** Gap between cards in a list. */
     val betweenCards: Dp = 12.dp
 
-    /** Odstęp między elementami połączonej grupy listy (M3 Expressive „segmented list”). */
+    /** Gap between items of a connected list group (M3 Expressive "segmented list"). */
     val inGroup: Dp = 2.dp
 
-    /** Miejsce na pływający pasek nawigacji nad dolną krawędzią. */
+    /** Room for the floating navigation bar above the bottom edge. */
     val bottomBarClearance: Dp = 120.dp
 
-    /** Maksymalna szerokość formularzy (logowanie, powitanie) na tabletach i w poziomie. */
+    /** Maximum width of forms (sign-in, welcome) on tablets and in landscape. */
     val formMaxWidth: Dp = 480.dp
 
     val screenContent = PaddingValues(
@@ -46,19 +46,19 @@ object WseiSpacing {
 }
 
 object WseiCorners {
-    /** Karty treści. */
+    /** Content cards. */
     val card: Dp = 28.dp
 
-    /** Karty „hero” na górze ekranu. */
+    /** Hero cards at the top of a screen. */
     val hero: Dp = 36.dp
 
-    /** Zewnętrzne rogi połączonej grupy listy. */
+    /** Outer corners of a connected list group. */
     val groupOuter: Dp = 24.dp
 
-    /** Wewnętrzne rogi połączonej grupy listy. */
+    /** Inner corners of a connected list group. */
     val groupInner: Dp = 6.dp
 
-    /** Kontenery wewnątrz kart. */
+    /** Containers inside cards. */
     val inset: Dp = 18.dp
 }
 
@@ -67,7 +67,7 @@ val WseiHeroShape = RoundedCornerShape(WseiCorners.hero)
 val WseiInsetShape = RoundedCornerShape(WseiCorners.inset)
 
 /**
- * Kształt elementu połączonej grupy: zewnętrzne rogi duże, wewnętrzne małe.
+ * Shape of a connected group item: large outer corners, small inner ones.
  */
 fun wseiGroupItemShape(
     index: Int,
@@ -81,13 +81,13 @@ fun wseiGroupItemShape(
 }
 
 /**
- * Sprężyny w duchu `MotionScheme.expressive()`, ale szybsze — interfejs ma reagować „od razu”,
- * zachowując sprężysty charakter M3 Expressive (bez tween/linear):
- * - [spatial] — ruch i zmiana kształtu, z lekkim odbiciem,
- * - [fastSpatial] — reakcje na dotyk (wciśnięcie, morfing rogów, rozwinięcie pigułki),
- * - [size] — zmiana rozmiaru bez odbicia (bez migania przy rozwijaniu kart),
- * - [effects] — kolor i przezroczystość, bez odbicia,
- * - [fastEffects] — znikanie elementów, które ustępują miejsca nowej treści.
+ * Springs in the spirit of `MotionScheme.expressive()`, but faster — the UI reacts at once
+ * while keeping the springy M3 Expressive character (no tween/linear):
+ * - [spatial] — movement and shape change, with a slight bounce,
+ * - [fastSpatial] — touch feedback (press, corner morph, pill expansion),
+ * - [size] — size changes without bounce (no flicker when cards expand),
+ * - [effects] — colour and alpha, no bounce,
+ * - [fastEffects] — elements fading out to make room for new content.
  */
 object WseiMotion {
     /** Default spatial spring: ~1.8× stiffer than expressive's 380, same 0.8 damping. */

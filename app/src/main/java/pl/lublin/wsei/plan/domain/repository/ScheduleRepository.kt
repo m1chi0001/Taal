@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.LocalDate
 import pl.lublin.wsei.plan.domain.model.AcademicDay
+import pl.lublin.wsei.plan.domain.attachments.DownloadedAttachment
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DataSourceOrigin
@@ -75,10 +76,14 @@ interface WseiRemoteDataSource : TimetableDataSource {
         announcementId: Int
     ): Result<Unit>
 
+    /**
+     * Downloads [attachment] with [session]: the APR endpoint first, then parameter-name variants
+     * and the list entry's alternative id/direct link. Fails with a typed, localized error.
+     */
     suspend fun downloadAnnouncementAttachment(
         session: StudentSession,
-        attachmentId: Int
-    ): Result<AnnouncementAttachment>
+        attachment: AnnouncementAttachment
+    ): Result<DownloadedAttachment>
 }
 
 data class SyncReport(
@@ -147,7 +152,8 @@ interface ScheduleRepository {
 
     suspend fun markAnnouncementRead(announcementId: Int): Result<Unit>
 
-    suspend fun downloadAnnouncementAttachment(attachmentId: Int): Result<AnnouncementAttachment>
+    /** Downloads [attachment] with the active session (see [WseiRemoteDataSource.downloadAnnouncementAttachment]). */
+    suspend fun downloadAnnouncementAttachment(attachment: AnnouncementAttachment): Result<DownloadedAttachment>
 
     /** Last cached academic modules (offline-first prefill for the UI). Never touches the network. */
     suspend fun loadCachedAcademicModules(): CachedAcademicModules

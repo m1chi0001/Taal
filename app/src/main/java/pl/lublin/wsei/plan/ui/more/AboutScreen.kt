@@ -78,8 +78,9 @@ private const val AUTHOR_LOGIN = "m1chi0001"
 private const val LINK_REPOSITORY = "https://github.com/${UpdateManager.REPO}"
 
 /**
- * „O aplikacji”: zwarty nagłówek (ikona, nazwa, wersja), aktualizacje, skróty do GitHuba
- * i historii zmian oraz jedna linijka o technologiach i licencji.
+ * "About": a compact header (icon, name, version), updates, links to the changelog and GitHub,
+ * and a single line about the technology and licence. Uses the shared [MorePage] frame, so its
+ * top app bar matches the Announcements and Settings panes.
  */
 @Composable
 internal fun AboutScreen(
@@ -142,10 +143,10 @@ internal fun AboutScreen(
 }
 
 // -----------------------------------------------------------------------------------------
-// Nagłówek i stopka
+// Header and footer
 // -----------------------------------------------------------------------------------------
 
-/** Ikona aplikacji w kształcie MaterialShapes, nazwa, wersja i krótki opis — w jednym wierszu. */
+/** App icon in a MaterialShapes cookie, name, version and a short tagline. */
 @Composable
 private fun AboutHeader(modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
@@ -205,7 +206,7 @@ private fun AboutHeader(modifier: Modifier = Modifier) {
     }
 }
 
-/** Technologie, autor, licencja i zastrzeżenie — drobnym drukiem. */
+/** Technology, author, licence and disclaimer — in small print. */
 @Composable
 private fun AboutFooter(modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
@@ -238,12 +239,12 @@ private fun AboutFooter(modifier: Modifier = Modifier) {
 }
 
 // -----------------------------------------------------------------------------------------
-// Aktualizacje
+// Updates
 // -----------------------------------------------------------------------------------------
 
 /**
- * „Aktualizacje”: status w jednym wierszu z przyciskiem „Sprawdź aktualizacje” (wymuszone
- * odświeżenie), a gdy jest nowa wersja — skrót zmian, pobieranie i instalacja.
+ * "Updates": a one-line status with a "Check for updates" button (forced refresh) and, when a
+ * new version exists, its highlights, download and installation.
  */
 @Composable
 private fun UpdateCard(viewModel: UpdateViewModel, modifier: Modifier = Modifier) {
@@ -340,7 +341,7 @@ private fun UpdateCard(viewModel: UpdateViewModel, modifier: Modifier = Modifier
                     MarkdownHighlights(
                         items = highlights,
                         color = colors.onSecondaryContainer,
-                        markerColor = colors.primary
+                        markerColor = colors.onSecondaryContainer
                     )
                 }
                 if (state.phase == UpdatePhase.READY && needsInstallPermission) {

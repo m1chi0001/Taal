@@ -16,6 +16,8 @@
     <!-- Announcement attachments -->
     <string name="data_attachment_empty">The attachment is empty.</string>
     <string name="data_attachment_corrupt">Couldn\'t read the downloaded attachment.</string>
+    <string name="data_attachment_open_with">Open “%1$s” with</string>
+    <string name="data_attachment_share">Save or share “%1$s”</string>
 
     <!-- Live Notification -->
     <string name="notif_channel_name">Live classes</string>

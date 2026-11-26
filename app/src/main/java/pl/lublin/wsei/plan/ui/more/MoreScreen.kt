@@ -53,6 +53,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonSize
 import androidx.compose.material3.ripple
 import androidx.compose.material3.toPath
 import androidx.compose.material3.toShape
@@ -141,7 +142,7 @@ internal fun openExternalLink(context: android.content.Context, url: String) {
     }
 }
 
-/** Strzałka oznaczająca, że pozycja otwiera zewnętrzną stronę w przeglądarce. */
+/** Arrow marking an entry that opens an external page in the browser. */
 @Composable
 internal fun WseiExternalLinkMark() {
     Icon(
@@ -153,11 +154,11 @@ internal fun WseiExternalLinkMark() {
 }
 
 /**
- * Zakładka „Więcej”: hub oraz podstrony Ogłoszenia, Ustawienia i O aplikacji.
+ * "More" tab: the hub plus the Announcements, Settings and About sub-pages.
  *
- * - telefon: hub i podstrony zastępują się nawzajem ([currentSubView] z powłoki),
- * - okno średnie: hub jako siatka kafelków,
- * - okno szerokie / rozłożony foldable: hub po lewej, wybrana podstrona po prawej.
+ * - phone: the hub and sub-pages replace each other ([currentSubView] comes from the shell),
+ * - medium window: the hub as a tile grid,
+ * - wide window / unfolded foldable: the hub on the left, the selected sub-page on the right.
  */
 @Composable
 fun MoreScreen(
@@ -253,8 +254,10 @@ fun MoreScreen(
 }
 
 /**
- * Wspólna rama podstron „Więcej”. Osadzona w prawym panelu ([embedded]) nie ma przycisku
- * powrotu ani drugiego skrótu do profilu (ten jest już w panelu huba).
+ * Shared frame of all "More" sub-pages (Announcements, Settings, About), so their top app bars
+ * are identical: same unscrolled and scrolled container colours, no extra background behind the
+ * list. Embedded in the right pane ([embedded]) it has no back button and no second profile
+ * shortcut (the hub pane already shows one).
  */
 @Composable
 internal fun MorePage(
@@ -515,7 +518,7 @@ private fun HubTile(entry: HubEntry, shape: Shape, modifier: Modifier = Modifier
     }
 }
 
-/** Prawy panel na szerokim ekranie, zanim użytkownik wybierze sekcję. */
+/** Right pane on wide windows before a section is picked. */
 @Composable
 private fun MoreDetailPlaceholder(unreadCount: Int, onOpenAnnouncements: () -> Unit) {
     val colors = MaterialTheme.colorScheme
@@ -575,7 +578,7 @@ private fun MoreDetailPlaceholder(unreadCount: Int, onOpenAnnouncements: () -> U
 }
 
 // -----------------------------------------------------------------------------------------
-// Ustawienia
+// Settings
 // -----------------------------------------------------------------------------------------
 
 @Composable
@@ -672,7 +675,7 @@ private fun SettingsScreen(
     }
 }
 
-/** Wiersz ustawienia z przełącznikiem: cały wiersz przełącza (M3 Expressive segmented list). */
+/** Settings row with a switch: the whole row toggles (M3 Expressive segmented list). */
 @Composable
 private fun SettingsSwitchItem(
     index: Int,
@@ -713,7 +716,7 @@ private fun SettingsSwitchItem(
 
 // --- Theme mode ---------------------------------------------------------------------------
 
-/** Kolejność wyboru motywu w grupie przycisków. */
+/** Order of the theme modes in the button group. */
 private val ThemeModeOrder = listOf(AppThemeMode.LIGHT, AppThemeMode.DARK, AppThemeMode.SYSTEM)
 
 @get:StringRes
@@ -789,9 +792,10 @@ private val AppThemeMode.icon: ImageVector
     }
 
 /**
- * Wybór motywu (jasny / ciemny / systemowy) jako połączona grupa przycisków
- * (M3 Expressive connected button group). Wybrany przycisk morfuje do pigułki, a pod grupą
- * pojawia się opis bieżącego trybu. Źródło kolorów wybiera się osobno ([ColorPaletteSelector]).
+ * Theme mode (light / dark / system) as an M3 Expressive connected button group: three
+ * equal-width segments with the icon and label on one centred line. The checked segment morphs
+ * into a pill and the mode description is shown below. Colours are chosen separately
+ * ([ColorPaletteSelector]).
  */
 @Composable
 private fun ThemeModeSelector(
@@ -819,43 +823,35 @@ private fun ThemeModeSelector(
                         ToggleButton(
                             checked = selected == mode,
                             onCheckedChange = { onSelect(mode) },
+                            buttonSize = ToggleButtonSize.Medium,
                             shapes = when (index) {
                                 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
                                 lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                                 else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                             },
-                            contentPadding = PaddingValues(
-                                horizontal = WseiSpacing.xs,
-                                vertical = WseiSpacing.m
-                            ),
+                            // Same padding on every segment, so icon + label sit centred in equal widths.
+                            contentPadding = PaddingValues(horizontal = WseiSpacing.m),
                             interactionSource = interactionSource,
+                            icon = { Icon(imageVector = mode.icon, contentDescription = null) },
                             modifier = with(groupScope) {
                                 Modifier
                                     .weight(1f)
                                     .animateWidth(interactionSource)
                             }
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
-                            ) {
-                                Icon(
-                                    imageVector = mode.icon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                val labelStyle = MaterialTheme.typography.labelLarge
-                                Text(
-                                    text = label,
-                                    style = labelStyle,
-                                    maxLines = 1,
-                                    autoSize = TextAutoSize.StepBased(
-                                        minFontSize = 10.sp,
-                                        maxFontSize = labelStyle.fontSize,
-                                        stepSize = 0.5.sp
-                                    )
-                                )
-                            }
+                            val labelStyle = MaterialTheme.typography.labelLarge
+                            // Long translations shrink instead of wrapping or pushing the icon out.
+                            Text(
+                                text = label,
+                                style = labelStyle,
+                                maxLines = 1,
+                                autoSize = TextAutoSize.StepBased(
+                                    minFontSize = 11.sp,
+                                    maxFontSize = labelStyle.fontSize,
+                                    stepSize = 0.5.sp
+                                ),
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
                         }
                     },
                     menuContent = { menuState ->
@@ -931,8 +927,8 @@ private class MorphShape(private val morph: Morph, private val progress: Float) 
 }
 
 /**
- * Wybór palety kolorów: siatka okrągłych próbek (kolor główny, drugorzędny i trzeciorzędny).
- * Działa w każdym trybie motywu. Paleta dynamiczna (Material You) wymaga Androida 12+.
+ * Colour palette picker: a grid of round swatches (primary, secondary and tertiary colour).
+ * Works in every theme mode. The dynamic palette (Material You) needs Android 12+.
  */
 @Composable
 private fun ColorPaletteSelector(
@@ -998,8 +994,8 @@ private fun ColorPaletteSelector(
 }
 
 /**
- * Pojedyncza próbka palety. Po wybraniu koło morfuje w ciasteczko (MaterialShapes) na sprężynie,
- * powiększa się i pokazuje znacznik wyboru; wciśnięcie lekko je „wciska”.
+ * One palette swatch. When selected the circle morphs into a cookie (MaterialShapes) on a spring,
+ * grows and shows a check mark; pressing squeezes it slightly.
  */
 @Composable
 private fun PaletteSwatchChip(
@@ -1142,8 +1138,8 @@ private fun currentAppLanguage(): AppLanguage {
 }
 
 /**
- * Język aplikacji (per-app language, AppCompat). Zmiana stosuje nowe zasoby od razu —
- * AppCompat odtwarza aktywność; na Androidzie 13+ wybór jest widoczny także w ustawieniach systemu.
+ * App language (per-app language, AppCompat). A change applies the new resources right away —
+ * AppCompat recreates the activity; on Android 13+ the choice also shows in the system settings.
  */
 @Composable
 private fun AppLanguageSelector(modifier: Modifier = Modifier) {

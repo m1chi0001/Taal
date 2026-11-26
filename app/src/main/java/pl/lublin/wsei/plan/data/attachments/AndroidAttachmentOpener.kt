@@ -1,57 +1,56 @@
 package pl.lublin.wsei.plan.data.attachments
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
-import android.util.Base64
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.data.local.LocalizedStrings
 import pl.lublin.wsei.plan.domain.attachments.AttachmentOpenResult
 import pl.lublin.wsei.plan.domain.attachments.AttachmentOpener
+import pl.lublin.wsei.plan.domain.attachments.DownloadedAttachment
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.repository.ScheduleRepository
 import java.io.File
+import java.io.IOException
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
-import pl.lublin.wsei.plan.data.local.LocalizedStrings
 
 /**
  * [AttachmentOpener] that downloads the file through [ScheduleRepository] (active session: bearer
  * token + session cookies are added by the shared OkHttp client), caches it in
- * `cacheDir/attachments` and opens it via `FileProvider` (`${packageName}.updates`, see
- * `res/xml/file_paths.xml`) + `Intent.ACTION_VIEW`.
+ * `cacheDir/attachments/<attachment key>/<name>` and opens it via `FileProvider`
+ * (`${packageName}.updates`, see `res/xml/file_paths.xml`).
  *
- * The MIME type is detected from the file signature first and the extension second, because the
- * dean's office often serves files with a missing or wrong extension.
+ * Opening tries, in order: `ACTION_VIEW` with the detected MIME type, an app chooser over every
+ * viewer (wildcard type, for files whose type no app claims), and the share sheet, so the student can
+ * at least save the file. A file downloaded earlier (same attachment, non-empty, younger than
+ * [MAX_CACHE_AGE_MILLIS]) is reopened without touching the network.
  */
 @Singleton
 class AndroidAttachmentOpener @Inject constructor(
     @ApplicationContext private val context: Context,
     private val scheduleRepository: ScheduleRepository,
-    private val strings: LocalizedStrings
+    private val strings: LocalizedStrings,
+    private val responses: AttachmentResponseHandler
 ) : AttachmentOpener {
 
     override suspend fun downloadAndOpen(attachment: AnnouncementAttachment): Result<AttachmentOpenResult> = try {
-        val downloaded = if (!attachment.fileBytesBase64.isNullOrBlank()) {
-            attachment
-        } else {
-            scheduleRepository.downloadAnnouncementAttachment(attachment.id).getOrThrow()
-        }
-        val prepared = withContext(Dispatchers.IO) {
-            val bytes = decode(downloaded.fileBytesBase64)
-            val rawName = downloaded.fileName.ifBlank { attachment.fileName }
-            val mime = resolveMimeType(bytes, rawName)
-            val name = withExtension(sanitizeFileName(rawName), mime)
-            val dir = File(context.cacheDir, CACHE_DIR).apply { mkdirs() }
-            cleanUpOldFiles(dir)
-            val file = File(dir, name)
-            file.writeBytes(bytes)
-            PreparedFile(file, mime)
+        val prepared = withContext(Dispatchers.IO) { findCached(attachment) } ?: run {
+            // Inline Base64 from the list is a shortcut only: if it's broken, download properly.
+            val downloaded = attachment.fileBytesBase64?.takeIf { it.isNotBlank() }
+                ?.let { base64 -> runCatching { responses.fromInlineBase64(attachment, base64) }.getOrNull() }
+                ?: scheduleRepository.downloadAnnouncementAttachment(attachment).getOrThrow()
+            withContext(Dispatchers.IO) { save(attachment, downloaded) }
         }
         Result.success(withContext(Dispatchers.Main) { open(prepared) })
     } catch (e: CancellationException) {
@@ -60,111 +59,173 @@ class AndroidAttachmentOpener @Inject constructor(
         Result.failure(e)
     }
 
-    private fun open(prepared: PreparedFile): AttachmentOpenResult {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", prepared.file)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, prepared.mimeType)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        // No resolveActivity() pre-check: without <queries> it returns null on Android 11+ even when
-        // a viewer is installed. Starting the activity is the only reliable test.
-        return try {
-            context.startActivity(intent)
-            AttachmentOpenResult.Opened(prepared.file.name)
-        } catch (e: ActivityNotFoundException) {
-            AttachmentOpenResult.NoViewerApp(prepared.file.name, prepared.mimeType)
-        }
+    // ---------------------------------------------------------------------------------------------
+    // Cache
+    // ---------------------------------------------------------------------------------------------
+
+    private fun rootDir(): File = File(context.cacheDir, CACHE_DIR)
+
+    /** One directory per attachment, so a reopened file keeps its name and nothing collides. */
+    private fun cacheKey(attachment: AnnouncementAttachment): String {
+        if (attachment.id > 0) return "id_${attachment.id}"
+        val seed = "${attachment.announcementId}|${attachment.fileName}|${attachment.downloadUrl.orEmpty()}|" +
+            attachment.alternativeFileId.orEmpty()
+        val digest = MessageDigest.getInstance("SHA-256").digest(seed.toByteArray(Charsets.UTF_8))
+        return "h_" + digest.take(10).joinToString("") { "%02x".format(it) }
     }
 
-    private fun decode(base64: String?): ByteArray {
-        val encoded = base64?.substringAfter("base64,")?.trim()?.takeIf { it.isNotEmpty() }
-            ?: throw IllegalStateException(strings.get(R.string.data_attachment_empty))
-        val bytes = try {
-            Base64.decode(encoded, Base64.DEFAULT)
-        } catch (e: IllegalArgumentException) {
-            throw IllegalStateException(strings.get(R.string.data_attachment_corrupt), e)
+    private fun findCached(attachment: AnnouncementAttachment): PreparedFile? {
+        val dir = File(rootDir(), cacheKey(attachment))
+        val files = dir.listFiles { f -> f.isFile && !f.name.endsWith(PARTIAL_SUFFIX) }.orEmpty()
+        val file = files.singleOrNull()?.takeIf { it.length() > 0 } ?: return null
+        if (file.lastModified() < System.currentTimeMillis() - MAX_CACHE_AGE_MILLIS) return null
+        return PreparedFile(file, mimeTypeFor(file.name, readHeader(file)))
+    }
+
+    private fun save(attachment: AnnouncementAttachment, downloaded: DownloadedAttachment): PreparedFile {
+        if (downloaded.bytes.isEmpty()) throw responses.empty()
+        val root = rootDir()
+        try {
+            root.mkdirs()
+            cleanUpOldFiles(root)
+            val dir = File(root, cacheKey(attachment))
+            dir.deleteRecursively()
+            if (!dir.mkdirs() && !dir.isDirectory) throw IOException("Cannot create the attachment directory.")
+            val name = withExtension(
+                AttachmentFileNames.sanitize(downloaded.fileName, AttachmentResponseHandler.fallbackBaseName(attachment)),
+                downloaded.mimeType
+            )
+            val partial = File(dir, name + PARTIAL_SUFFIX)
+            partial.writeBytes(downloaded.bytes)
+            val file = File(dir, name)
+            if (!partial.renameTo(file)) {
+                partial.delete()
+                throw IOException("Cannot finalize the attachment file.")
+            }
+            val mime = downloaded.mimeType.takeUnless { AttachmentFileTypes.isGenericMime(it) }
+                ?: mimeTypeFor(name, downloaded.bytes)
+            return PreparedFile(file, mime)
+        } catch (e: IOException) {
+            throw responses.saveFailed(e)
+        } catch (e: SecurityException) {
+            throw responses.saveFailed(e)
         }
-        if (bytes.isEmpty()) throw IllegalStateException(strings.get(R.string.data_attachment_empty))
-        return bytes
     }
 
     /** Removes cached attachments older than [MAX_CACHE_AGE_MILLIS]. */
     private fun cleanUpOldFiles(dir: File) {
         val threshold = System.currentTimeMillis() - MAX_CACHE_AGE_MILLIS
-        dir.listFiles()?.forEach { file ->
-            if (file.lastModified() < threshold) file.deleteRecursively()
+        dir.listFiles()?.forEach { entry ->
+            val newest = if (entry.isDirectory) {
+                entry.listFiles()?.maxOfOrNull { it.lastModified() } ?: entry.lastModified()
+            } else {
+                entry.lastModified()
+            }
+            if (newest < threshold) entry.deleteRecursively()
         }
+    }
+
+    private fun readHeader(file: File): ByteArray = runCatching {
+        file.inputStream().use { input ->
+            val buffer = ByteArray(HEADER_BYTES)
+            val read = input.read(buffer)
+            if (read <= 0) ByteArray(0) else buffer.copyOf(read)
+        }
+    }.getOrDefault(ByteArray(0))
+
+    // ---------------------------------------------------------------------------------------------
+    // Opening
+    // ---------------------------------------------------------------------------------------------
+
+    private fun open(prepared: PreparedFile): AttachmentOpenResult {
+        val uri = try {
+            FileProvider.getUriForFile(context, "${context.packageName}.updates", prepared.file)
+        } catch (e: IllegalArgumentException) {
+            throw responses.openFailed(e) // path not covered by res/xml/file_paths.xml
+        }
+        val name = prepared.file.name
+
+        // 1. The default viewer for the detected type. No resolveActivity() pre-check: starting
+        //    the activity is the only reliable test.
+        if (tryStart(viewIntent(uri, prepared.mimeType, name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) {
+            return AttachmentOpenResult.Opened(name)
+        }
+        // 2. Any app that views files (the type may be wrong, or no app claims it explicitly).
+        val viewAny = viewIntent(uri, ANY_TYPE, name)
+        if (hasHandler(viewAny) &&
+            tryStart(chooser(viewAny, strings.get(R.string.data_attachment_open_with, name)))
+        ) {
+            return AttachmentOpenResult.Opened(name)
+        }
+        // 3. Share sheet: lets the student save the file to Files/Drive or send it to a viewer.
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = prepared.mimeType
+            putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newUri(context.contentResolver, name, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        if (hasHandler(send) && tryStart(chooser(send, strings.get(R.string.data_attachment_share, name)))) {
+            return AttachmentOpenResult.Opened(name)
+        }
+        return AttachmentOpenResult.NoViewerApp(name, prepared.mimeType)
+    }
+
+    /** ClipData carries the URI grant through choosers and intent forwarding. */
+    private fun viewIntent(uri: Uri, mimeType: String, name: String): Intent =
+        Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mimeType)
+            clipData = ClipData.newUri(context.contentResolver, name, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+    private fun chooser(target: Intent, title: String): Intent =
+        Intent.createChooser(target, title).addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        )
+
+    private fun tryStart(intent: Intent): Boolean = try {
+        context.startActivity(intent)
+        true
+    } catch (e: ActivityNotFoundException) {
+        false
+    } catch (e: SecurityException) {
+        throw responses.openFailed(e)
+    }
+
+    /** Needs the `<queries>` entries in the manifest to see other apps on Android 11+. */
+    @Suppress("DEPRECATION")
+    private fun hasHandler(intent: Intent): Boolean =
+        context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY).isNotEmpty()
+
+    // ---------------------------------------------------------------------------------------------
+    // MIME
+    // ---------------------------------------------------------------------------------------------
+
+    /** Extension table first, then Android's `MimeTypeMap`, then magic bytes. */
+    private fun mimeTypeFor(fileName: String, header: ByteArray): String {
+        val ext = AttachmentFileNames.extensionOf(fileName)
+        return AttachmentFileTypes.mimeForExtension(ext)
+            ?: ext?.let { MimeTypeMap.getSingleton().getMimeTypeFromExtension(it) }
+            ?: AttachmentFileTypes.sniff(header)?.mimeType
+            ?: AttachmentFileTypes.OCTET_STREAM
+    }
+
+    /** Appends an extension matching [mime] when the name has none (viewers often rely on it). */
+    private fun withExtension(name: String, mime: String): String {
+        if (AttachmentFileNames.extensionOf(name) != null || AttachmentFileTypes.isGenericMime(mime)) return name
+        val ext = AttachmentFileTypes.extensionForMime(mime)
+            ?: MimeTypeMap.getSingleton().getExtensionFromMimeType(mime.substringBefore(';').trim())
+            ?: return name
+        return "$name.$ext"
     }
 
     private class PreparedFile(val file: File, val mimeType: String)
 
-    internal companion object {
-        private const val CACHE_DIR = "attachments"
-        private const val MAX_CACHE_AGE_MILLIS = 7L * 24 * 60 * 60 * 1000
-        private const val OCTET_STREAM = "application/octet-stream"
-        private const val MAX_NAME_LENGTH = 120
-
-        /** Strips path separators and characters that are illegal in file names; keeps the extension. */
-        fun sanitizeFileName(raw: String): String {
-            val cleaned = raw.substringAfterLast('/').substringAfterLast('\\')
-                .replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_")
-                .trim()
-                .trim('.')
-                .ifBlank { "zalacznik" }
-            if (cleaned.length <= MAX_NAME_LENGTH) return cleaned
-            val ext = cleaned.substringAfterLast('.', "").takeIf { it.isNotEmpty() && it.length <= 10 }
-            return if (ext == null) {
-                cleaned.take(MAX_NAME_LENGTH)
-            } else {
-                cleaned.substringBeforeLast('.').take(MAX_NAME_LENGTH - ext.length - 1) + "." + ext
-            }
-        }
-
-        /** Appends an extension matching [mime] when the name has none (viewers often rely on it). */
-        fun withExtension(name: String, mime: String): String {
-            if (name.substringAfterLast('.', "").isNotEmpty() || mime == OCTET_STREAM) return name
-            val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: return name
-            return "$name.$ext"
-        }
-
-        fun resolveMimeType(bytes: ByteArray, fileName: String): String {
-            val extension = fileName.substringAfterLast('.', "").lowercase()
-            val byExtension = extension.takeIf { it.isNotEmpty() }
-                ?.let { MimeTypeMap.getSingleton().getMimeTypeFromExtension(it) }
-            return when (val signature = sniff(bytes)) {
-                // Container formats: the extension tells which document it is (docx, xlsx, odt, doc, xls…).
-                Signature.ZIP -> byExtension ?: "application/zip"
-                Signature.OLE -> byExtension ?: "application/msword"
-                null -> byExtension ?: OCTET_STREAM
-                else -> signature.mime
-            }
-        }
-
-        private enum class Signature(val mime: String) {
-            PDF("application/pdf"),
-            PNG("image/png"),
-            JPEG("image/jpeg"),
-            GIF("image/gif"),
-            WEBP("image/webp"),
-            RTF("application/rtf"),
-            ZIP("application/zip"),
-            OLE("application/x-ole-storage")
-        }
-
-        private fun sniff(b: ByteArray): Signature? {
-            fun startsWith(vararg sig: Int, offset: Int = 0): Boolean =
-                b.size >= offset + sig.size && sig.indices.all { (b[offset + it].toInt() and 0xFF) == sig[it] }
-            return when {
-                startsWith(0x25, 0x50, 0x44, 0x46) -> Signature.PDF // %PDF
-                startsWith(0x89, 0x50, 0x4E, 0x47) -> Signature.PNG
-                startsWith(0xFF, 0xD8, 0xFF) -> Signature.JPEG
-                startsWith(0x47, 0x49, 0x46, 0x38) -> Signature.GIF // GIF8
-                startsWith(0x52, 0x49, 0x46, 0x46) && startsWith(0x57, 0x45, 0x42, 0x50, offset = 8) -> Signature.WEBP
-                startsWith(0x7B, 0x5C, 0x72, 0x74, 0x66) -> Signature.RTF // {\rtf
-                startsWith(0x50, 0x4B, 0x03, 0x04) -> Signature.ZIP
-                startsWith(0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1) -> Signature.OLE
-                else -> null
-            }
-        }
+    private companion object {
+        const val CACHE_DIR = "attachments"
+        const val PARTIAL_SUFFIX = ".part"
+        const val MAX_CACHE_AGE_MILLIS = 7L * 24 * 60 * 60 * 1000
+        const val HEADER_BYTES = 64 * 1024
+        const val ANY_TYPE = "*/*"
     }
 }

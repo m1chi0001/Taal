@@ -1,6 +1,8 @@
 package pl.lublin.wsei.plan.data.remote.api
 
+import android.util.Log
 import io.ktor.client.HttpClient
+import io.ktor.client.call.body
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -8,15 +10,26 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.contentLength
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlinx.datetime.LocalDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.serializer
+import pl.lublin.wsei.plan.data.attachments.AttachmentFileNames
+import pl.lublin.wsei.plan.data.attachments.AttachmentResponseHandler
+import pl.lublin.wsei.plan.data.attachments.AttachmentUrls
 import pl.lublin.wsei.plan.data.remote.ScheduleNormalizer
+import pl.lublin.wsei.plan.domain.attachments.AttachmentDownloadException
+import pl.lublin.wsei.plan.domain.attachments.DownloadedAttachment
 import pl.lublin.wsei.plan.data.remote.ScholarshipMapper
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.ClassEvent
@@ -37,6 +50,7 @@ import pl.lublin.wsei.plan.domain.model.StudyPlanSubjectItem
 import pl.lublin.wsei.plan.domain.model.TimeSlot
 import pl.lublin.wsei.plan.domain.model.formatPolishBankAccount
 import pl.lublin.wsei.plan.domain.repository.WseiRemoteDataSource
+import java.io.IOException
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -63,7 +77,8 @@ class ArpApiDataSource @Inject constructor(
     private val httpClient: HttpClient,
     private val sessionCookieJar: ArpSessionCookieJar,
     private val json: Json,
-    private val strings: LocalizedStrings
+    private val strings: LocalizedStrings,
+    private val attachmentResponses: AttachmentResponseHandler
 ) : WseiRemoteDataSource {
 
     override val sourceOrigin: DataSourceOrigin = DataSourceOrigin.APR_WD_API
@@ -73,6 +88,12 @@ class ArpApiDataSource @Inject constructor(
         const val APR_TENANT_DIRECTORY_URL =
             "https://api-proklucznik.apr.pl/api/services/app/Tenant/GetMSCustomers"
         private const val PERSON_TYPE_STUDENT = "Student"
+        private const val TAG = "ArpAttachments"
+        private const val ATTACHMENT_BYTES_PATH = "/api/services/app/AnnouncementsData/GetAttachmentBytes"
+        private const val MAX_ATTACHMENT_HOPS = 6
+        /** Inline Base64 from the list is kept for the offline snapshot only when reasonably small. */
+        private const val MAX_INLINE_BASE64_CHARS = 2 * 1024 * 1024
+        private val NOT_FOUND_STATUSES = setOf(400, 404, 405, 410)
         private val SERVER_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
     }
 
@@ -233,7 +254,11 @@ class ArpApiDataSource @Inject constructor(
             obtainedTitle = personal?.obtainedTitle?.ifBlank { null }
                 ?: activeCourse?.obtainedTitle?.ifBlank { null }
                 ?: "inż.",
-            specialization = activeCourse?.nameOfStudies.orEmpty(),
+            // `nameOfStudies` often carries the mode of study ("niestacjonarne"), not a specialization.
+            specialization = activeCourse?.nameOfStudies
+                ?.trim()
+                ?.takeUnless { it.isBlank() || isStudyModeLabel(it, mode) }
+                .orEmpty(),
             semesterNumber = courseDash?.semestr?.takeIf { it > 0 } ?: personal?.semestr?.takeIf { it > 0 } ?: 1,
             academicYear = courseDash?.year?.takeIf { it > 0 } ?: personal?.year?.takeIf { it > 0 } ?: 1,
             statusName = courseDash?.status?.ifBlank { null } ?: personal?.status?.ifBlank { null } ?: "Studiuje",
@@ -530,9 +555,7 @@ class ArpApiDataSource @Inject constructor(
                 isImportant = priority == 0, // AnnouncementPriority.High = 0
                 isRead = item.readed,
                 hasAttachment = item.isAttachment || item.attachments.isNotEmpty(),
-                attachments = item.attachments.map { att ->
-                    AnnouncementAttachment(id = att.id, fileName = att.name)
-                },
+                attachments = item.attachments.mapIndexed { attIdx, att -> att.toDomain(item.id, attIdx) },
                 authorDepartment = senderName,
                 senderInitial = senderName.firstOrNull()?.uppercaseChar()?.toString() ?: "D"
             )
@@ -558,26 +581,164 @@ class ArpApiDataSource @Inject constructor(
         Unit
     }
 
-    /** `GET /api/services/app/AnnouncementsData/GetAttachmentBytes?Id=` */
+    /**
+     * Downloads an announcement attachment.
+     *
+     * Tried in order, moving on when a variant answers 400/404/405/410, an empty result, an HTML
+     * error page or a server error (the first variant is the official app's call):
+     * 1. `GET …/AnnouncementsData/GetAttachmentBytes?Id=&PersonType=Student&IdLoggedPersonType=`,
+     * 2. the same with `id` / `attachmentId`, and with `announcementId` when known,
+     * 3. the list entry's alternative id (`fileId`/`guid`),
+     * 4. the list entry's direct link (relative links resolved against [WSEI_WD_BASE_URL]).
+     *
+     * Every response shape is accepted (see [AttachmentResponseHandler]); redirects are followed
+     * manually so the session reaches same-host download handlers and never leaves the host.
+     * Session expiry, network errors and cancellation stop the sequence immediately.
+     */
     override suspend fun downloadAnnouncementAttachment(
         session: StudentSession,
-        attachmentId: Int
-    ): Result<AnnouncementAttachment> = apiCall {
-        val dto = getAbp<MsAnnouncementAttachmentDto>("/api/services/app/AnnouncementsData/GetAttachmentBytes") {
-            parameter("Id", attachmentId)
-            parameter("PersonType", PERSON_TYPE_STUDENT)
-            parameter("IdLoggedPersonType", session.studId)
-        } ?: error(strings.get(R.string.error_attachment_download))
-        AnnouncementAttachment(
-            id = dto.id.takeIf { it != 0 } ?: attachmentId,
-            fileName = dto.name.ifBlank { "zalacznik_$attachmentId.pdf" },
-            fileBytesBase64 = dto.fileBytes?.ifBlank { null } ?: error(strings.get(R.string.data_attachment_empty))
-        )
+        attachment: AnnouncementAttachment
+    ): Result<DownloadedAttachment> = apiCall {
+        val attempts = attachmentAttempts(session, attachment)
+        var failure: Throwable? = null
+        for ((label, url) in attempts) {
+            try {
+                val downloaded = fetchAttachment(label, url, attachment)
+                Log.i(TAG, "attachment downloaded via $label: ${downloaded.bytes.size} B, ${downloaded.mimeType}")
+                return@apiCall downloaded
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: AprSessionExpiredException) {
+                throw e
+            } catch (e: IOException) {
+                throw e
+            } catch (e: AttachmentDownloadException) {
+                Log.i(TAG, "attachment variant $label failed: ${e.reason}")
+                failure = AttachmentResponseHandler.moreInformative(failure, e)
+            } catch (e: AprApiException) {
+                Log.i(TAG, "attachment variant $label failed: ${e.javaClass.simpleName}")
+                failure = AttachmentResponseHandler.moreInformative(failure, e)
+            }
+        }
+        throw failure ?: attachmentResponses.notFound()
+    }
+
+    /** Download client sharing the authenticated engine, with redirects handled in [fetchAttachment]. */
+    private val downloadClient: HttpClient by lazy { httpClient.config { followRedirects = false } }
+
+    private fun attachmentAttempts(
+        session: StudentSession,
+        attachment: AnnouncementAttachment
+    ): List<Pair<String, String>> {
+        val endpoint = "$WSEI_WD_BASE_URL$ATTACHMENT_BYTES_PATH".toHttpUrl()
+        fun url(vararg params: Pair<String, Any>): String = endpoint.newBuilder().apply {
+            params.forEach { (name, value) -> addQueryParameter(name, value.toString()) }
+            addQueryParameter("PersonType", PERSON_TYPE_STUDENT)
+            addQueryParameter("IdLoggedPersonType", session.studId.toString())
+        }.build().toString()
+
+        val id = attachment.id.takeIf { it > 0 } // ids <= 0 are synthetic (see toDomain)
+        val announcementId = attachment.announcementId.takeIf { it > 0 }
+        val alternativeId = attachment.alternativeFileId?.trim()?.takeIf { it.isNotEmpty() && it != id?.toString() }
+        val direct = AttachmentUrls.resolve("$WSEI_WD_BASE_URL/", attachment.downloadUrl)
+        return buildList {
+            if (id != null) {
+                add("Id" to url("Id" to id))
+                add("id" to url("id" to id))
+                add("attachmentId" to url("attachmentId" to id))
+                if (announcementId != null) {
+                    add("Id+announcementId" to url("Id" to id, "announcementId" to announcementId))
+                    add("attachmentId+announcementId" to url("attachmentId" to id, "announcementId" to announcementId))
+                }
+            }
+            if (alternativeId != null) {
+                add("altId" to url("Id" to alternativeId))
+                add("fileId" to url("fileId" to alternativeId))
+            }
+            if (direct != null) add("directUrl" to direct)
+        }.distinctBy { it.second }
+    }
+
+    /**
+     * One variant: GET [startUrl], following redirects and links found in the body (ABP `targetUrl`,
+     * JSON `url`) up to [MAX_ATTACHMENT_HOPS]. Same-host hops keep the session (the interceptor adds
+     * the bearer token and cookies); other hosts get no credentials. Logs only paths, parameter
+     * names, statuses and sizes — never tokens, cookies or content.
+     */
+    private suspend fun fetchAttachment(
+        label: String,
+        startUrl: String,
+        attachment: AnnouncementAttachment
+    ): DownloadedAttachment {
+        var url = startUrl
+        val visited = HashSet<String>()
+        for (hop in 0 until MAX_ATTACHMENT_HOPS) {
+            if (!visited.add(url)) break // redirect loop
+            val isApiPath = url.toHttpUrl().encodedPath.startsWith("/api/", ignoreCase = true)
+            val response = downloadClient.get(url) {
+                if (!isApiPath) header(ArpAutoReauthInterceptor.HEADER_ACCEPT_ANY, "1")
+            }
+            val status = response.status.value
+            val contentType = response.headers[HttpHeaders.ContentType]
+            Log.i(
+                TAG,
+                "$label hop $hop: HTTP $status ${AttachmentUrls.describeForLog(url)} " +
+                    "type=${contentType?.substringBefore(';')} length=${response.contentLength()}"
+            )
+            when {
+                status in 300..399 -> {
+                    val location = response.headers[HttpHeaders.Location]
+                        ?: throw AprHttpException(status, "Redirect without a Location header.")
+                    if (AbpEnvelope.isLoginRedirect(location)) throw attachmentResponses.htmlPage(isLoginPage = true)
+                    url = AttachmentUrls.resolve(url, location) ?: throw attachmentResponses.notFound()
+                    continue
+                }
+                status == 401 -> throw AprSessionExpiredException()
+                status in NOT_FOUND_STATUSES -> throw attachmentResponses.notFound(AprHttpException(status, "HTTP $status"))
+                !response.status.isSuccess() -> {
+                    // ABP error envelopes come with 4xx/5xx; keep the server's own message when there is one.
+                    val text = try {
+                        response.bodyAsText()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        ""
+                    }
+                    runCatching { AbpEnvelope.unwrap(json, text) }.exceptionOrNull()
+                        ?.let { if (it is AprApiException && it !is AprMalformedResponseException) throw it }
+                    throw AprHttpException(status, "Attachment download responded with HTTP $status.")
+                }
+            }
+            val declaredLength = response.contentLength()
+            if (declaredLength != null && declaredLength > AttachmentResponseHandler.MAX_ATTACHMENT_BYTES) {
+                throw attachmentResponses.tooLarge()
+            }
+            val bytes = response.body<ByteArray>()
+            val outcome = attachmentResponses.handle(
+                attachment = attachment,
+                sourceUrl = url,
+                contentType = contentType,
+                contentDisposition = response.headers[HttpHeaders.ContentDisposition],
+                bytes = bytes
+            )
+            when (outcome) {
+                is AttachmentResponseHandler.Outcome.File -> return outcome.attachment
+                is AttachmentResponseHandler.Outcome.FollowLink -> url = outcome.url
+            }
+        }
+        throw attachmentResponses.notFound()
     }
 
     // ---------------------------------------------------------------------------------------------
     // Mapping
     // ---------------------------------------------------------------------------------------------
+
+    /** True when [value] names a mode of study (e.g. "niestacjonarne") rather than a specialization. */
+    private fun isStudyModeLabel(value: String, mode: String): Boolean {
+        val normalized = value.lowercase().replace(Regex("[^a-ząćęłńóśźż]"), "")
+        return normalized == mode.lowercase().replace(Regex("[^a-ząćęłńóśźż]"), "") ||
+            normalized in STUDY_MODE_LABELS
+    }
 
     /**
      * Returns null for items whose date/time can't be parsed. The previous version fell back to
@@ -629,6 +790,31 @@ class ArpApiDataSource @Inject constructor(
             notes = notesText.joinToString(" • ").ifBlank { null },
             incidentAlert = scheduleIncident?.takeIf { it.isNotBlank() },
             origin = DataSourceOrigin.APR_WD_API
+        )
+    }
+
+    /**
+     * Maps a list entry. An attachment without a server id gets a negative synthetic id (unique per
+     * announcement) so the UI can track it; synthetic ids are never sent to the server.
+     */
+    private fun MsAnnouncementAttachmentDto.toDomain(announcementItemId: Int, index: Int): AnnouncementAttachment {
+        val directLink = listOf(downloadUrl, url, link, path).firstOrNull { AttachmentUrls.looksLikeUrl(it) }
+        val inlineBase64 = (fileBytes as? JsonPrimitive)?.takeIf { it.isString }?.content
+            ?.takeIf { it.isNotBlank() && it.length <= MAX_INLINE_BASE64_CHARS }
+        val ownId = id.takeIf { it > 0 }
+            ?: -((announcementItemId.coerceAtLeast(0).toLong() * 100 + index + 1) % Int.MAX_VALUE).toInt().coerceAtLeast(1)
+        return AnnouncementAttachment(
+            id = ownId,
+            fileName = name.ifBlank { fileName }.trim().ifBlank {
+                AttachmentFileNames.nameFromUrl(directLink) ?: "${AttachmentFileNames.DEFAULT_BASE_NAME}_${index + 1}"
+            },
+            fileBytesBase64 = inlineBase64,
+            announcementId = announcementId.takeIf { it > 0 } ?: announcementItemId,
+            sizeBytes = maxOf(size, fileSize, length).coerceAtLeast(0),
+            downloadUrl = directLink?.trim(),
+            alternativeFileId = listOf(fileId, guid, fileGuid).map { it.trim() }
+                .firstOrNull { it.isNotEmpty() && it != "0" && it != id.toString() },
+            mimeType = contentType.ifBlank { mimeType }.trim().takeIf { '/' in it }
         )
     }
 
@@ -1077,11 +1263,31 @@ data class MsAnnouncementDto(
     @SerialName("attachments") val attachments: List<MsAnnouncementAttachmentDto> = emptyList()
 )
 
+/**
+ * Attachment entry of `MsAnnouncementDto.Attachments`. Besides the official `id`/`name`/`fileBytes`,
+ * fields seen in other APR System versions are captured leniently (blank/0 when absent), so a
+ * download can fall back to an alternative id or a direct link.
+ */
 @Serializable
 data class MsAnnouncementAttachmentDto(
     @SerialName("id") val id: LInt = 0,
     @SerialName("name") val name: LString = "",
-    @SerialName("fileBytes") val fileBytes: String? = null
+    @SerialName("fileName") val fileName: LString = "",
+    /** `byte[]` → Base64 string; occasionally a number array. Usually null in the list. */
+    @SerialName("fileBytes") val fileBytes: JsonElement? = null,
+    @SerialName("announcementId") val announcementId: LInt = 0,
+    @SerialName("fileId") val fileId: LString = "",
+    @SerialName("guid") val guid: LString = "",
+    @SerialName("fileGuid") val fileGuid: LString = "",
+    @SerialName("url") val url: LString = "",
+    @SerialName("downloadUrl") val downloadUrl: LString = "",
+    @SerialName("link") val link: LString = "",
+    @SerialName("path") val path: LString = "",
+    @SerialName("size") val size: LLong = 0,
+    @SerialName("fileSize") val fileSize: LLong = 0,
+    @SerialName("length") val length: LLong = 0,
+    @SerialName("contentType") val contentType: LString = "",
+    @SerialName("mimeType") val mimeType: LString = ""
 )
 
 @Serializable
@@ -1090,4 +1296,9 @@ data class MsAnnouncementReadedUpdateInputDto(
     @SerialName("PersonId") val personId: Int,
     @SerialName("Readed") val readed: Boolean = true,
     @SerialName("ReadedDate") val readedDate: String
+)
+
+private val STUDY_MODE_LABELS = setOf(
+    "stacjonarne", "niestacjonarne", "stacjonarny", "niestacjonarny",
+    "studiastacjonarne", "studianiestacjonarne", "zaoczne", "dzienne", "wieczorowe"
 )

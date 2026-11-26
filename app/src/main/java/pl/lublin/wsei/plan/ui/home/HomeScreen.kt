@@ -48,12 +48,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DeliveryMode
+import pl.lublin.wsei.plan.domain.model.GradeItem
+import pl.lublin.wsei.plan.domain.model.StudentSession
 import pl.lublin.wsei.plan.domain.schedule.ScheduleFocus
 import pl.lublin.wsei.plan.domain.schedule.ScheduleFocusKind
 import pl.lublin.wsei.plan.domain.schedule.ScheduleFocusResolver
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
 import pl.lublin.wsei.plan.ui.adaptive.WseiWidthClass
-import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
 import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiCardHeader
@@ -80,6 +81,9 @@ import pl.lublin.wsei.plan.ui.theme.M3XCookieShape
 import pl.lublin.wsei.plan.ui.theme.M3XSunnyShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import pl.lublin.wsei.plan.ui.theme.mutedContentColor
+import pl.lublin.wsei.plan.ui.theme.tonalLayer
+import pl.lublin.wsei.plan.ui.theme.withContrastAgainst
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -98,9 +102,14 @@ import pl.lublin.wsei.plan.l10n.rememberLocalizedDateFormatter
 private const val DayHeaderSkeleton = "EEEEdMMMM"
 
 /**
- * Ekran Start: powitanie, karta dnia „w centrum uwagi” (trwające / następne zajęcia albo
- * najbliższy dzień z zajęciami) z listą pozostałych zajęć, szybkie skróty i najbliższa opłata.
- * Wszystko, czego student potrzebuje rano, bez przechodzenia między zakładkami.
+ * Start screen: greeting, the "in focus" day card (ongoing / next class or the nearest class
+ * day) with the rest of that day's classes, quick shortcuts and the next payment — everything a
+ * student needs in the morning without switching tabs.
+ *
+ * Header: the greeting is the collapsing title and today's date its subtitle; the semester and
+ * album chips follow directly. The bar title is aligned with the content column, which is capped
+ * at [HomeDashboardMaxWidth] and centred, so greeting, date, chips and cards share one start edge
+ * on every window size.
  */
 @Composable
 fun HomeScreen(
@@ -132,19 +141,22 @@ fun HomeScreen(
     // The ticker in the ViewModel updates `nowEpochMillis` every minute, so "today" follows
     // midnight without restarting the screen.
     val todayIso = remember(uiState.nowEpochMillis) { localDateOf(uiState.nowEpochMillis).toString() }
+    val locale = appLocale()
+    val dayHeaderFormatter = rememberLocalizedDateFormatter(DayHeaderSkeleton)
+    val todayLabel = remember(todayIso, dayHeaderFormatter, locale) {
+        LocalDate.parse(todayIso).format(dayHeaderFormatter).capitalizeFirst(locale)
+    }
 
     WseiScreenScaffold(
         title = greeting,
+        subtitle = todayLabel,
         onRefresh = onRefresh,
         isRefreshing = uiState.isRefreshing,
-        contentPadding = wseiScreenContentPadding()
+        contentPadding = wseiScreenContentPadding(),
+        maxContentWidth = HomeDashboardMaxWidth
     ) {
         item(key = "home_intro", contentType = "home_intro") {
-            HomeIntro(
-                uiState = uiState,
-                todayIso = todayIso,
-                modifier = if (windowLayout.isCompact) Modifier else Modifier.wseiReadableWidth(HomeDashboardMaxWidth)
-            )
+            HomeIntroChips(uiState = uiState)
         }
         if (windowLayout.isCompact) {
             item(key = "home_focus", contentType = "home_focus") {
@@ -167,8 +179,8 @@ fun HomeScreen(
             // left, the summary tiles in a side column — instead of cards stretched edge to edge.
             item(key = "home_dashboard", contentType = "home_dashboard") {
                 Row(
-                    modifier = Modifier.wseiReadableWidth(HomeDashboardMaxWidth),
-                    horizontalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)
                 ) {
                     val primaryWeight = if (windowLayout.widthClass == WseiWidthClass.EXPANDED) 0.58f else 0.5f
                     HomeFocusSection(
@@ -196,7 +208,7 @@ fun HomeScreen(
     }
 }
 
-/** Width cap of the two-column dashboard so it stays readable on very wide windows. */
+/** Width cap of the Start column (header and two-column dashboard) on very wide windows. */
 private val HomeDashboardMaxWidth = 1200.dp
 
 /** Class dates (`dateIso`) are in Warsaw time, so "today" is resolved in the same zone. */
@@ -205,45 +217,38 @@ private fun localDateOf(epochMillis: Long): LocalDate =
 
 private val WarsawZone: ZoneId = ZoneId.of("Europe/Warsaw")
 
+/**
+ * Semester and album chips under the greeting and date (both in the title bar). They start at
+ * the content edge, exactly below the title, and leave a little extra air above the cards.
+ */
 @Composable
-private fun HomeIntro(
-    uiState: ScheduleUiState,
-    todayIso: String,
-    modifier: Modifier = Modifier
-) {
+private fun HomeIntroChips(uiState: ScheduleUiState) {
     val session = uiState.currentSession
-    val locale = appLocale()
-    val dayHeaderFormatter = rememberLocalizedDateFormatter(DayHeaderSkeleton)
-    val today = remember(todayIso, dayHeaderFormatter) {
-        LocalDate.parse(todayIso).format(dayHeaderFormatter).capitalizeFirst(locale)
-    }
-    Column(
-        modifier = modifier.padding(horizontal = WseiSpacing.xs),
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = WseiSpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s),
         verticalArrangement = Arrangement.spacedBy(WseiSpacing.s)
     ) {
-        Text(
-            text = today,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        WseiPill(
+            text = stringResource(R.string.subjects_semester_number, session?.semesterNumber ?: 1),
+            icon = WseiIcons.School,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            emphasized = true
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)) {
-            WseiPill(
-                text = stringResource(R.string.subjects_semester_number, session?.semesterNumber ?: 1),
-                icon = WseiIcons.School,
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                emphasized = true
-            )
-            WseiPill(
-                text = stringResource(R.string.home_album_number, uiState.maskSensitive(session?.albumNumber ?: "—")),
-                icon = WseiIcons.Badge
-            )
-        }
+        WseiPill(
+            text = stringResource(R.string.home_album_number, uiState.maskSensitive(session?.albumNumber ?: "—")),
+            icon = WseiIcons.Badge,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
 // -----------------------------------------------------------------------------------------
-// W centrum uwagi — karta dnia (dziś / jutro / dalej w zjeździe / następny zjazd)
+// In focus — the day card (today / tomorrow / later this zjazd / next zjazd)
 // -----------------------------------------------------------------------------------------
 
 /** Visual state of the focus hero; switching between these is the only hero transition. */
@@ -369,8 +374,6 @@ private fun FocusHeroCard(
             val live = model.mode == FocusMode.LIVE
             val container = if (live) colors.primaryContainer else colors.tertiaryContainer
             val content = if (live) colors.onPrimaryContainer else colors.onTertiaryContainer
-            val accent = if (live) colors.primary else colors.tertiary
-            val onAccent = if (live) colors.onPrimary else colors.onTertiary
             val minutes = if (live) {
                 event.remainingMinutes(nowEpochMillis)
             } else {
@@ -384,8 +387,6 @@ private fun FocusHeroCard(
             FocusHeroLayout(
                 containerColor = container,
                 contentColor = content,
-                accentColor = accent,
-                onAccentColor = onAccent,
                 status = stringResource(if (live) R.string.schedule_hero_status_live else R.string.class_state_next),
                 trailing = stringResource(
                     R.string.schedule_hero_time_range,
@@ -431,8 +432,6 @@ private fun FocusHeroCard(
             FocusHeroLayout(
                 containerColor = colors.secondaryContainer,
                 contentColor = colors.onSecondaryContainer,
-                accentColor = colors.secondary,
-                onAccentColor = colors.onSecondary,
                 // Today's state is a quiet header of its own, apart from the next-day block below.
                 status = stringResource(
                     if (todayHadClasses) R.string.home_focus_free_now else R.string.home_focus_free_today
@@ -458,6 +457,7 @@ private fun FocusHeroCard(
         FocusMode.NONE -> FocusHeroLayout(
             containerColor = colors.surfaceContainerHigh,
             contentColor = colors.onSurface,
+            // A neutral card: the tertiary container pair reads as a calm accent on it.
             accentColor = colors.tertiaryContainer,
             onAccentColor = colors.onTertiaryContainer,
             status = null,
@@ -482,13 +482,16 @@ private fun FocusHeroCard(
  *
  * [statusIcon] == null renders [status] as an accent chip ("Trwa teraz"); with an icon it is a
  * quiet line about today ("Dziś bez zajęć") that stays visually apart from the block below.
+ *
+ * Colour: the card is a container role with its on-colour. The chip and the badge default to
+ * the inverted pair ([contentColor] behind, [containerColor] on top), which has exactly the
+ * text contrast of the card itself, so they never blend in, even on high-chroma wallpapers.
+ * Captions and pills are flattened to opaque colours that keep WCAG AA on the card.
  */
 @Composable
 private fun FocusHeroLayout(
     containerColor: Color,
     contentColor: Color,
-    accentColor: Color,
-    onAccentColor: Color,
     status: String?,
     trailing: String?,
     icon: ImageVector,
@@ -499,9 +502,13 @@ private fun FocusHeroLayout(
     message: String?,
     pills: List<Pair<ImageVector, String>>,
     onClick: () -> Unit,
-    statusIcon: ImageVector? = null
+    statusIcon: ImageVector? = null,
+    accentColor: Color = contentColor,
+    onAccentColor: Color = containerColor
 ) {
-    val mutedColor = contentColor.copy(alpha = 0.78f)
+    val mutedColor = mutedContentColor(contentColor, containerColor)
+    val pillColor = tonalLayer(containerColor, contentColor, 0.1f)
+    val pillContent = contentColor.withContrastAgainst(pillColor)
     WseiCard(
         onClick = onClick,
         shape = ActiveHeroCardAsymmetricShape,
@@ -561,7 +568,7 @@ private fun FocusHeroLayout(
                         text = overline,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
-                        color = accentColor.takeIf { status != null } ?: mutedColor,
+                        color = if (status != null) contentColor else mutedColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -599,8 +606,8 @@ private fun FocusHeroLayout(
                     WseiPill(
                         text = text,
                         icon = pillIcon,
-                        containerColor = contentColor.copy(alpha = 0.1f),
-                        contentColor = contentColor
+                        containerColor = pillColor,
+                        contentColor = pillContent
                     )
                 }
             }
@@ -745,7 +752,9 @@ private fun ArrowBubble(
 }
 
 // -----------------------------------------------------------------------------------------
-// Skróty — siatka 2×2 kolorowych kafli z falowanymi ikonami (M3 Expressive „hero tiles”).
+// Shortcuts — a 2×2 grid of tinted tiles with wavy icons (M3 Expressive "hero tiles"). Each
+// tile is a container role; its icon bubble uses the inverted pair (onXContainer behind an
+// xContainer icon), so the icon never blends into a saturated tile.
 // -----------------------------------------------------------------------------------------
 
 private data class Shortcut(
@@ -773,6 +782,7 @@ private fun QuickShortcutsGrid(
     val unread = uiState.unreadAnnouncementsCount
     val unpaidCount = uiState.financials.count { !it.isPaid }
     val weekClasses = uiState.currentWeekClassCount
+    val average = remember(session, uiState.grades) { currentSemesterAverage(session, uiState.grades) }
 
     val shortcuts = listOf(
         Shortcut(
@@ -786,22 +796,22 @@ private fun QuickShortcutsGrid(
             iconShape = M3XCookieShape,
             containerColor = colors.primaryContainer,
             contentColor = colors.onPrimaryContainer,
-            accentColor = colors.primary,
-            onAccentColor = colors.onPrimary,
+            accentColor = colors.onPrimaryContainer,
+            onAccentColor = colors.primaryContainer,
             onClick = onOpenSchedule
         ),
         Shortcut(
             title = stringResource(R.string.home_shortcut_grades),
             value = stringResource(
                 R.string.home_average_value,
-                uiState.maskSensitive(String.format(Locale.US, "%.2f", session?.averageCurrentSemester ?: 0.0))
+                uiState.maskSensitive(average?.let { String.format(Locale.US, "%.2f", it) } ?: "—")
             ),
             icon = WseiIcons.School,
             iconShape = M3XCloverShape,
             containerColor = colors.secondaryContainer,
             contentColor = colors.onSecondaryContainer,
-            accentColor = colors.secondary,
-            onAccentColor = colors.onSecondary,
+            accentColor = colors.onSecondaryContainer,
+            onAccentColor = colors.secondaryContainer,
             onClick = onOpenSubjects
         ),
         Shortcut(
@@ -815,8 +825,8 @@ private fun QuickShortcutsGrid(
             iconShape = M3XSunnyShape,
             containerColor = colors.tertiaryContainer,
             contentColor = colors.onTertiaryContainer,
-            accentColor = colors.tertiary,
-            onAccentColor = colors.onTertiary,
+            accentColor = colors.onTertiaryContainer,
+            onAccentColor = colors.tertiaryContainer,
             onClick = onOpenFinances
         ),
         Shortcut(
@@ -830,8 +840,8 @@ private fun QuickShortcutsGrid(
             iconShape = M3XCookieShape,
             containerColor = if (unread > 0) colors.errorContainer else colors.surfaceContainerHigh,
             contentColor = if (unread > 0) colors.onErrorContainer else colors.onSurface,
-            accentColor = if (unread > 0) colors.error else colors.primary,
-            onAccentColor = if (unread > 0) colors.onError else colors.onPrimary,
+            accentColor = if (unread > 0) colors.onErrorContainer else colors.primaryContainer,
+            onAccentColor = if (unread > 0) colors.errorContainer else colors.onPrimaryContainer,
             onClick = onOpenAnnouncements
         )
     )
@@ -858,7 +868,7 @@ private fun QuickShortcutsGrid(
     }
 }
 
-/** Kafle stykające się wewnętrznymi rogami tworzą jeden „blok” z dużymi rogami na zewnątrz. */
+/** Tiles meeting at their inner corners form one block with large outer corners. */
 private fun shortcutTileShape(row: Int, column: Int): Shape {
     val outer = 32.dp
     val inner = 10.dp
@@ -914,7 +924,7 @@ private fun ShortcutTile(
                 Text(
                     text = shortcut.value,
                     style = MaterialTheme.typography.labelMedium,
-                    color = shortcut.contentColor.copy(alpha = 0.8f),
+                    color = mutedContentColor(shortcut.contentColor, shortcut.containerColor),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -924,7 +934,7 @@ private fun ShortcutTile(
 }
 
 // -----------------------------------------------------------------------------------------
-// Najbliższa opłata
+// Next payment
 // -----------------------------------------------------------------------------------------
 
 @Composable
@@ -952,11 +962,17 @@ private fun NextPaymentCard(
                 else -> stringResource(R.string.home_payment_next)
             },
             overline = stringResource(R.string.nav_finances),
-            overlineColor = if (urgent) colors.error else colors.primary,
+            overlineColor = if (urgent) colors.onErrorContainer else colors.primary,
             icon = if (nextUnpaid == null) WseiIcons.CheckCircle else WseiIcons.AccountBalanceWallet,
-            iconContainerColor = if (urgent) colors.error else colors.secondaryContainer,
-            iconContentColor = if (urgent) colors.onError else colors.onSecondaryContainer,
-            trailing = { ArrowBubble(containerColor = contentColor.copy(alpha = 0.08f), contentColor = contentColor) }
+            // On the error container the badge inverts the pair instead of using raw error.
+            iconContainerColor = if (urgent) colors.onErrorContainer else colors.secondaryContainer,
+            iconContentColor = if (urgent) colors.errorContainer else colors.onSecondaryContainer,
+            trailing = {
+                ArrowBubble(
+                    containerColor = tonalLayer(containerColor, contentColor, 0.08f),
+                    contentColor = contentColor
+                )
+            }
         )
 
         if (nextUnpaid != null) {
@@ -978,7 +994,7 @@ private fun NextPaymentCard(
                     Text(
                         text = stringResource(R.string.home_payment_due_date, nextUnpaid.dueDateIso),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = contentColor.copy(alpha = 0.75f)
+                        color = mutedContentColor(contentColor, containerColor)
                     )
                 }
                 Text(
@@ -991,8 +1007,26 @@ private fun NextPaymentCard(
             Text(
                 text = stringResource(R.string.home_payment_none_supporting),
                 style = MaterialTheme.typography.bodyMedium,
-                color = contentColor.copy(alpha = 0.75f)
+                color = mutedContentColor(contentColor, containerColor)
             )
         }
     }
+}
+
+/** Numeric grade (2.0–5.5); pass/fail entries ("ZAL") and blanks are not graded. */
+private fun numericGrade(raw: String): Double? =
+    raw.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in 2.0..5.5 }
+
+/**
+ * Current-semester average for the Oceny tile, with the same rule as Profile: the dean's office
+ * value is shown only when that semester holds at least one numeric grade (or when grades are not
+ * loaded at all). `null` is rendered as "—" instead of a misleading "0.00".
+ */
+private fun currentSemesterAverage(session: StudentSession?, grades: List<GradeItem>): Double? {
+    if (session == null) return null
+    val value = session.averageCurrentSemester.takeIf { it > 0.0 } ?: return null
+    if (grades.isEmpty()) return value
+    val semester = session.semesterNumber.takeIf { number -> grades.any { it.semesterNumber == number } }
+        ?: grades.first().semesterNumber
+    return value.takeIf { grades.any { it.semesterNumber == semester && numericGrade(it.gradeValue) != null } }
 }

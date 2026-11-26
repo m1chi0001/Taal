@@ -84,7 +84,9 @@
     <string name="schedule_class_ongoing_badge">Триває • ще %1$d хв</string>
     <string name="schedule_focus_today_done">Сьогоднішні заняття завершено</string>
     <string name="schedule_focus_today_free">Сьогодні без занять</string>
-    <string name="schedule_focus_next_tomorrow">Наступні заняття: завтра о %1$s</string>
+    <string name="schedule_focus_showing_tomorrow">нижче розклад на завтра</string>
+    <string name="schedule_focus_showing_later">нижче наступний день зʼїзду</string>
+    <string name="schedule_focus_showing_next_zjazd">нижче найближчий зʼїзд</string>
     <string name="schedule_focus_next_later">Наступний день зʼїзду: %1$s</string>
     <string name="schedule_focus_next_zjazd">Наступний зʼїзд: %1$s</string>
     <string name="schedule_day_date_count">%1$s • %2$s</string>

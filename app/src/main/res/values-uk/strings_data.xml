@@ -16,6 +16,8 @@
     <!-- Announcement attachments -->
     <string name="data_attachment_empty">Вкладення порожнє.</string>
     <string name="data_attachment_corrupt">Не вдалося прочитати завантажене вкладення.</string>
+    <string name="data_attachment_open_with">Відкрити «%1$s» за допомогою</string>
+    <string name="data_attachment_share">Зберегти або поділитися «%1$s»</string>
 
     <!-- Live Notification -->
     <string name="notif_channel_name">Заняття наживо</string>

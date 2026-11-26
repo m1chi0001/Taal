@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,6 +29,7 @@ import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarColors
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
@@ -53,8 +55,8 @@ import androidx.compose.ui.res.stringResource
 import pl.lublin.wsei.plan.R
 
 /**
- * Skrót do profilu w prawym górnym rogu każdego głównego ekranu (zdjęcie studenta).
- * Dostarczany raz przez powłokę aplikacji, więc ekrany nie muszą go przekazywać.
+ * Profile shortcut (student photo) in the top-right corner of every main screen. Provided once
+ * by the app shell, so screens do not pass it around.
  */
 @Immutable
 data class WseiProfileShortcut(
@@ -62,8 +64,8 @@ data class WseiProfileShortcut(
     val fullName: String,
     val onOpen: () -> Unit,
     /**
-     * `false`, gdy Profil jest już dostępny z nagłówka bocznej szyny nawigacji (tablety) —
-     * górny pasek ekranu nie powiela wtedy awatara.
+     * `false` when Profile is already reachable from the navigation rail header (tablets), so
+     * the screen's top bar does not repeat the avatar.
      */
     val showInTopBar: Boolean = true
 )
@@ -71,12 +73,18 @@ data class WseiProfileShortcut(
 val LocalWseiProfileShortcut = compositionLocalOf<WseiProfileShortcut?> { null }
 
 /**
- * Rama ekranu: duży, zwijający się pasek tytułu (M3 Expressive `LargeFlexibleTopAppBar`,
- * na niskich oknach w poziomie mniejszy `MediumFlexibleTopAppBar`), opcjonalny podtytuł,
- * przycisk powrotu, skrót do profilu i „przeciągnij, aby odświeżyć”.
+ * Screen frame: a large collapsing title bar (M3 Expressive `LargeFlexibleTopAppBar`, the
+ * smaller `MediumFlexibleTopAppBar` on short landscape windows), optional subtitle, back button,
+ * profile shortcut and pull-to-refresh.
  *
- * [content] dostaje modyfikator, który trzeba nałożyć na przewijaną listę — dzięki temu pasek
- * tytułu zwija się przy przewijaniu i rozwija przed gestem odświeżania.
+ * The bar uses the same colours on every screen and pane — [wseiTopBarColors]: the window
+ * background at rest and `surfaceContainer` once content scrolls under it (M3
+ * `scrolledContainerColor`). Its title is inset so that it starts at the same edge as the
+ * content column: [contentHorizontalPadding] (adaptive screen margin by default) plus the
+ * centring margin of a column capped at [contentMaxWidth].
+ *
+ * [content] receives a modifier that must be applied to the scrolling container, so the title
+ * bar collapses on scroll and expands again before the refresh gesture.
  */
 @Composable
 fun WseiScreenFrame(
@@ -87,12 +95,20 @@ fun WseiScreenFrame(
     isRefreshing: Boolean = false,
     showProfileShortcut: Boolean = onBack == null,
     subtitle: String? = null,
+    contentMaxWidth: Dp = Dp.Unspecified,
+    contentHorizontalPadding: Dp = Dp.Unspecified,
     content: @Composable (scrollModifier: Modifier) -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val profileShortcut = LocalWseiProfileShortcut.current
     val colors = MaterialTheme.colorScheme
-    // Telefon w poziomie: rozwinięty duży pasek zabrałby większość wysokości ekranu.
+    val layoutDirection = LocalLayoutDirection.current
+    val horizontalPadding = if (contentHorizontalPadding.isSpecified) {
+        contentHorizontalPadding
+    } else {
+        wseiScreenContentPadding().calculateStartPadding(layoutDirection)
+    }
+    // Short landscape phone: an expanded large bar would take most of the screen height.
     val isShortWindow = !currentWindowAdaptiveInfo().windowSizeClass
         .isHeightAtLeastBreakpoint(WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND)
 
@@ -128,72 +144,103 @@ fun WseiScreenFrame(
             }
         }
     }
-    val barColors = TopAppBarDefaults.topAppBarColors(
-        containerColor = colors.background,
-        scrolledContainerColor = colors.surfaceContainer
-    )
+    val barColors = wseiTopBarColors()
 
-    Scaffold(
-        modifier = modifier,
-        containerColor = colors.background,
-        contentWindowInsets = WindowInsets.statusBars,
-        topBar = {
-            if (isShortWindow) {
-                MediumFlexibleTopAppBar(
-                    title = titleSlot,
-                    subtitle = subtitleSlot,
-                    navigationIcon = navigationIcon,
-                    actions = {
-                        if (showProfileShortcut && profileShortcut != null && profileShortcut.showInTopBar) {
-                            ProfileShortcutButton(profileShortcut)
-                        }
-                    },
-                    colors = barColors,
-                    scrollBehavior = scrollBehavior
-                )
-            } else {
-                LargeFlexibleTopAppBar(
-                    title = titleSlot,
-                    subtitle = subtitleSlot,
-                    navigationIcon = navigationIcon,
-                    actions = {
-                        if (showProfileShortcut && profileShortcut != null && profileShortcut.showInTopBar) {
-                            ProfileShortcutButton(profileShortcut)
-                        }
-                    },
-                    colors = barColors,
-                    scrollBehavior = scrollBehavior
-                )
-            }
+    BoxWithConstraints(modifier = modifier) {
+        // Aligns the bar title with the content column: the bar already insets its title by
+        // TopBarTitleInset, the rest comes from the screen margin and the centring margin.
+        val centring = if (contentMaxWidth.isSpecified && constraints.hasBoundedWidth) {
+            max(0.dp, (maxWidth - horizontalPadding * 2 - contentMaxWidth) / 2)
+        } else {
+            0.dp
         }
-    ) { innerPadding ->
-        val scrollModifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            if (onRefresh != null) {
-                WseiRefreshBox(
-                    isRefreshing = isRefreshing,
-                    onRefresh = onRefresh,
-                    modifier = Modifier.fillMaxSize()
-                ) { content(scrollModifier) }
-            } else {
-                content(scrollModifier)
+        val titleInset = max(0.dp, horizontalPadding - TopBarTitleInset) + centring
+        val barInsets = TopAppBarDefaults.windowInsets.add(WindowInsets(left = titleInset, right = titleInset))
+
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = colors.background,
+            contentWindowInsets = WindowInsets.statusBars,
+            topBar = {
+                if (isShortWindow) {
+                    MediumFlexibleTopAppBar(
+                        title = titleSlot,
+                        subtitle = subtitleSlot,
+                        navigationIcon = navigationIcon,
+                        actions = {
+                            if (showProfileShortcut && profileShortcut != null && profileShortcut.showInTopBar) {
+                                ProfileShortcutButton(profileShortcut)
+                            }
+                        },
+                        colors = barColors,
+                        windowInsets = barInsets,
+                        scrollBehavior = scrollBehavior
+                    )
+                } else {
+                    LargeFlexibleTopAppBar(
+                        title = titleSlot,
+                        subtitle = subtitleSlot,
+                        navigationIcon = navigationIcon,
+                        actions = {
+                            if (showProfileShortcut && profileShortcut != null && profileShortcut.showInTopBar) {
+                                ProfileShortcutButton(profileShortcut)
+                            }
+                        },
+                        colors = barColors,
+                        windowInsets = barInsets,
+                        scrollBehavior = scrollBehavior
+                    )
+                }
+            }
+        ) { innerPadding ->
+            val scrollModifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                if (onRefresh != null) {
+                    WseiRefreshBox(
+                        isRefreshing = isRefreshing,
+                        onRefresh = onRefresh,
+                        modifier = Modifier.fillMaxSize()
+                    ) { content(scrollModifier) }
+                } else {
+                    content(scrollModifier)
+                }
             }
         }
     }
 }
 
 /**
- * Standardowy ekran z listą: [WseiScreenFrame] + LazyColumn z jednolitymi marginesami.
+ * Top bar colours shared by every screen and pane: the window background at rest and the M3
+ * `scrolledContainerColor` (`surfaceContainer`) once content scrolls beneath the bar.
+ */
+@Composable
+fun wseiTopBarColors(): TopAppBarColors {
+    val colors = MaterialTheme.colorScheme
+    return TopAppBarDefaults.topAppBarColors(
+        containerColor = colors.background,
+        scrolledContainerColor = colors.surfaceContainer,
+        titleContentColor = colors.onSurface,
+        subtitleContentColor = colors.onSurfaceVariant,
+        actionIconContentColor = colors.onSurfaceVariant,
+        navigationIconContentColor = colors.onSurface
+    )
+}
+
+/** Start inset the M3 top bars give their title (4 dp bar padding + 12 dp title inset). */
+private val TopBarTitleInset: Dp = 16.dp
+
+/**
+ * Standard list screen: [WseiScreenFrame] + a LazyColumn with uniform margins.
  *
- * @param contentPadding domyślnie adaptacyjne marginesy [wseiScreenContentPadding] (większe na
- *   tabletach, miejsce na pływający pasek tylko tam, gdzie on jest).
- * @param maxContentWidth na szerokich oknach karty są wyśrodkowane i nie szersze niż ta wartość
- *   (lista nadal przewija się na całej szerokości). `Dp.Unspecified` wyłącza ograniczenie,
- *   np. dla własnego układu dwupanelowego.
+ * @param contentPadding adaptive [wseiScreenContentPadding] by default (wider on tablets, room
+ *   for the floating bar only where it is shown).
+ * @param maxContentWidth on wide windows the cards are centred and no wider than this (the list
+ *   still scrolls over the full width); the title bar is aligned with the same column.
+ *   `Dp.Unspecified` removes the cap, e.g. for a custom two-pane layout.
  */
 @Composable
 fun WseiScreenScaffold(
@@ -214,13 +261,15 @@ fun WseiScreenScaffold(
         onBack = onBack,
         onRefresh = onRefresh,
         isRefreshing = isRefreshing,
-        subtitle = subtitle
+        subtitle = subtitle,
+        contentMaxWidth = maxContentWidth,
+        contentHorizontalPadding = contentPadding.calculateStartPadding(LocalLayoutDirection.current)
     ) { scrollModifier ->
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val layoutDirection = LocalLayoutDirection.current
             val start = contentPadding.calculateStartPadding(layoutDirection)
             val end = contentPadding.calculateEndPadding(layoutDirection)
-            // Dodatkowy margines boczny centruje kolumnę kart na szerokim oknie.
+            // Extra side margin centres the card column on a wide window.
             val extra = if (maxContentWidth.isSpecified && constraints.hasBoundedWidth) {
                 max(0.dp, (maxWidth - start - end - maxContentWidth) / 2)
             } else {
@@ -260,7 +309,7 @@ private fun ProfileShortcutButton(shortcut: WseiProfileShortcut) {
         Surface(
             onClick = shortcut.onOpen,
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.primaryContainer,
             interactionSource = interactionSource,
             modifier = Modifier
                 .size(44.dp)
@@ -277,7 +326,7 @@ private fun ProfileShortcutButton(shortcut: WseiProfileShortcut) {
 }
 
 /**
- * Wspólny margines list — zachowany dla zgodności z istniejącymi ekranami.
- * Nowy kod powinien używać adaptacyjnego [wseiScreenContentPadding].
+ * Shared list margins, kept for existing screens. New code should use the adaptive
+ * [wseiScreenContentPadding].
  */
 val WseiScreenContentPadding: PaddingValues = WseiSpacing.screenContent

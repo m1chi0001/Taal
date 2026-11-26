@@ -193,6 +193,7 @@
     <string name="finances_account_copy_cd">Copy bank account number</string>
     <string name="finances_account_copied_cd">Bank account number copied</string>
     <string name="finances_pay_online">Pay online • %1$s</string>
+    <string name="finances_pay_online_short">Pay online</string>
     <string name="finances_due_this_month">Due this month • %1$s</string>
     <string name="finances_paid_on">Paid • %1$s</string>
     <string name="finances_due_on">Due %1$s</string>
@@ -223,7 +224,6 @@
     <!-- Profile -->
     <string name="profile_section_studies">Studies</string>
     <string name="profile_specialization">Specialisation</string>
-    <string name="profile_specialization_general">General</string>
     <string name="profile_department">Faculty</string>
     <string name="profile_obtained_title">Degree awarded</string>
     <string name="profile_group">Group</string>

@@ -35,7 +35,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -43,6 +44,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -101,10 +103,10 @@ import pl.lublin.wsei.plan.R
 private const val EXTRA_CLIP_IS_SENSITIVE = "android.content.extra.IS_SENSITIVE"
 
 /**
- * Finanse: saldo i numer konta, należności (do zapłaty / zapłacone) oraz stypendia.
+ * Finances: balance and account number, obligations (to pay / paid) and scholarships.
  *
- * Na szerokich oknach (tablet, rozłożony foldable) podsumowanie i stypendia trafiają do lewej
- * kolumny, a lista należności do prawej; na telefonie wszystko jest jedną listą.
+ * On wide windows (tablet, unfolded foldable) the summary and scholarships sit in the left pane
+ * and the obligations in the right one; on phones everything is a single list.
  */
 @Composable
 fun FinancesScreen(
@@ -236,7 +238,7 @@ fun FinancesScreen(
 }
 
 // -----------------------------------------------------------------------------------------
-// Sekcje listy (wspólne dla układu jedno- i dwukolumnowego)
+// List sections (shared by the single- and two-pane layouts)
 // -----------------------------------------------------------------------------------------
 
 private fun LazyListScope.summaryItems(
@@ -279,11 +281,15 @@ private fun LazyListScope.obligationItems(
         item(key = "section_unpaid", contentType = "section") {
             WseiSectionTitle(text = stringResource(R.string.finances_section_unpaid), trailing = "${unpaid.size}", modifier = itemModifier)
         }
+        // Only the nearest due obligation carries the prominent payment button; the others get
+        // a compact one until they are expanded.
+        val nearestId = unpaid.first().id
         items(items = unpaid, key = { "unpaid_${it.id}" }, contentType = { "obligation" }) { item ->
             ObligationCard(
                 item = item,
                 maskSensitive = hidden,
                 onPayOnline = { onPayOnline(item) },
+                isNearestDue = item.id == nearestId,
                 modifier = itemModifier
             )
         }
@@ -335,7 +341,7 @@ private fun LazyListScope.scholarshipItems(
 }
 
 // -----------------------------------------------------------------------------------------
-// Karty
+// Cards
 // -----------------------------------------------------------------------------------------
 
 /** Copies [text] and flags the clip as sensitive, so Android 13+ does not preview it on screen. */
@@ -461,15 +467,19 @@ private fun BalanceHeroCard(
 }
 
 /**
- * Należność: zwinięta pokazuje tytuł, termin, kwotę i przycisk płatności;
- * po rozwinięciu — szczegóły rozliczenia.
+ * Obligation card: collapsed it shows the due date, title, amount and a payment action; expanded
+ * it adds the settlement details (zero-value rows are left out).
+ *
+ * @param isNearestDue the nearest unpaid obligation gets a full-width tonal payment button; the
+ *   others get a compact text button until expanded.
  */
 @Composable
 private fun ObligationCard(
     item: FinancialObligation,
     maskSensitive: Boolean,
     onPayOnline: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isNearestDue: Boolean = false
 ) {
     var expanded by rememberSaveable(item.id) { mutableStateOf(false) }
     val dueThisMonth = remember(item) { item.isDueThisMonth() }
@@ -477,9 +487,10 @@ private fun ObligationCard(
     val containerColor = if (dueThisMonth) colors.errorContainer else colors.surfaceContainer
     val contentColor = if (dueThisMonth) colors.onErrorContainer else colors.onSurface
     val amount = wseiMasked(
-        if (item.isPaid) item.amountFormatted else formatPln(item.outstandingAmountPln),
+        if (item.isPaid) formatMoneyText(item.amountFormatted) else formatPln(item.outstandingAmountPln),
         maskSensitive
     )
+    val canPay = item.payOnlineAvailable && !item.isPaid
 
     WseiExpandableCard(
         expanded = expanded,
@@ -487,29 +498,17 @@ private fun ObligationCard(
         containerColor = containerColor,
         contentColor = contentColor,
         modifier = if (item.isPaid) modifier.alpha(0.85f) else modifier,
-        pinned = if (item.payOnlineAvailable && !item.isPaid) {
+        pinned = if (canPay) {
             {
-                Button(
-                    onClick = onPayOnline,
-                    shape = CircleShape,
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 52.dp)
-                ) {
-                    Icon(
-                        imageVector = WseiIcons.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(WseiSpacing.s))
-                    Text(
-                        text = stringResource(R.string.finances_pay_online, amount),
-                        style = MaterialTheme.typography.labelLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                PayOnlineAction(
+                    amount = amount,
+                    prominent = isNearestDue || expanded,
+                    // On the error-tinted card the button is a tonal overlay of the card's content colour.
+                    tonalContainer = if (dueThisMonth) contentColor.copy(alpha = 0.12f) else colors.secondaryContainer,
+                    tonalContent = if (dueThisMonth) contentColor else colors.onSecondaryContainer,
+                    textColor = if (dueThisMonth) contentColor else colors.primary,
+                    onClick = onPayOnline
+                )
             }
         } else {
             null
@@ -541,7 +540,7 @@ private fun ObligationCard(
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = when {
-                        dueThisMonth -> colors.error
+                        dueThisMonth -> contentColor
                         item.isPaid -> colors.onSurfaceVariant
                         else -> colors.primary
                     },
@@ -565,20 +564,91 @@ private fun ObligationCard(
             WseiInset(
                 containerColor = if (dueThisMonth) contentColor.copy(alpha = 0.08f) else colors.surfaceContainerLow
             ) {
-                val m: (String) -> String = { wseiMasked(it, maskSensitive) }
+                val m: (String) -> String = { wseiMasked(formatMoneyText(it), maskSensitive) }
                 WseiInfoRow(stringResource(R.string.finances_status), item.statusLabel)
                 WseiInfoRow(stringResource(R.string.finances_due_date), item.dueDateIso)
                 item.paymentDateIso?.let { WseiInfoRow(stringResource(R.string.finances_payment_date), it) }
-                HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = contentColor.copy(alpha = 0.12f))
                 WseiInfoRow(stringResource(R.string.finances_amount_charged), m(item.amountFormatted))
-                WseiInfoRow(stringResource(R.string.finances_interest_charged), m(item.interestFormatted))
-                WseiInfoRow(stringResource(R.string.finances_interest_paid), m(item.accumulatedInterestFormatted))
-                WseiInfoRow(stringResource(R.string.finances_amortization), m(item.amortizationFormatted))
-                WseiInfoRow(stringResource(R.string.finances_discount), m(item.discountFormatted))
-                WseiInfoRow(stringResource(R.string.finances_expired), m(item.expiredFormatted))
+                // Interest, write-offs and discounts are almost always zero: only real values are listed.
+                listOf(
+                    R.string.finances_interest_charged to item.interestFormatted,
+                    R.string.finances_interest_paid to item.accumulatedInterestFormatted,
+                    R.string.finances_amortization to item.amortizationFormatted,
+                    R.string.finances_discount to item.discountFormatted,
+                    R.string.finances_expired to item.expiredFormatted
+                ).forEach { (label, value) ->
+                    if (value.isNotBlank() && !isZeroMoneyText(value)) {
+                        WseiInfoRow(stringResource(label), m(value))
+                    }
+                }
             }
         }
     )
+}
+
+/**
+ * Online payment action of an obligation card. [prominent] (nearest due item or an expanded card)
+ * is a full-width filled tonal button with the amount; otherwise a compact text button keeps the
+ * list calm.
+ */
+@Composable
+private fun PayOnlineAction(
+    amount: String,
+    prominent: Boolean,
+    tonalContainer: Color,
+    tonalContent: Color,
+    textColor: Color,
+    onClick: () -> Unit
+) {
+    if (prominent) {
+        FilledTonalButton(
+            onClick = onClick,
+            shape = CircleShape,
+            colors = ButtonDefaults.filledTonalButtonColors(
+                containerColor = tonalContainer,
+                contentColor = tonalContent
+            ),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+        ) {
+            Icon(
+                imageVector = WseiIcons.ArrowForward,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(WseiSpacing.s))
+            Text(
+                text = stringResource(R.string.finances_pay_online, amount),
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    } else {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Spacer(modifier = Modifier.weight(1f))
+            TextButton(
+                onClick = onClick,
+                shape = CircleShape,
+                colors = ButtonDefaults.textButtonColors(contentColor = textColor),
+            ) {
+                Text(
+                    text = stringResource(R.string.finances_pay_online_short),
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.width(WseiSpacing.s))
+                Icon(
+                    imageVector = WseiIcons.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
 }
 
 /** Theme colours (container to content) for a scholarship status badge. */
@@ -701,7 +771,7 @@ private fun ScholarshipCard(
         val payouts = if (showAllPayouts) scholarship.payouts else scholarship.payouts.take(3)
         if (amount != null || payouts.isNotEmpty()) {
             WseiInset {
-                amount?.let { WseiInfoRow(stringResource(R.string.finances_scholarship_amount), m(it)) }
+                amount?.let { WseiInfoRow(stringResource(R.string.finances_scholarship_amount), m(formatMoneyText(it))) }
                 if (payouts.isNotEmpty()) {
                     if (amount != null) HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.5f))
                     Text(
@@ -717,7 +787,7 @@ private fun ScholarshipCard(
                                 1 -> label[0]
                                 else -> "—"
                             },
-                            value = m(payout.amountFormatted)
+                            value = m(formatMoneyText(payout.amountFormatted))
                         )
                     }
                 }

@@ -55,6 +55,8 @@ import pl.lublin.wsei.plan.ui.more.openExternalLink
 import pl.lublin.wsei.plan.ui.theme.WseiCardShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import pl.lublin.wsei.plan.ui.theme.mutedContentColor
+import pl.lublin.wsei.plan.ui.theme.withContrastAgainst
 
 /**
  * Non-intrusive "update available" prompt wired to [viewModel]. Springs in when the repository
@@ -156,11 +158,13 @@ fun UpdatePromptCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
             ) {
+                // Banner on primaryContainer: the badge and the version pill use the inverted
+                // container pair, so they stand out on any palette (also high-chroma wallpapers).
                 WseiIconBadge(
                     icon = UpdateIcons.NewReleases,
                     shape = MaterialShapes.Cookie9Sided.toShape(),
-                    containerColor = colors.primary,
-                    contentColor = colors.onPrimary,
+                    containerColor = colors.onPrimaryContainer,
+                    contentColor = colors.primaryContainer,
                     size = 44.dp,
                     iconSize = 22.dp
                 )
@@ -181,14 +185,14 @@ fun UpdatePromptCard(
                     ) {
                         WseiPill(
                             text = stringResource(R.string.changelog_version_badge, release.version),
-                            containerColor = colors.primary,
-                            contentColor = colors.onPrimary,
+                            containerColor = colors.onPrimaryContainer,
+                            contentColor = colors.primaryContainer,
                             emphasized = true
                         )
                         Text(
                             text = stringResource(R.string.update_prompt_installed, currentVersion),
                             style = MaterialTheme.typography.labelMedium,
-                            color = colors.onPrimaryContainer.copy(alpha = 0.8f),
+                            color = mutedContentColor(colors.onPrimaryContainer, colors.primaryContainer),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -207,7 +211,7 @@ fun UpdatePromptCard(
                 MarkdownHighlights(
                     items = highlights,
                     color = colors.onPrimaryContainer,
-                    markerColor = colors.primary,
+                    markerColor = colors.onPrimaryContainer,
                     modifier = Modifier.padding(end = WseiSpacing.m)
                 )
             }
@@ -229,7 +233,7 @@ fun UpdatePromptCard(
                 UpdatePhase.ERROR -> Text(
                     text = download.message ?: stringResource(R.string.about_update_error),
                     style = MaterialTheme.typography.bodySmall,
-                    color = colors.error,
+                    color = colors.error.withContrastAgainst(colors.primaryContainer),
                     modifier = Modifier.padding(end = WseiSpacing.m)
                 )
                 else -> Unit

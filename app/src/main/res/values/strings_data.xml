@@ -16,6 +16,8 @@
     <!-- Announcement attachments -->
     <string name="data_attachment_empty">Załącznik jest pusty.</string>
     <string name="data_attachment_corrupt">Nie udało się odczytać pobranego załącznika.</string>
+    <string name="data_attachment_open_with">Otwórz „%1$s” za pomocą</string>
+    <string name="data_attachment_share">Zapisz lub udostępnij „%1$s”</string>
 
     <!-- Live Notification -->
     <string name="notif_channel_name">Zajęcia na żywo</string>
