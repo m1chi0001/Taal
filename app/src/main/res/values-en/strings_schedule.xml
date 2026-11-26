@@ -78,7 +78,9 @@
     <string name="schedule_class_ongoing_badge">Now • %1$d min left</string>
     <string name="schedule_focus_today_done">Today\'s classes are over</string>
     <string name="schedule_focus_today_free">No classes today</string>
-    <string name="schedule_focus_next_tomorrow">Next class: tomorrow at %1$s</string>
+    <string name="schedule_focus_showing_tomorrow">showing tomorrow\'s classes</string>
+    <string name="schedule_focus_showing_later">showing the next day of this session</string>
+    <string name="schedule_focus_showing_next_zjazd">showing the next weekend session</string>
     <string name="schedule_focus_next_later">Next day of this session: %1$s</string>
     <string name="schedule_focus_next_zjazd">Next weekend session: %1$s</string>
     <string name="schedule_day_date_count">%1$s • %2$s</string>

@@ -75,19 +75,21 @@ import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
 import pl.lublin.wsei.plan.ui.theme.rememberDecodedStudentPhoto
+import pl.lublin.wsei.plan.ui.theme.mutedContentColor
+import pl.lublin.wsei.plan.ui.theme.tonalLayer
 import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
 import kotlin.math.roundToInt
 import androidx.compose.ui.res.stringResource
 import pl.lublin.wsei.plan.R
 
 // =========================================================================================
-// Podstawowe klocki interfejsu. Każdy ekran składa się z tych samych elementów, więc
-// aplikacja wygląda spójnie, a poprawka w jednym miejscu działa wszędzie.
+// Basic UI building blocks. Every screen is made of the same elements, so the app looks
+// consistent and a fix in one place applies everywhere.
 // =========================================================================================
 
 /**
- * Ekspresyjna reakcja na dotyk: element lekko się „wciska” (skala) na sprężynie.
- * Odczyt wartości odbywa się w fazie rysowania (graphicsLayer), więc nie wywołuje rekompozycji.
+ * Expressive touch feedback: the element is slightly "pressed in" (scale) on a spring. The
+ * value is read in the draw phase (graphicsLayer), so it causes no recomposition.
  */
 @Composable
 fun Modifier.wseiPressScale(
@@ -107,8 +109,8 @@ fun Modifier.wseiPressScale(
 }
 
 /**
- * Karta treści. Gdy podano [onClick], karta reaguje na dotyk ekspresyjnym „wciśnięciem”
- * i delikatnym zmniejszeniem zaokrągleń.
+ * Content card. With [onClick] the card reacts to touch with an expressive press. Pass a
+ * container role with its matching on-colour ([containerColor] / [contentColor]).
  */
 @Composable
 fun WseiCard(
@@ -152,7 +154,10 @@ fun WseiCard(
     }
 }
 
-/** Ikona w kontenerze (domyślnie squircle). Zastępuje ~25 powielonych bloków Surface+Box+Icon. */
+/**
+ * Icon in a container (squircle by default). On a tinted tile use a contrasting pair, e.g. the
+ * inverted container pair (`onXContainer` bubble with an `xContainer` icon), so it never blends.
+ */
 @Composable
 fun WseiIconBadge(
     icon: ImageVector,
@@ -180,7 +185,7 @@ fun WseiIconBadge(
     }
 }
 
-/** Mała pigułka statusu / etykiety. */
+/** Small status / label pill. */
 @Composable
 fun WseiPill(
     text: String,
@@ -216,7 +221,7 @@ fun WseiPill(
 }
 
 /**
- * Nagłówek karty: ikona, nadtytuł (overline), tytuł i opcjonalny element po prawej.
+ * Card header: icon, overline, title and an optional trailing element.
  */
 @Composable
 fun WseiCardHeader(
@@ -267,7 +272,7 @@ fun WseiCardHeader(
     }
 }
 
-/** Nagłówek sekcji nad grupą kart lub listą. */
+/** Section title above a group of cards or a list. */
 @Composable
 fun WseiSectionTitle(
     text: String,
@@ -300,9 +305,8 @@ fun WseiSectionTitle(
 }
 
 /**
- * Wiersz „etykieta — wartość” w kartach szczegółów. Wartość zajmuje najwyżej 60% szerokości
- * i zawija się do kolejnych linii, więc długie nazwy (kierunek, wydział) nie wypychają etykiety
- * poza kartę.
+ * "Label — value" row of detail cards. The value takes at most 60% of the width and wraps,
+ * so long names (programme, faculty) never push the label out of the card.
  */
 @Composable
 fun WseiInfoRow(label: String, value: String, modifier: Modifier = Modifier) {
@@ -348,7 +352,7 @@ fun WseiInfoRow(label: String, value: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** Wewnętrzny, jaśniejszy kontener wewnątrz karty (szczegóły, metryki). */
+/** Inner container inside a card (details, metrics). */
 @Composable
 fun WseiInset(
     modifier: Modifier = Modifier,
@@ -369,11 +373,11 @@ fun WseiInset(
 }
 
 // -----------------------------------------------------------------------------------------
-// Połączone listy (M3 Expressive „segmented list”): elementy stykają się, zewnętrzne rogi
-// są duże, wewnętrzne małe. Używane w ustawieniach, profilu i hubie „Więcej”.
+// Connected lists (M3 Expressive "segmented list"): items touch, outer corners are large and
+// inner ones small. Used in settings, profile and the "Więcej" hub.
 // -----------------------------------------------------------------------------------------
 
-/** Pojedynczy element połączonej listy. Kształt nadaje [WseiListGroup]. */
+/** A single item of a connected list; [WseiListGroup] gives it its shape. */
 class WseiListEntry(
     val key: String,
     val content: @Composable (shape: Shape) -> Unit
@@ -389,8 +393,8 @@ fun WseiListGroup(
         verticalArrangement = Arrangement.spacedBy(WseiSpacing.inGroup)
     ) {
         entries.forEachIndexed { index, entry ->
-            // Stabilna tożsamość elementu: stan wewnątrz wiersza nie „przeskakuje” na sąsiada,
-            // gdy lista się zmienia (np. po odświeżeniu grup studenckich).
+            // Stable item identity: row state does not jump to a neighbour when the list
+            // changes (e.g. after the student groups refresh).
             key(entry.key) {
                 entry.content(wseiGroupItemShape(index, entries.size))
             }
@@ -399,7 +403,7 @@ fun WseiListGroup(
 }
 
 /**
- * Wiersz listy: ikona, tytuł, opis i element po prawej (przełącznik, strzałka, pigułka).
+ * List row: icon, title, supporting text and a trailing element (switch, chevron, pill).
  */
 @Composable
 fun WseiListItem(
@@ -432,8 +436,10 @@ fun WseiListItem(
             if (icon != null) {
                 WseiIconBadge(
                     icon = icon,
-                    containerColor = if (selected) MaterialTheme.colorScheme.primary else iconContainerColor,
-                    contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else iconContentColor,
+                    // Selected rows sit on secondaryContainer: the inverted pair keeps the icon
+                    // bubble distinct from the row whatever the palette.
+                    containerColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else iconContainerColor,
+                    contentColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else iconContentColor,
                     size = 40.dp,
                     iconSize = 20.dp
                 )
@@ -452,7 +458,7 @@ fun WseiListItem(
                     Text(
                         text = supporting,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (selected) contentColor.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (selected) mutedContentColor(contentColor, color) else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -479,7 +485,7 @@ fun WseiListItem(
     }
 }
 
-/** Strzałka „przejdź dalej” dla wierszy listy. */
+/** "Go on" chevron of list rows. */
 @Composable
 fun WseiChevron() {
     Icon(
@@ -490,7 +496,7 @@ fun WseiChevron() {
     )
 }
 
-/** Stan pusty: ikona w kształcie cookie, tytuł i krótka podpowiedź. */
+/** Empty state: cookie-shaped icon, title and a short hint. */
 @Composable
 fun WseiEmptyState(
     icon: ImageVector,
@@ -523,7 +529,7 @@ fun WseiEmptyState(
     }
 }
 
-/** Duża liczba z podpisem — statystyki na kartach podsumowań. */
+/** Big figure with a caption — statistics on summary cards. */
 @Composable
 fun WseiStat(
     value: String,
@@ -543,8 +549,8 @@ fun WseiStat(
             verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
         ) {
             val valueStyle = MaterialTheme.typography.headlineSmall
-            // Wąskie kolumny (3 statystyki obok siebie na małym telefonie) zmniejszają czcionkę
-            // zamiast ucinać wartość.
+            // Narrow columns (3 stats side by side on a small phone) shrink the font instead
+            // of clipping the value.
             Text(
                 text = value,
                 style = valueStyle,
@@ -558,7 +564,7 @@ fun WseiStat(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = contentColor.copy(alpha = 0.75f),
+                color = mutedContentColor(contentColor, containerColor),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -619,10 +625,11 @@ fun StudentAvatar(
     } else {
         Modifier
     }
+    // Initials sit on the container pair (a large tinted area), never on raw primary.
     Box(
         modifier = frame
             .clip(shape)
-            .background(MaterialTheme.colorScheme.primary)
+            .background(MaterialTheme.colorScheme.primaryContainer)
             .then(photoEdge),
         contentAlignment = Alignment.Center
     ) {
@@ -652,7 +659,7 @@ fun StudentAvatar(
                 } else {
                     MaterialTheme.typography.titleMedium
                 },
-                color = MaterialTheme.colorScheme.onPrimary,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -663,11 +670,11 @@ fun StudentAvatar(
 private val StudentAvatarEdgeWidth: Dp = 1.dp
 
 // -----------------------------------------------------------------------------------------
-// Odświeżanie i karty rozwijane
+// Refresh and expandable cards
 // -----------------------------------------------------------------------------------------
 
 /**
- * Jedyne pole „przeciągnij, aby odświeżyć” w aplikacji — ze wskaźnikiem LoadingIndicator M3 Expressive.
+ * The app's only pull-to-refresh container, with the M3 Expressive LoadingIndicator.
  */
 @Composable
 fun WseiRefreshBox(
@@ -697,11 +704,11 @@ fun WseiRefreshBox(
 }
 
 /**
- * Karta rozwijana dotknięciem nagłówka. Strzałka obraca się na sprężynie, a przy rozwinięciu
- * jej kontener zmienia kształt z koła w squircle (morfing M3 Expressive).
+ * Card expanded by tapping its header. The chevron turns on a spring and its container morphs
+ * from a circle into a squircle when expanded (M3 Expressive shape morph).
  *
- * @param pinned elementy widoczne zawsze, pod nagłówkiem (np. przycisk płatności)
- * @param body elementy widoczne po rozwinięciu
+ * @param pinned always visible content under the header (e.g. a payment button)
+ * @param body content visible when expanded
  */
 @Composable
 fun WseiExpandableCard(
@@ -750,7 +757,7 @@ fun WseiExpandableCard(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(RoundedCornerShape(chevronCorner))
-                        .background(contentColor.copy(alpha = 0.08f)),
+                        .background(tonalLayer(containerColor, contentColor, 0.08f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -787,13 +794,13 @@ fun WseiExpandableCard(
 }
 
 // -----------------------------------------------------------------------------------------
-// Prywatność, przełączniki i ładowanie
+// Privacy, switches and loading
 // -----------------------------------------------------------------------------------------
 
-/** Wspólna maska dla danych wrażliwych (kwoty, oceny, numer albumu, numer konta). */
+/** Shared mask of sensitive data (amounts, grades, album number, bank account). */
 const val WseiSensitiveMask: String = "••••••"
 
-/** Zwraca [value] albo maskę, gdy włączono tryb „Ukryj dane”. */
+/** [value], or the mask while "Ukryj dane" is on. */
 fun wseiMasked(value: String, hidden: Boolean): String = if (hidden) WseiSensitiveMask else value
 
 private fun wseiSymbol(name: String, pathData: String): ImageVector =
@@ -820,8 +827,8 @@ private val SwitchCloseIcon: ImageVector by lazy {
 }
 
 /**
- * Przełącznik M3 z ikoną w kciuku (✓ / ✕) — stan jest czytelny także bez rozróżniania kolorów.
- * Przekaż `onCheckedChange = null`, gdy cały wiersz listy obsługuje przełączanie.
+ * M3 switch with an icon in the thumb (✓ / ✕) — the state reads without relying on colour.
+ * Pass `onCheckedChange = null` when the whole list row toggles it.
  */
 @Composable
 fun WseiSwitch(
@@ -845,7 +852,7 @@ fun WseiSwitch(
     )
 }
 
-/** Ekspresyjny wskaźnik ładowania (M3 LoadingIndicator) z opcjonalnym podpisem. */
+/** Expressive loading indicator (M3 LoadingIndicator) with an optional caption. */
 @Composable
 fun WseiLoadingState(
     modifier: Modifier = Modifier,

@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -135,6 +136,7 @@ import pl.lublin.wsei.plan.domain.schedule.ScheduleFocusKind
 import pl.lublin.wsei.plan.domain.schedule.ScheduleFocusResolver
 import pl.lublin.wsei.plan.domain.schedule.NextClassDay
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiWindowLayout
+import pl.lublin.wsei.plan.ui.adaptive.WseiReadableContentMaxWidth
 import pl.lublin.wsei.plan.ui.adaptive.WseiTwoPane
 import pl.lublin.wsei.plan.ui.adaptive.wseiReadableWidth
 import pl.lublin.wsei.plan.ui.adaptive.wseiScreenContentPadding
@@ -144,6 +146,7 @@ import pl.lublin.wsei.plan.ui.components.WseiIconBadge
 import pl.lublin.wsei.plan.ui.components.WseiPill
 import pl.lublin.wsei.plan.ui.components.WseiScreenFrame
 import pl.lublin.wsei.plan.ui.components.classRowStateOf
+import pl.lublin.wsei.plan.ui.components.displayGroupCode
 import pl.lublin.wsei.plan.ui.components.wseiPressScale
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.ActiveHeroCardAsymmetricShape
@@ -152,6 +155,9 @@ import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
 import pl.lublin.wsei.plan.ui.theme.WseiInsetShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import pl.lublin.wsei.plan.ui.theme.mutedContentColor
+import pl.lublin.wsei.plan.ui.theme.tonalLayer
+import pl.lublin.wsei.plan.ui.theme.withContrastAgainst
 import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
 import java.time.Instant
 import java.time.YearMonth
@@ -170,14 +176,14 @@ import pl.lublin.wsei.plan.l10n.shortNameRes
 
 /**
  * Plan zajęć (Material 3 Expressive):
- * - przełącznik „Mój plan / Plan grupy” jako połączona grupa przycisków,
- * - kalendarz tygodniowy rozwijany do pełnego miesiąca,
- * - karta „Trwa teraz” z odliczaniem i falującym postępem,
- * - komunikat, gdy plan otwiera się na jutrze / dalszym dniu zjazdu / następnym zjeździe,
- * - lista zajęć wybranego dnia,
- * - eksport do kalendarza urządzenia w jednym arkuszu (wybór → postęp → wynik).
- * Na szerokich ekranach i rozłożonych składakach układ dwupanelowy (kalendarz | lista dnia),
- * dopasowany do zawiasu.
+ * - "Mój plan / Plan grupy" switch as a connected button group,
+ * - week calendar that expands to the full month,
+ * - "Trwa teraz" hero with a countdown and wavy progress,
+ * - a short notice when the plan opens on tomorrow / a later zjazd day / the next zjazd,
+ * - the selected day's classes,
+ * - export to the device calendar in one sheet (pick → progress → result).
+ * Wide windows and unfolded foldables use two panes (calendar | day list), snapped to the hinge
+ * and capped at [ScheduleTwoPaneMaxWidth]; the title bar is aligned with the content edge.
  */
 @Composable
 fun ScheduleScreen(
@@ -272,7 +278,8 @@ fun ScheduleScreen(
         title = stringResource(R.string.nav_schedule),
         modifier = modifier.fillMaxSize(),
         onRefresh = onRefreshSchedule,
-        isRefreshing = uiState.isRefreshing
+        isRefreshing = uiState.isRefreshing,
+        contentMaxWidth = if (windowLayout.supportsTwoPane) ScheduleTwoPaneMaxWidth else WseiReadableContentMaxWidth
     ) { scrollModifier ->
         val controls: @Composable (Modifier) -> Unit = { controlsModifier ->
             ScheduleControls(
@@ -300,33 +307,42 @@ fun ScheduleScreen(
             val layoutDirection = LocalLayoutDirection.current
             val paneTop = contentPadding.calculateTopPadding()
             val paneBottom = contentPadding.calculateBottomPadding()
-            WseiTwoPane(
+            val start = contentPadding.calculateStartPadding(layoutDirection)
+            val end = contentPadding.calculateEndPadding(layoutDirection)
+            // Both panes share one top edge and one centred, capped column, so the controls row,
+            // the calendar card and the day list line up with each other and with the title.
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(scrollModifier)
-                    .padding(
-                        start = contentPadding.calculateStartPadding(layoutDirection),
-                        end = contentPadding.calculateEndPadding(layoutDirection)
-                    ),
-                gap = WseiSpacing.xxl,
-                first = {
-                    controls(
-                        Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(top = paneTop, bottom = paneBottom)
-                    )
-                },
-                second = {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(top = paneTop, bottom = paneBottom),
-                        verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
-                    ) {
-                        dayTimeline(uiState, timelineRows, todayIso, onSelectDate)
+                    .then(scrollModifier),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                WseiTwoPane(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .widthIn(max = ScheduleTwoPaneMaxWidth + start + end)
+                        .fillMaxWidth()
+                        .padding(start = start, end = end),
+                    gap = WseiSpacing.xxl,
+                    first = {
+                        controls(
+                            Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(top = paneTop, bottom = paneBottom)
+                        )
+                    },
+                    second = {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(top = paneTop, bottom = paneBottom),
+                            verticalArrangement = Arrangement.spacedBy(WseiSpacing.betweenCards)
+                        ) {
+                            dayTimeline(uiState, timelineRows, todayIso, onSelectDate, headerTopPadding = 0.dp)
+                        }
                     }
-                }
-            )
+                )
+            }
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -343,6 +359,9 @@ fun ScheduleScreen(
         }
     }
 }
+
+/** Width cap of the two-pane layout (calendar | day list) on very wide windows. */
+private val ScheduleTwoPaneMaxWidth: Dp = 1200.dp
 
 /** A class row with a key that is unique within the rendered day. */
 @Immutable
@@ -478,18 +497,26 @@ private fun CalendarSyncButton(isBusy: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** Nagłówek dnia i karty zajęć — wspólne dla układu jedno- i dwupanelowego. */
+/**
+ * Day header and class cards — shared by the one- and two-pane layouts.
+ *
+ * @param headerTopPadding air above the day header; 0 in the second pane, so the header starts
+ *   on the same line as the controls row of the first pane.
+ */
 private fun LazyListScope.dayTimeline(
     uiState: ScheduleUiState,
     rows: List<TimelineRow>,
     todayIso: String,
     onSelectDate: (LocalDate) -> Unit,
-    readableWidth: Boolean = false
+    readableWidth: Boolean = false,
+    headerTopPadding: Dp = WseiSpacing.s
 ) {
     val itemModifier = if (readableWidth) Modifier.wseiReadableWidth() else Modifier
     val selectedDay = uiState.selectedDay
     val focus = uiState.scheduleFocus
     // Explains why Plan zajęć opened on another day: only while that focus day is the one shown.
+    // The day header right below already names the date, so the notice only says what happened
+    // today and what kind of day is shown — never the date again.
     if (!focus.isToday && focus.kind != ScheduleFocusKind.NONE &&
         focus.dateIso != null && focus.dateIso == selectedDay?.date?.toString()
     ) {
@@ -509,7 +536,7 @@ private fun LazyListScope.dayTimeline(
         }
     }
     item(key = "day_header", contentType = "day_header") {
-        DaySectionHeader(selectedDay = selectedDay, modifier = itemModifier)
+        DaySectionHeader(selectedDay = selectedDay, topPadding = headerTopPadding, modifier = itemModifier)
     }
     if (rows.isEmpty()) {
         item(key = "empty_day", contentType = "empty_day") {
@@ -555,7 +582,7 @@ private fun LazyListScope.dayTimeline(
 }
 
 // -----------------------------------------------------------------------------------------
-// Przełącznik planu — połączona grupa przycisków (M3 Expressive „connected button group”)
+// Plan switch — connected button group (M3 Expressive "connected button group")
 // -----------------------------------------------------------------------------------------
 
 @Composable
@@ -612,7 +639,7 @@ private fun ScheduleFilterButtonGroup(
 }
 
 // -----------------------------------------------------------------------------------------
-// Kalendarz: tydzień ⇄ miesiąc
+// Calendar: week ⇄ month
 // -----------------------------------------------------------------------------------------
 
 @Composable
@@ -809,7 +836,11 @@ private fun WeekDaysStrip(
                 targetValue = when {
                     isSelected -> MaterialTheme.colorScheme.primary
                     hasClasses -> MaterialTheme.colorScheme.secondaryContainer
-                    else -> MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+                    else -> tonalLayer(
+                        MaterialTheme.colorScheme.surfaceContainer,
+                        MaterialTheme.colorScheme.surfaceContainerHighest,
+                        0.5f
+                    )
                 },
                 animationSpec = WseiMotion.effects(),
                 label = "dayContainer"
@@ -985,17 +1016,20 @@ private fun monthNameRes(monthNumber: Int): Int = when (monthNumber) {
 }
 
 // -----------------------------------------------------------------------------------------
-// Trwające zajęcia
+// Ongoing class
 // -----------------------------------------------------------------------------------------
 
 /** Hero content switches to two columns once the card is at least this wide (medium+ windows). */
 private val HeroTwoColumnMinWidth = 560.dp
 
 /**
- * „Trwa teraz” — karta trwających zajęć (M3 Expressive):
- * status i godziny, plakietka z przedmiotem, odliczanie do końca z falującym postępem,
- * sala i prowadzący (maskowany przy „Ukryj dane”), a po rozwinięciu zapowiedź następnych zajęć.
- * Na szerokich oknach treść układa się w dwie kolumny zamiast rozciągać się na całą szerokość.
+ * "Trwa teraz" — the ongoing class hero (M3 Expressive): status and time range, subject badge,
+ * countdown with wavy progress, room and lecturer (masked by "Ukryj dane") and, when expanded,
+ * the next class. On wide windows the content uses two columns instead of stretching.
+ *
+ * Colour: the card is `primaryContainer` / `onPrimaryContainer`. The status chip, the badge and
+ * the progress use the inverted pair (`onPrimaryContainer` on top of the container), never raw
+ * `primary`, so nothing blends in when a wallpaper produces a high-chroma container.
  *
  * @param lecturerLabel lecturer as it may be shown — pass `uiState.maskLecturer(...)`.
  */
@@ -1066,8 +1100,8 @@ private fun HeroHeader(activeClass: ClassEvent, canExpand: Boolean, isExpanded: 
         ) {
             ScheduleStatusChip(
                 text = stringResource(R.string.schedule_hero_status_live),
-                containerColor = colors.primary,
-                contentColor = colors.onPrimary
+                containerColor = colors.onPrimaryContainer,
+                contentColor = colors.primaryContainer
             )
             Text(
                 text = stringResource(
@@ -1090,8 +1124,8 @@ private fun HeroHeader(activeClass: ClassEvent, canExpand: Boolean, isExpanded: 
         ) {
             ScheduleAccentBadge(
                 icon = WseiIcons.forSubject(activeClass.subject.name, activeClass.classType),
-                containerColor = colors.primary,
-                contentColor = colors.onPrimary
+                containerColor = colors.onPrimaryContainer,
+                contentColor = colors.primaryContainer
             )
             Column(
                 modifier = Modifier.weight(1f),
@@ -1101,7 +1135,7 @@ private fun HeroHeader(activeClass: ClassEvent, canExpand: Boolean, isExpanded: 
                     text = stringResource(activeClass.classType.labelRes),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    color = colors.primary,
+                    color = colors.onPrimaryContainer,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1133,7 +1167,7 @@ private fun HeroExpandChevron(isExpanded: Boolean) {
         modifier = Modifier
             .size(36.dp)
             .clip(CircleShape)
-            .background(colors.onPrimaryContainer.copy(alpha = 0.08f)),
+            .background(tonalLayer(colors.primaryContainer, colors.onPrimaryContainer, 0.08f)),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -1266,7 +1300,7 @@ private fun HeroProgress(activeClass: ClassEvent, nowEpochMillis: Long) {
         ScheduleCountdown(
             value = stringResource(R.string.schedule_hero_remaining_value, remainingMin),
             caption = stringResource(R.string.schedule_hero_remaining_label),
-            captionColor = colors.onPrimaryContainer.copy(alpha = 0.78f)
+            captionColor = mutedContentColor(colors.onPrimaryContainer, colors.primaryContainer)
         )
         LinearWavyProgressIndicator(
             // Read lazily: the indicator redraws without recomposing the hero.
@@ -1275,17 +1309,18 @@ private fun HeroProgress(activeClass: ClassEvent, nowEpochMillis: Long) {
                 .fillMaxWidth()
                 .height(16.dp)
                 .semantics { contentDescription = progressDescription },
-            color = colors.primary,
-            trackColor = colors.onPrimaryContainer.copy(alpha = 0.16f)
+            color = colors.onPrimaryContainer,
+            trackColor = tonalLayer(colors.primaryContainer, colors.onPrimaryContainer, 0.16f)
         )
     }
 }
 
-/** Room / delivery mode, lecturer (already masked by the caller) and group. */
+/** Room / delivery mode, lecturer (already masked by the caller) and a real group code. */
 @Composable
 private fun HeroDetails(activeClass: ClassEvent, lecturerLabel: String) {
     val colors = MaterialTheme.colorScheme
-    val chipColor = colors.onPrimaryContainer.copy(alpha = 0.1f)
+    val chipColor = tonalLayer(colors.primaryContainer, colors.onPrimaryContainer, 0.1f)
+    val chipContent = colors.onPrimaryContainer.withContrastAgainst(chipColor)
     val location = if (activeClass.deliveryMode == DeliveryMode.ON_SITE) {
         activeClass.room.localizedLabel()
     } else {
@@ -1299,20 +1334,20 @@ private fun HeroDetails(activeClass: ClassEvent, lecturerLabel: String) {
             text = location,
             icon = WseiIcons.LocationOn,
             containerColor = chipColor,
-            contentColor = colors.onPrimaryContainer
+            contentColor = chipContent
         )
         WseiPill(
             text = lecturerLabel,
             icon = WseiIcons.Person,
             containerColor = chipColor,
-            contentColor = colors.onPrimaryContainer
+            contentColor = chipContent
         )
-        if (activeClass.groupCode.isNotBlank()) {
+        displayGroupCode(activeClass.groupCode)?.let { group ->
             WseiPill(
-                text = activeClass.groupCode,
+                text = group,
                 icon = WseiIcons.Groups,
                 containerColor = chipColor,
-                contentColor = colors.onPrimaryContainer
+                contentColor = chipContent
             )
         }
     }
@@ -1350,10 +1385,12 @@ private fun NextClassPreviewCard(preview: NextClassPreview) {
     } else {
         stringResource(R.string.schedule_hero_next_no_break)
     }
+    // An opaque inset on the hero; every text colour is checked against it.
+    val insetColor = tonalLayer(colors.primaryContainer, colors.surfaceContainerLowest, 0.6f)
     Surface(
         shape = WseiInsetShape,
-        color = colors.surfaceContainerLowest.copy(alpha = 0.55f),
-        contentColor = colors.onSurface,
+        color = insetColor,
+        contentColor = colors.onSurface.withContrastAgainst(insetColor),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -1383,7 +1420,7 @@ private fun NextClassPreviewCard(preview: NextClassPreview) {
                     text = stringResource(R.string.schedule_hero_next_title, next.timeSlot.startFormatted),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = colors.tertiary
+                    color = colors.tertiary.withContrastAgainst(insetColor)
                 )
                 Text(
                     text = next.subject.name,
@@ -1394,7 +1431,7 @@ private fun NextClassPreviewCard(preview: NextClassPreview) {
                 Text(
                     text = stringResource(R.string.schedule_hero_next_details, breakLabel, location),
                     style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant,
+                    color = colors.onSurfaceVariant.withContrastAgainst(insetColor),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1404,8 +1441,10 @@ private fun NextClassPreviewCard(preview: NextClassPreview) {
 }
 
 /**
- * Small notice above the day list when the focus moved away from today: today's classes are
- * over (or there were none) and the list shows tomorrow, a later zjazd day or the next zjazd.
+ * Short notice above the day list when the focus moved away from today: what happened today
+ * ("Dzisiaj bez zajęć" / "Dzisiejsze zajęcia zakończone") and which kind of day is shown below
+ * (tomorrow, a later zjazd day, the next zjazd). The date is not repeated — the day header right
+ * below names it — so the notice stays a single quiet line instead of a second banner.
  */
 @Composable
 private fun ScheduleFocusNotice(
@@ -1414,51 +1453,43 @@ private fun ScheduleFocusNotice(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val dateFormatter = rememberLocalizedDateFormatter(FocusNoticeDateSkeleton)
-    val dateText = remember(focus.dateIso, dateFormatter) {
-        focus.dateIso?.let { iso -> runCatching { java.time.LocalDate.parse(iso).format(dateFormatter) }.getOrNull() }
-            ?: focus.dateIso.orEmpty()
-    }
-    val firstStart = focus.events.firstOrNull()?.timeSlot?.startFormatted.orEmpty()
     val title = stringResource(
         if (todayHadClasses) R.string.schedule_focus_today_done else R.string.schedule_focus_today_free
     )
-    val detail = when (focus.kind) {
-        ScheduleFocusKind.TOMORROW -> stringResource(R.string.schedule_focus_next_tomorrow, firstStart)
-        ScheduleFocusKind.LATER_THIS_ZJAZD -> stringResource(R.string.schedule_focus_next_later, dateText)
-        else -> stringResource(R.string.schedule_focus_next_zjazd, dateText)
-    }
-    Surface(
-        shape = WseiInsetShape,
-        color = colors.secondaryContainer,
-        contentColor = colors.onSecondaryContainer,
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) {}
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = WseiSpacing.l, vertical = WseiSpacing.m),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
+    val detail = stringResource(
+        when (focus.kind) {
+            ScheduleFocusKind.TOMORROW -> R.string.schedule_focus_showing_tomorrow
+            ScheduleFocusKind.LATER_THIS_ZJAZD -> R.string.schedule_focus_showing_later
+            else -> R.string.schedule_focus_showing_next_zjazd
+        }
+    )
+    // Start-aligned within the (possibly centred) item width, like the day header below it.
+    Box(modifier = modifier.fillMaxWidth()) {
+        Surface(
+            shape = CircleShape,
+            color = colors.surfaceContainerHigh,
+            contentColor = colors.onSurface,
+            modifier = Modifier.semantics(mergeDescendants = true) {}
         ) {
-            ScheduleAccentBadge(
-                icon = WseiIcons.CalendarMonth,
-                containerColor = colors.secondary,
-                contentColor = colors.onSecondary,
-                size = 36.dp
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+            Row(
+                modifier = Modifier.padding(
+                    start = WseiSpacing.m,
+                    end = WseiSpacing.l,
+                    top = WseiSpacing.s,
+                    bottom = WseiSpacing.s
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+            ) {
+                Icon(
+                    imageVector = WseiIcons.CheckCircle,
+                    contentDescription = null,
+                    tint = colors.secondary,
+                    modifier = Modifier.size(18.dp)
                 )
                 Text(
-                    text = detail,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.onSecondaryContainer.copy(alpha = 0.8f),
+                    text = stringResource(R.string.schedule_day_date_count, title, detail),
+                    style = MaterialTheme.typography.labelLarge,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1467,11 +1498,8 @@ private fun ScheduleFocusNotice(
     }
 }
 
-/** CLDR skeleton of the focus notice date ("pt., 28 listopada" / "Fri, November 28"). */
-private const val FocusNoticeDateSkeleton = "EEEdMMMM"
-
 @Composable
-private fun DaySectionHeader(selectedDay: AcademicDay?, modifier: Modifier = Modifier) {
+private fun DaySectionHeader(selectedDay: AcademicDay?, topPadding: Dp, modifier: Modifier = Modifier) {
     if (selectedDay == null) return
     // Keyed by date: switching days slides the header in the direction of travel, while a refresh
     // of the same day only updates the count in place.
@@ -1487,7 +1515,7 @@ private fun DaySectionHeader(selectedDay: AcademicDay?, modifier: Modifier = Mod
         modifier = modifier.fillMaxWidth(),
         label = "scheduleDayHeader"
     ) { day ->
-        DaySectionHeaderContent(day)
+        DaySectionHeaderContent(day, topPadding)
     }
 }
 
@@ -1497,7 +1525,7 @@ private fun dayChangeEnter(forward: Boolean): EnterTransition =
         slideInHorizontally(WseiMotion.spatial()) { width -> if (forward) width / 10 else -width / 10 }
 
 @Composable
-private fun DaySectionHeaderContent(selectedDay: AcademicDay) {
+private fun DaySectionHeaderContent(selectedDay: AcademicDay, topPadding: Dp) {
     val count = selectedDay.events.size
     val countText = if (count == 0) {
         stringResource(R.string.schedule_day_no_classes)
@@ -1513,7 +1541,7 @@ private fun DaySectionHeaderContent(selectedDay: AcademicDay) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = WseiSpacing.xs, end = WseiSpacing.xs, top = WseiSpacing.s)
+            .padding(start = WseiSpacing.xs, end = WseiSpacing.xs, top = topPadding)
     ) {
         Text(
             text = stringResource(selectedDay.date.dayOfWeek.fullNameRes),
@@ -1529,7 +1557,7 @@ private fun DaySectionHeaderContent(selectedDay: AcademicDay) {
 }
 
 // -----------------------------------------------------------------------------------------
-// Wolne od zajęć — z podpowiedzią najbliższego dnia z zajęciami
+// Day off — with a hint about the nearest class day
 // -----------------------------------------------------------------------------------------
 
 /** What the day-off card shows: the viewed day and the next class day after it (if any). */
@@ -1697,7 +1725,7 @@ internal fun relativeDaysLabel(days: Int): String? = when {
 private const val DayDateSkeleton = "dMMMMy"
 
 // -----------------------------------------------------------------------------------------
-// Synchronizacja z kalendarzem urządzenia
+// Device calendar sync
 // -----------------------------------------------------------------------------------------
 
 private val CalendarPermissions = arrayOf(

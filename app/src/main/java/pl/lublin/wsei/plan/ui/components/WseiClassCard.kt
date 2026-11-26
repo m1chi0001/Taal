@@ -40,10 +40,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pl.lublin.wsei.plan.domain.model.ClassEvent
+import pl.lublin.wsei.plan.domain.model.DeliveryMode
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.WseiCardShape
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 import pl.lublin.wsei.plan.ui.theme.WseiSpacing
+import pl.lublin.wsei.plan.ui.theme.mutedContentColor
+import pl.lublin.wsei.plan.ui.theme.tonalLayer
+import pl.lublin.wsei.plan.ui.theme.withContrastAgainst
 import androidx.compose.ui.res.stringResource
 import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.l10n.labelRes
@@ -52,7 +56,7 @@ import pl.lublin.wsei.plan.l10n.localizedNameOrPlaceholder
 
 enum class ClassRowState { UPCOMING, NEXT, ONGOING, FINISHED }
 
-/** Stan karty zajęć na podstawie czasu — jedna funkcja zamiast kilku kopii tej samej logiki. */
+/** Time-based state of a class card — one function instead of several copies of the same logic. */
 fun classRowStateOf(
     event: ClassEvent,
     nowEpochMillis: Long,
@@ -66,10 +70,13 @@ fun classRowStateOf(
 }
 
 /**
- * Karta zajęć (Start i Plan zajęć).
- * Po lewej „kafelek czasu”, po prawej przedmiot, forma, sala i prowadzący.
- * Trwające zajęcia są wyróżnione kolorem głównym i plakietką z liczbą minut do końca — bez paska
- * postępu (ten jest tylko w karcie „Trwa teraz” nad listą).
+ * Class card (Start and Plan zajęć): a time tile on the left; subject, class type, room and
+ * lecturer on the right. An ongoing class sits on `primaryContainer` with an inverted time tile
+ * (`onPrimaryContainer` / `primaryContainer`, always ≥ 4.5:1) and a "minutes left" badge — no
+ * progress bar (that lives in the "Trwa teraz" hero above the list).
+ *
+ * Metadata is never repeated: the delivery mode chip only appears when the location line does
+ * not already say it, and the data layer's placeholder group ("Grupa dziekanatowa") is hidden.
  *
  * @param lecturerLabel lecturer line as it may be shown — pass `uiState.maskLecturer(...)` so
  *   "Ukryj dane" hides the name; defaults to the unmasked name for previews and legacy callers.
@@ -99,21 +106,28 @@ fun WseiClassCard(
         label = "classCardContainer"
     )
     val contentColor = if (ongoing) colors.onPrimaryContainer else colors.onSurface
-    val mutedColor = if (ongoing) contentColor.copy(alpha = 0.75f) else colors.onSurfaceVariant
+    val mutedColor = if (ongoing) {
+        mutedContentColor(colors.onPrimaryContainer, colors.primaryContainer)
+    } else {
+        colors.onSurfaceVariant
+    }
+    // The ongoing tile inverts the container pair, so it can never blend into the card.
+    val timeTileTarget = when (state) {
+        ClassRowState.ONGOING -> colors.onPrimaryContainer
+        ClassRowState.NEXT -> colors.tertiaryContainer
+        else -> colors.surfaceContainerHighest
+    }
     val timeTileColor by animateColorAsState(
-        targetValue = when (state) {
-            ClassRowState.ONGOING -> colors.primary
-            ClassRowState.NEXT -> colors.tertiaryContainer
-            else -> colors.surfaceContainerHighest
-        },
+        targetValue = timeTileTarget,
         animationSpec = WseiMotion.effects(),
         label = "classTimeTile"
     )
     val timeTileContent = when (state) {
-        ClassRowState.ONGOING -> colors.onPrimary
+        ClassRowState.ONGOING -> colors.primaryContainer
         ClassRowState.NEXT -> colors.onTertiaryContainer
         else -> colors.onSurface
     }
+    val timeTileMuted = mutedContentColor(timeTileContent, timeTileTarget)
     val stateLabel = stringResource(
         when (state) {
             ClassRowState.ONGOING -> R.string.class_state_ongoing
@@ -176,7 +190,7 @@ fun WseiClassCard(
                         Text(
                             text = event.timeSlot.endFormatted,
                             style = MaterialTheme.typography.labelMedium,
-                            color = timeTileContent.copy(alpha = 0.75f),
+                            color = timeTileMuted,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -217,14 +231,17 @@ fun WseiClassCard(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             val chipColor = if (ongoing) {
-                                colors.onPrimaryContainer.copy(alpha = 0.12f)
+                                tonalLayer(colors.primaryContainer, colors.onPrimaryContainer, 0.12f)
                             } else {
                                 colors.surfaceContainerHighest
                             }
-                            WseiPill(classTypeLabel, containerColor = chipColor, contentColor = contentColor)
-                            WseiPill(stringResource(event.deliveryMode.labelRes), containerColor = chipColor, contentColor = contentColor)
-                            if (event.groupCode.isNotBlank()) {
-                                WseiPill(event.groupCode, containerColor = chipColor, contentColor = contentColor)
+                            val chipContent = contentColor.withContrastAgainst(chipColor)
+                            WseiPill(classTypeLabel, containerColor = chipColor, contentColor = chipContent)
+                            deliveryChipLabel(event)?.let { label ->
+                                WseiPill(label, containerColor = chipColor, contentColor = chipContent)
+                            }
+                            displayGroupCode(event.groupCode)?.let { group ->
+                                WseiPill(group, containerColor = chipColor, contentColor = chipContent)
                             }
                         }
                         ClassDetailLine(WseiIcons.LocationOn, roomLabel, mutedColor)
@@ -239,14 +256,38 @@ fun WseiClassCard(
     }
 }
 
-/** Subtle "live" badge of the ongoing class: a pill with a sunny marker instead of a progress bar. */
+/**
+ * Group code worth showing on a card, or `null` for a blank code or the placeholder the data
+ * layer writes when the dean's office gives no group ([GroupCodePlaceholder]).
+ */
+fun displayGroupCode(groupCode: String): String? =
+    groupCode.trim().takeIf { it.isNotEmpty() && !it.equals(GroupCodePlaceholder, ignoreCase = true) }
+
+/** Fallback group name of the timetable sources — not real data, so never shown as a chip. */
+private const val GroupCodePlaceholder = "Grupa dziekanatowa"
+
+/**
+ * Delivery mode chip text, or `null` when it would only repeat the location line: on-site
+ * classes show their room, remote / e-learning rooms already read "Streaming (zajęcia zdalne)"
+ * or "E-learning".
+ */
+@Composable
+private fun deliveryChipLabel(event: ClassEvent): String? = when {
+    event.deliveryMode == DeliveryMode.ON_SITE -> null
+    event.room.isRemoteTeams -> null
+    else -> stringResource(event.deliveryMode.labelRes)
+}
+
+/** Subtle "live" badge of the ongoing class: a tonal pill with a sunny marker, no progress bar. */
 @Composable
 private fun OngoingBadge(text: String) {
     val colors = MaterialTheme.colorScheme
+    val badgeColor = tonalLayer(colors.primaryContainer, colors.onPrimaryContainer, 0.14f)
+    val badgeContent = colors.onPrimaryContainer.withContrastAgainst(badgeColor)
     Surface(
         shape = CircleShape,
-        color = colors.primary,
-        contentColor = colors.onPrimary
+        color = badgeColor,
+        contentColor = badgeContent
     ) {
         Row(
             modifier = Modifier.padding(start = 6.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
@@ -257,7 +298,7 @@ private fun OngoingBadge(text: String) {
                 modifier = Modifier
                     .size(10.dp)
                     .clip(MaterialShapes.Sunny.toShape())
-                    .background(colors.onPrimary)
+                    .background(badgeContent)
             )
             Text(
                 text = text,
