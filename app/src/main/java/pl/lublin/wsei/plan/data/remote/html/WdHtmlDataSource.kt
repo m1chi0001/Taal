@@ -144,6 +144,67 @@ class WdHtmlDataSource @Inject constructor(
     }
 
     // ---------------------------------------------------------------------------------------------
+    // Attachment fallback
+    // ---------------------------------------------------------------------------------------------
+
+    /** Raw response of a portal file download; interpreted by `AttachmentResponseHandler`. */
+    class PortalDownload(
+        val statusCode: Int,
+        val url: String,
+        val contentType: String?,
+        val contentDisposition: String?,
+        val bytes: ByteArray
+    )
+
+    /** True when [url] is on the dean's office host, the only host this fallback may log in to. */
+    fun canDownload(url: HttpUrl): Boolean =
+        url.host.equals(endpoints.baseUrl.toHttpUrl().host, ignoreCase = true)
+
+    /**
+     * Attachment fallback for links that need the web portal's cookie session (the REST API session
+     * got an HTML login page or 404). Logs in through the portal form once when the server answers
+     * with its login page. Redirects are followed by the portal client; bodies larger than
+     * [maxBytes] are rejected before reading.
+     */
+    suspend fun downloadAttachment(url: HttpUrl, maxBytes: Long): PortalDownload {
+        require(canDownload(url)) { "Attachment fallback is limited to the dean's office host." }
+        var result = fetchRaw(url, maxBytes)
+        if (isLoginResponse(result)) {
+            val login = apiSession.savedLogin?.takeIf { it.isNotBlank() }
+            val password = apiSession.savedPassword?.takeIf { it.isNotEmpty() }
+            if (login != null && password != null) {
+                login(login, password)
+                result = fetchRaw(url, maxBytes)
+            }
+        }
+        return result
+    }
+
+    private suspend fun fetchRaw(url: HttpUrl, maxBytes: Long): PortalDownload = withContext(Dispatchers.IO) {
+        client.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
+            val body = response.body
+            val declared = body?.contentLength() ?: -1L
+            if (declared > maxBytes) throw IOException("Attachment larger than $maxBytes bytes.")
+            PortalDownload(
+                statusCode = response.code,
+                url = response.request.url.toString(),
+                contentType = response.header("Content-Type"),
+                contentDisposition = response.header("Content-Disposition"),
+                bytes = body?.bytes() ?: ByteArray(0)
+            )
+        }
+    }
+
+    private fun isLoginResponse(download: PortalDownload): Boolean {
+        val type = download.contentType?.lowercase().orEmpty()
+        if (!type.contains("html") && !download.bytes.take(64).toByteArray().decodeToString().trimStart().startsWith("<")) {
+            return false
+        }
+        val html = String(download.bytes, Charsets.UTF_8)
+        return isLoginPage(Jsoup.parse(html, download.url))
+    }
+
+    // ---------------------------------------------------------------------------------------------
 
     private suspend fun login(login: String, password: String) {
         cookieJar.clear()

@@ -28,6 +28,12 @@
     <string name="error_payment_no_link">Brak linku do płatności online BlueMedia.</string>
     <string name="error_attachment_no_viewer">Brak aplikacji, która otworzy plik „%1$s”.</string>
     <string name="error_attachment_download">Nie udało się pobrać załącznika.</string>
+    <string name="error_attachment_not_found">Nie znaleziono załącznika na serwerze. Mógł zostać usunięty przez dziekanat.</string>
+    <string name="error_attachment_html_page">Serwer zwrócił stronę internetową zamiast pliku. Spróbuj ponownie później.</string>
+    <string name="error_attachment_login_page">Serwer zwrócił stronę logowania zamiast pliku — sesja mogła wygasnąć. Zaloguj się ponownie i spróbuj jeszcze raz.</string>
+    <string name="error_attachment_too_large">Załącznik jest zbyt duży, aby pobrać go w aplikacji.</string>
+    <string name="error_attachment_save_failed">Nie udało się zapisać załącznika w pamięci urządzenia.</string>
+    <string name="error_attachment_open_failed">Nie udało się przekazać pobranego pliku do innej aplikacji.</string>
     <string name="error_schedule_refresh">Nie udało się odświeżyć planu zajęć.</string>
 
     <!-- App updates (GitHub releases) -->

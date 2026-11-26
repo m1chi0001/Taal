@@ -232,7 +232,9 @@ class ArpTokenRefresher @Inject constructor(
  * - detects an expired session (HTTP 401 or a 3xx to a login page — redirects are not followed for the
  *   API), re-authenticates once via [ArpTokenRefresher] and replays the request with the new token,
  * - if re-authentication is impossible, returns a clean 401 so the caller raises
- *   [AprSessionExpiredException] instead of trying to parse HTML.
+ *   [AprSessionExpiredException] instead of trying to parse HTML,
+ * - sends credentials only to the dean's office host: requests to other hosts (attachment links,
+ *   cross-host redirects) pass through without `Authorization`, API key or re-auth handling.
  */
 class ArpAutoReauthInterceptor(
     private val cookieJar: ArpSessionCookieJar,
@@ -241,12 +243,29 @@ class ArpAutoReauthInterceptor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val original = chain.request()
-        val url = withApiSuffix(original.url)
+        // Credentials (bearer token, MS-API-KEY) go only to the dean's office host: a file link or a
+        // redirect may point to a CDN/storage host, which must neither see nor be confused by them.
+        if (!isApiHost(original.url)) {
+            return chain.proceed(
+                original.newBuilder()
+                    .removeHeader(HEADER_SKIP_REAUTH)
+                    .removeHeader(HEADER_ACCEPT_ANY)
+                    .removeHeader("Authorization")
+                    .build()
+            )
+        }
+        val acceptAny = original.header(HEADER_ACCEPT_ANY) != null
+        // File handlers outside /api/ don't understand the API query suffix.
+        val url = if (acceptAny && !original.url.encodedPath.startsWith("/api/", ignoreCase = true)) {
+            original.url
+        } else {
+            withApiSuffix(original.url)
+        }
         val isAuthCall = original.url.encodedPath.endsWith(ArpTokenRefresher.AUTH_PATH, ignoreCase = true) ||
             original.header(HEADER_SKIP_REAUTH) != null
 
         val tokenUsed = cookieJar.bearerToken
-        val firstResponse = chain.proceed(decorate(original, url, tokenUsed, isAuthCall))
+        val firstResponse = chain.proceed(decorate(original, url, tokenUsed, isAuthCall, acceptAny))
         if (isAuthCall || !isSessionExpired(firstResponse)) return firstResponse
 
         firstResponse.close()
@@ -260,14 +279,21 @@ class ArpAutoReauthInterceptor(
                 .body("".toResponseBody(null))
                 .build()
         }
-        return chain.proceed(decorate(original, url, cookieJar.bearerToken, isAuthCall = false))
+        return chain.proceed(decorate(original, url, cookieJar.bearerToken, isAuthCall = false, acceptAny = acceptAny))
     }
 
-    private fun decorate(original: Request, url: HttpUrl, token: String?, isAuthCall: Boolean): Request =
+    private fun decorate(
+        original: Request,
+        url: HttpUrl,
+        token: String?,
+        isAuthCall: Boolean,
+        acceptAny: Boolean = false
+    ): Request =
         original.newBuilder()
             .url(url)
             .removeHeader(HEADER_SKIP_REAUTH)
-            .header("Accept", "application/json")
+            .removeHeader(HEADER_ACCEPT_ANY)
+            .header("Accept", if (acceptAny) "*/*" else "application/json")
             .header("X-Requested-With", "XMLHttpRequest")
             .header(AprMsApiKeyGenerator.HEADER_NAME, AprMsApiKeyGenerator.generateMsApiKey())
             .apply {
@@ -285,6 +311,17 @@ class ArpAutoReauthInterceptor(
     companion object {
         /** Add to a request to skip the re-auth loop (used by the login call itself). */
         const val HEADER_SKIP_REAUTH = "X-Taal-Skip-Reauth"
+
+        /**
+         * Add to a file download request: sends a wildcard `Accept` instead of `application/json` and
+         * skips the API query suffix outside `/api/` (static files / download handlers).
+         */
+        const val HEADER_ACCEPT_ANY = "X-Taal-Accept-Any"
+
+        private val API_HOST: String = ArpApiDataSource.WSEI_WD_BASE_URL.toHttpUrl().host
+
+        /** True for the dean's office host (any port: the API and the web portal share it). */
+        fun isApiHost(url: HttpUrl): Boolean = url.host.equals(API_HOST, ignoreCase = true)
 
         fun withApiSuffix(url: HttpUrl): HttpUrl = url.newBuilder().apply {
             if (url.queryParameter("TwoLetterISOLanguageName") == null) {

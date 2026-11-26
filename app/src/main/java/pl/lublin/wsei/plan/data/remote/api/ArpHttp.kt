@@ -75,10 +75,29 @@ object AbpEnvelope {
         } catch (e: SerializationException) {
             throw AprMalformedResponseException("Invalid JSON response from the Virtual Dean's Office.", e)
         }
-        val obj = element as? JsonObject ?: return element
-        val looksLikeEnvelope = "__abp" in obj ||
+        return unwrapElement(element)
+    }
+
+    /** True when [element] is an ABP `AjaxResponse` envelope rather than a bare DTO. */
+    fun isEnvelope(element: JsonElement): Boolean {
+        val obj = element as? JsonObject ?: return false
+        return "__abp" in obj ||
             ("success" in obj && ("result" in obj || "error" in obj || "unAuthorizedRequest" in obj))
-        if (!looksLikeEnvelope) return element
+    }
+
+    /**
+     * `targetUrl` of an envelope (ABP's way to point the client to another address, e.g. a file
+     * download handler), or null when absent/blank.
+     */
+    fun targetUrl(element: JsonElement): String? {
+        if (!isEnvelope(element)) return null
+        return ((element as JsonObject)["targetUrl"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+    }
+
+    /** Element-level variant of [unwrap] for callers that already parsed the body. */
+    fun unwrapElement(element: JsonElement): JsonElement {
+        if (!isEnvelope(element)) return element
+        val obj = element as JsonObject
 
         val unauthorized = (obj["unAuthorizedRequest"] as? JsonPrimitive)?.booleanOrNull == true
         if (unauthorized) throw AprSessionExpiredException()

@@ -8,6 +8,7 @@ package pl.lublin.wsei.plan.ui.more
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.text.format.Formatter
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -46,6 +47,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
@@ -284,8 +286,16 @@ private fun AttachmentButton(
     onClick: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val context = LocalContext.current
     val openDescription = stringResource(R.string.announcements_attachment_open_cd, attachment.fileName)
     val openingDescription = stringResource(R.string.announcements_attachment_opening)
+    val extension = remember(attachment.fileName) { attachmentExtension(attachment.fileName) }
+    val details = remember(extension, attachment.sizeBytes, context) {
+        listOfNotNull(
+            extension?.uppercase(),
+            attachment.sizeBytes.takeIf { it > 0 }?.let { Formatter.formatShortFileSize(context, it) }
+        ).joinToString(" · ")
+    }
     FilledTonalButton(
         onClick = onClick,
         enabled = enabled,
@@ -295,24 +305,35 @@ private fun AttachmentButton(
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .semantics {
-                contentDescription = openDescription
+                contentDescription = if (details.isEmpty()) openDescription else "$openDescription, $details"
                 if (isOpening) stateDescription = openingDescription
             }
     ) {
         Icon(
-            imageVector = WseiIcons.AttachFile,
+            imageVector = attachmentTypeIcon(extension),
             contentDescription = null,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(20.dp)
         )
-        Text(
-            text = attachment.fileName,
-            style = MaterialTheme.typography.labelLarge,
-            maxLines = 1,
-            overflow = TextOverflow.MiddleEllipsis,
+        Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = WseiSpacing.s)
-        )
+        ) {
+            Text(
+                text = attachment.fileName,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.MiddleEllipsis
+            )
+            if (details.isNotEmpty()) {
+                Text(
+                    text = details,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = LocalContentColor.current.copy(alpha = 0.72f),
+                    maxLines = 1
+                )
+            }
+        }
         Box(modifier = Modifier.size(28.dp), contentAlignment = Alignment.Center) {
             AnimatedContent(
                 targetState = isOpening,
@@ -337,6 +358,100 @@ private fun AttachmentButton(
             }
         }
     }
+}
+
+/** Extension of an attachment name (lower-case, without the dot), or null when it has none. */
+private fun attachmentExtension(fileName: String): String? =
+    fileName.substringAfterLast('.', "").lowercase()
+        .takeIf { it.isNotEmpty() && it.length <= 5 && it.all(Char::isLetterOrDigit) && it.any(Char::isLetter) }
+
+/** File-type symbol for the attachment row; the generic paper clip for unknown types. */
+private fun attachmentTypeIcon(extension: String?): ImageVector = when (extension) {
+    "pdf" -> PdfFileIcon
+    "png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "tif", "tiff", "svg" -> ImageFileIcon
+    "xls", "xlsx", "xlsm", "ods", "csv", "tsv" -> SpreadsheetFileIcon
+    "ppt", "pptx", "pps", "ppsx", "odp" -> SlidesFileIcon
+    "doc", "docx", "docm", "odt", "rtf", "txt", "md" -> DocumentFileIcon
+    "zip", "rar", "7z" -> ArchiveFileIcon
+    else -> WseiIcons.AttachFile
+}
+
+private fun fileTypeSymbol(name: String, pathData: String): ImageVector =
+    ImageVector.Builder(
+        name = name,
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).addPath(
+        pathData = addPathNodes(pathData),
+        fill = SolidColor(Color.Black)
+    ).build()
+
+/** Material Icons „picture_as_pdf”. */
+private val PdfFileIcon: ImageVector by lazy {
+    fileTypeSymbol(
+        "PictureAsPdf",
+        "M20,2H8c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V4c0,-1.1 -0.9,-2 -2,-2z" +
+            "M11.5,9.5c0,0.83 -0.67,1.5 -1.5,1.5H9v2H7.5V7H10c0.83,0 1.5,0.67 1.5,1.5v1z" +
+            "M16.5,11.5c0,0.83 -0.67,1.5 -1.5,1.5h-2.5V7H15c0.83,0 1.5,0.67 1.5,1.5v3z" +
+            "M20.5,8.5H19v1h1.5V11H19v2h-1.5V7h3v1.5z" +
+            "M9,9.5h1v-1H9v1z" +
+            "M4,6H2v14c0,1.1 0.9,2 2,2h14v-2H4V6z" +
+            "M14,11.5h1v-3h-1v3z"
+    )
+}
+
+/** Material Icons „image”. */
+private val ImageFileIcon: ImageVector by lazy {
+    fileTypeSymbol(
+        "Image",
+        "M21,19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2z" +
+            "M8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z"
+    )
+}
+
+/** Material Icons „table_chart”. */
+private val SpreadsheetFileIcon: ImageVector by lazy {
+    fileTypeSymbol(
+        "TableChart",
+        "M10,10.02h5V21h-5z" +
+            "M17,21h3c1.1,0 2,-0.9 2,-2v-9h-5v11z" +
+            "M20,3H5c-1.1,0 -2,0.9 -2,2v3h19V5c0,-1.1 -0.9,-2 -2,-2z" +
+            "M3,19c0,1.1 0.9,2 2,2h3V10H3v9z"
+    )
+}
+
+/** Material Icons „slideshow”. */
+private val SlidesFileIcon: ImageVector by lazy {
+    fileTypeSymbol(
+        "Slideshow",
+        "M10,8v8l5,-4 -5,-4z" +
+            "M19,3H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2V5c0,-1.1 -0.9,-2 -2,-2z" +
+            "M19,19H5V5h14v14z"
+    )
+}
+
+/** Material Icons „description”. */
+private val DocumentFileIcon: ImageVector by lazy {
+    fileTypeSymbol(
+        "Description",
+        "M14,2H6c-1.1,0 -1.99,0.9 -1.99,2L4,20c0,1.1 0.89,2 1.99,2H18c1.1,0 2,-0.9 2,-2V8l-6,-6z" +
+            "M16,18H8v-2h8v2z" +
+            "M16,14H8v-2h8v2z" +
+            "M13,9V3.5L18.5,9H13z"
+    )
+}
+
+/** Material Icons „archive”. */
+private val ArchiveFileIcon: ImageVector by lazy {
+    fileTypeSymbol(
+        "Archive",
+        "M20.54,5.23l-1.39,-1.68C18.88,3.21 18.47,3 18,3H6c-0.47,0 -0.88,0.21 -1.16,0.55L3.46,5.23" +
+            "C3.17,5.57 3,6.02 3,6.5V19c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2V6.5c0,-0.48 -0.17,-0.93 -0.46,-1.27z" +
+            "M12,17.5L6.5,12H10v-2h4v2h3.5L12,17.5z" +
+            "M5.12,5l0.81,-1h12l0.94,1H5.12z"
+    )
 }
 
 // -----------------------------------------------------------------------------------------

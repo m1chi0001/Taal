@@ -28,6 +28,12 @@
     <string name="error_payment_no_link">No BlueMedia online payment link is available.</string>
     <string name="error_attachment_no_viewer">No app can open the file “%1$s”.</string>
     <string name="error_attachment_download">Couldn\'t download the attachment.</string>
+    <string name="error_attachment_not_found">The attachment wasn\'t found on the server. The dean\'s office may have removed it.</string>
+    <string name="error_attachment_html_page">The server returned a web page instead of the file. Try again later.</string>
+    <string name="error_attachment_login_page">The server returned a login page instead of the file — your session may have expired. Sign in again and retry.</string>
+    <string name="error_attachment_too_large">The attachment is too large to download in the app.</string>
+    <string name="error_attachment_save_failed">Couldn\'t save the attachment on this device.</string>
+    <string name="error_attachment_open_failed">Couldn\'t hand the downloaded file over to another app.</string>
     <string name="error_schedule_refresh">Couldn\'t refresh the schedule.</string>
 
     <!-- App updates (GitHub releases) -->

@@ -542,7 +542,17 @@ data class FinancialObligation(
 data class AnnouncementAttachment(
     val id: Int,
     val fileName: String,
-    val fileBytesBase64: String? = null
+    val fileBytesBase64: String? = null,
+    /** Id of the announcement the file belongs to (0 = unknown); sent to download endpoint fallbacks. */
+    val announcementId: Int = 0,
+    /** Size in bytes reported by the list endpoint (0 = unknown). */
+    val sizeBytes: Long = 0,
+    /** Direct download address from the list entry (`url`/`path`/`link`), absolute or server-relative. */
+    val downloadUrl: String? = null,
+    /** Alternative file identifier from the list entry (`fileId`/`guid`), used as a download fallback. */
+    val alternativeFileId: String? = null,
+    /** MIME type reported by the list endpoint, if any. */
+    val mimeType: String? = null
 )
 
 @Immutable

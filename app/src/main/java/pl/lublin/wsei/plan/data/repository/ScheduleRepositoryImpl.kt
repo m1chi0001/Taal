@@ -26,6 +26,10 @@ import pl.lublin.wsei.plan.data.remote.api.ArpSessionCookieJar
 import pl.lublin.wsei.plan.data.remote.api.ArpTokenRefresher
 import pl.lublin.wsei.plan.data.remote.html.WdHtmlDataSource
 import pl.lublin.wsei.plan.domain.model.AcademicDay
+import pl.lublin.wsei.plan.data.attachments.AttachmentResponseHandler
+import pl.lublin.wsei.plan.data.attachments.AttachmentUrls
+import pl.lublin.wsei.plan.domain.attachments.AttachmentDownloadException
+import pl.lublin.wsei.plan.domain.attachments.DownloadedAttachment
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DataSourceOrigin
@@ -43,11 +47,13 @@ import pl.lublin.wsei.plan.domain.repository.ScheduleRepository
 import pl.lublin.wsei.plan.domain.repository.SyncReport
 import pl.lublin.wsei.plan.service.ClassAlarmScheduler
 import pl.lublin.wsei.plan.service.ScheduleSyncScheduler
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import javax.net.ssl.SSLException
 import pl.lublin.wsei.plan.ui.schedule.SampleWseiScheduleFactory
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Singleton
 import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.data.local.LocalizedStrings
@@ -77,7 +83,8 @@ class ScheduleRepositoryImpl @Inject constructor(
     private val encryptedCredentialStore: EncryptedCredentialStore,
     private val alarmScheduler: ClassAlarmScheduler,
     private val syncScheduler: ScheduleSyncScheduler,
-    private val strings: LocalizedStrings
+    private val strings: LocalizedStrings,
+    private val attachmentResponses: AttachmentResponseHandler
 ) : ScheduleRepository {
 
     private val _currentSession = MutableStateFlow<StudentSession?>(null)
@@ -86,6 +93,14 @@ class ScheduleRepositoryImpl @Inject constructor(
     companion object {
         private val DEBUG_LOGINS = setOf("debug", "debug@wsei.lublin.pl", "99901", "test")
         private const val DEBUG_PASSWORD = "debug123"
+        private const val MAX_PORTAL_ATTACHMENT_HOPS = 3
+
+        /** Minimal valid one-page PDF for the demo account's attachments. */
+        private const val DEMO_ATTACHMENT_PDF =
+            "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n" +
+                "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n" +
+                "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]>>endobj\n" +
+                "trailer<</Root 1 0 R>>\n%%EOF\n"
     }
 
     init {
@@ -524,19 +539,64 @@ class ScheduleRepositoryImpl @Inject constructor(
     }
 
     override suspend fun downloadAnnouncementAttachment(
-        attachmentId: Int
-    ): Result<AnnouncementAttachment> {
+        attachment: AnnouncementAttachment
+    ): Result<DownloadedAttachment> {
         val session = _currentSession.value ?: return Result.failure(notLoggedIn())
         if (session.isDebugAccount) {
             return Result.success(
-                AnnouncementAttachment(
-                    id = attachmentId,
-                    fileName = "Regulamin_Laboratorium_CyberSec_AI_DEMO.pdf",
-                    fileBytesBase64 = "JVBERi0xLjQK"
+                DownloadedAttachment(
+                    fileName = attachment.fileName.ifBlank { "Regulamin_Laboratorium_CyberSec_AI_DEMO.pdf" },
+                    bytes = DEMO_ATTACHMENT_PDF.toByteArray(Charsets.US_ASCII),
+                    mimeType = "application/pdf"
                 )
             )
         }
-        return arpApiDataSource.downloadAnnouncementAttachment(session, attachmentId)
+        val apiResult = arpApiDataSource.downloadAnnouncementAttachment(session, attachment)
+        if (apiResult.isSuccess) return apiResult
+        return portalAttachmentFallback(attachment, apiResult.exceptionOrNull()) ?: apiResult
+    }
+
+    /**
+     * Second chance for list entries with a direct link on the dean's office host: when the REST
+     * session got an HTML page or "not found", the link may need the web portal's cookie session.
+     * Returns null (keep the API error) when not applicable or when the fallback fails too.
+     */
+    private suspend fun portalAttachmentFallback(
+        attachment: AnnouncementAttachment,
+        apiError: Throwable?
+    ): Result<DownloadedAttachment>? {
+        val reason = (apiError as? AttachmentDownloadException)?.reason ?: return null
+        if (reason != AttachmentDownloadException.Reason.HTML_PAGE && reason != AttachmentDownloadException.Reason.NOT_FOUND) {
+            return null
+        }
+        val portalBase = htmlDataSource.endpoints.baseUrl
+        var url = AttachmentUrls.resolve(portalBase, attachment.downloadUrl)?.toHttpUrlOrNull() ?: return null
+        if (!htmlDataSource.canDownload(url)) return null
+        return try {
+            repeat(MAX_PORTAL_ATTACHMENT_HOPS) {
+                val raw = htmlDataSource.downloadAttachment(url, AttachmentResponseHandler.MAX_ATTACHMENT_BYTES)
+                if (raw.statusCode !in 200..299) return null
+                when (
+                    val outcome = attachmentResponses.handle(
+                        attachment = attachment,
+                        sourceUrl = raw.url,
+                        contentType = raw.contentType,
+                        contentDisposition = raw.contentDisposition,
+                        bytes = raw.bytes
+                    )
+                ) {
+                    is AttachmentResponseHandler.Outcome.File -> return Result.success(outcome.attachment)
+                    is AttachmentResponseHandler.Outcome.FollowLink -> {
+                        url = outcome.url.toHttpUrlOrNull()?.takeIf { htmlDataSource.canDownload(it) } ?: return null
+                    }
+                }
+            }
+            null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
     }
 
     override suspend fun getEventById(eventId: String): ClassEvent? {
