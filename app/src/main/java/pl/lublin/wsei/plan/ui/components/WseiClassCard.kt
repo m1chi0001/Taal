@@ -57,6 +57,24 @@ import pl.lublin.wsei.plan.l10n.localizedNameOrPlaceholder
 
 enum class ClassRowState { UPCOMING, NEXT, ONGOING, FINISHED }
 
+/** Lead window (1 hour) across midnight within which an upcoming class already counts as "Next". */
+const val NEXT_CLASS_LEAD_MILLIS: Long = 60 * 60_000L
+
+/**
+ * True when [event] has not started yet at [nowEpochMillis] and should receive the
+ * [ClassRowState.NEXT] ("Następne") highlight — only on the day of classes ([todayIso]) or
+ * within [NEXT_CLASS_LEAD_MILLIS] (1 hour) before start, never days ahead of a zjazd.
+ */
+fun shouldHighlightAsNextClass(
+    event: ClassEvent,
+    nowEpochMillis: Long,
+    todayIso: String
+): Boolean {
+    val untilStart = event.timeSlot.startEpochMillis - nowEpochMillis
+    if (untilStart <= 0L) return false
+    return event.dateIso == todayIso || untilStart <= NEXT_CLASS_LEAD_MILLIS
+}
+
 /** Time-based state of a class card — one function instead of several copies of the same logic. */
 fun classRowStateOf(
     event: ClassEvent,

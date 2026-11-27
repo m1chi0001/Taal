@@ -18,6 +18,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -511,6 +512,8 @@ private fun ObligationCard(
                     // On the error-tinted card the button is an opaque tonal overlay of the card's content colour.
                     tonalContainer = if (dueThisMonth) tonalLayer(containerColor, contentColor, 0.14f) else colors.secondaryContainer,
                     tonalContent = if (dueThisMonth) contentColor else colors.onSecondaryContainer,
+                    secondaryContainer = if (dueThisMonth) tonalLayer(containerColor, contentColor, 0.08f) else colors.surfaceContainerHigh,
+                    secondaryBorder = if (dueThisMonth) tonalLayer(containerColor, contentColor, 0.24f) else colors.outlineVariant,
                     textColor = if (dueThisMonth) contentColor else colors.primary,
                     onClick = onPayOnline
                 )
@@ -593,8 +596,8 @@ private fun ObligationCard(
 
 /**
  * Online payment action of an obligation card. [prominent] (nearest due item or an expanded card)
- * is a full-width filled tonal button with the amount; otherwise a compact text button keeps the
- * list calm.
+ * is a full-width filled tonal button with the amount; later installments use a calm full-width
+ * tonal outlined button with expressive press-shape morphing instead of floating corner text.
  */
 @Composable
 private fun PayOnlineAction(
@@ -602,6 +605,8 @@ private fun PayOnlineAction(
     prominent: Boolean,
     tonalContainer: Color,
     tonalContent: Color,
+    secondaryContainer: Color,
+    secondaryBorder: Color,
     textColor: Color,
     onClick: () -> Unit
 ) {
@@ -627,30 +632,38 @@ private fun PayOnlineAction(
             Text(
                 text = stringResource(R.string.finances_pay_online, amount),
                 style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
     } else {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Spacer(modifier = Modifier.weight(1f))
-            TextButton(
-                onClick = onClick,
-                shapes = ButtonDefaults.shapes(),
-                colors = ButtonDefaults.textButtonColors(contentColor = textColor)
-            ) {
-                Text(
-                    text = stringResource(R.string.finances_pay_online_short),
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1
-                )
-                Spacer(modifier = Modifier.width(WseiSpacing.s))
-                Icon(
-                    imageVector = WseiIcons.ArrowForward,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+        OutlinedButton(
+            onClick = onClick,
+            shapes = ButtonDefaults.shapes(),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = secondaryContainer,
+                contentColor = textColor
+            ),
+            border = BorderStroke(1.dp, secondaryBorder),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 46.dp)
+        ) {
+            Icon(
+                imageVector = WseiIcons.ArrowForward,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(WseiSpacing.s))
+            Text(
+                text = stringResource(R.string.finances_pay_online_short),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

@@ -111,4 +111,5 @@
     <string name="home_focus_list_upcoming_date">Найближчі заняття • %1$s</string>
     <string name="home_focus_last_today">Це останнє заняття на сьогодні</string>
     <string name="announcements_attachment_unnamed">Вкладення до оголошення</string>
+    <string name="schedule_day_off_subtitle">На вибраний день занять не заплановано</string>
 </resources>

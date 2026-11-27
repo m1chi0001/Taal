@@ -111,4 +111,5 @@
     <string name="home_focus_list_upcoming_date">Najbliższe zajęcia • %1$s</string>
     <string name="home_focus_last_today">To ostatnie zajęcia na dziś</string>
     <string name="announcements_attachment_unnamed">Załącznik do ogłoszenia</string>
+    <string name="schedule_day_off_subtitle">Na wybrany dzień nie zaplanowano zajęć</string>
 </resources>

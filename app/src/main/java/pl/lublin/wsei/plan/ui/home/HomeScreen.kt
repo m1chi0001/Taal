@@ -63,6 +63,7 @@ import pl.lublin.wsei.plan.ui.components.WseiIconBadge
 import pl.lublin.wsei.plan.ui.components.WseiPill
 import pl.lublin.wsei.plan.ui.components.WseiScreenScaffold
 import pl.lublin.wsei.plan.ui.components.classRowStateOf
+import pl.lublin.wsei.plan.ui.components.shouldHighlightAsNextClass
 import pl.lublin.wsei.plan.ui.components.wseiPressScale
 import pl.lublin.wsei.plan.ui.finances.formatPln
 import pl.lublin.wsei.plan.ui.finances.isDueThisMonth
@@ -331,6 +332,7 @@ private fun HomeFocusSection(
                 FocusDayList(
                     uiState = uiState,
                     isToday = listModel.focus.isToday,
+                    todayIso = todayIso,
                     dateIso = listModel.focus.dateIso,
                     events = upcoming,
                     nowEpochMillis = now,
@@ -648,6 +650,7 @@ private fun OpenScheduleAffordance(color: Color) {
 private fun FocusDayList(
     uiState: ScheduleUiState,
     isToday: Boolean,
+    todayIso: String,
     dateIso: String?,
     events: List<ClassEvent>,
     nowEpochMillis: Long,
@@ -666,7 +669,10 @@ private fun FocusDayList(
         stringResource(R.string.home_focus_list_upcoming_date, shortDate)
     }
     val activeId = uiState.scheduleFocus.activeEvent?.id
-    val nextId = uiState.scheduleFocus.nextEvent?.id
+    val focusNext = uiState.scheduleFocus.nextEvent
+    val highlightedNextId = remember(focusNext, nowEpochMillis, todayIso) {
+        focusNext?.takeIf { shouldHighlightAsNextClass(it, nowEpochMillis, todayIso) }?.id
+    }
     WseiCard(
         onClick = onClick,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -705,9 +711,9 @@ private fun FocusDayList(
                         WseiClassCard(
                             event = event,
                             nowEpochMillis = nowEpochMillis,
-                            // The hero already carries the live/next highlight; rows stay quiet unless
-                            // they are the active or next class of a later-day list.
-                            state = classRowStateOf(event, nowEpochMillis, activeId, nextId?.takeIf { !isToday }),
+                            // Highlight "Następne" only on the day of classes (or within 1 h before start),
+                            // never days ahead in a future zjazd preview.
+                            state = classRowStateOf(event, nowEpochMillis, activeId, highlightedNextId),
                             compact = true,
                             showContainer = false,
                             shape = wseiGroupItemShape(index, visible.size, outer = 20.dp, inner = 6.dp),

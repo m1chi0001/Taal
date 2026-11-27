@@ -129,4 +129,74 @@ class NextClassDayTest {
         assertEquals(focus.events.size, day.blockCount)
         assertEquals(5, day.daysFromToday)
     }
+
+    @Test
+    fun `nearestClassDayFromNow always returns nearest upcoming zjazd from today regardless of later zjazdy`() {
+        val dec19 = event("dec19", "2026-12-19", "08:00", "09:30")
+        val schedule = listOf(friA, sunA, decFriB, dec19, decFriA, decFriC)
+        // Today is Friday 2026-11-27 (free day); upcoming zjazdy are 2026-12-04 and 2026-12-19.
+        // Even when the user browses 2026-12-11 or 2026-12-25 in the calendar, nearestClassDayFromNow
+        // resolves strictly from today -> 2026-12-04 (in 7 days), never skipping to 2026-12-19.
+        val nearest = ScheduleFocusResolver.nearestClassDayFromNow(
+            events = schedule,
+            nowEpochMillis = millis("2026-11-27", "13:42"),
+            zone = zone
+        )
+        assertNotNull(nearest)
+        nearest!!
+        assertEquals("2026-12-04", nearest.dateIso)
+        assertEquals(7, nearest.daysFromToday)
+        assertEquals("15:20", nearest.firstStartLabel)
+        assertEquals(3, nearest.blockCount)
+        assertTrue(nearest.startsZjazd)
+    }
+
+    @Test
+    fun `nearestClassDayFromNow returns today while classes remain today and advances once finished`() {
+        // Before today's class ends (15:00-16:30 on 2026-11-27): points to today (daysFromToday = 0).
+        val beforeStart = ScheduleFocusResolver.nearestClassDayFromNow(
+            events = all,
+            nowEpochMillis = millis("2026-11-27", "10:00"),
+            zone = zone
+        )!!
+        assertEquals("2026-11-27", beforeStart.dateIso)
+        assertEquals(0, beforeStart.daysFromToday)
+        assertTrue(beforeStart.startsZjazd)
+
+        val duringClass = ScheduleFocusResolver.nearestClassDayFromNow(
+            events = all,
+            nowEpochMillis = millis("2026-11-27", "15:30"),
+            zone = zone
+        )!!
+        assertEquals("2026-11-27", duringClass.dateIso)
+        assertEquals(0, duringClass.daysFromToday)
+
+        // Once today's last class ends at 16:30, advances to Saturday 2026-11-28 (same zjazd).
+        val afterTodayDone = ScheduleFocusResolver.nearestClassDayFromNow(
+            events = all,
+            nowEpochMillis = millis("2026-11-27", "16:31"),
+            zone = zone
+        )!!
+        assertEquals("2026-11-28", afterTodayDone.dateIso)
+        assertEquals(1, afterTodayDone.daysFromToday)
+        assertFalse(afterTodayDone.startsZjazd)
+    }
+
+    @Test
+    fun `nearestClassDayFromNow returns null when no classes remain`() {
+        assertNull(
+            ScheduleFocusResolver.nearestClassDayFromNow(
+                events = all,
+                nowEpochMillis = millis("2026-12-04", "20:15"),
+                zone = zone
+            )
+        )
+        assertNull(
+            ScheduleFocusResolver.nearestClassDayFromNow(
+                events = emptyList(),
+                nowEpochMillis = millis("2026-11-27", "12:00"),
+                zone = zone
+            )
+        )
+    }
 }

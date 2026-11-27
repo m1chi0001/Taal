@@ -2,10 +2,11 @@ package pl.lublin.wsei.plan.ui.navigation
 
 import android.content.Context
 import androidx.annotation.StringRes
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -184,21 +185,9 @@ fun WseiAppShell(
         currentDestination = destination
     }
 
-    // Wstecz: podekran „Więcej” → hub, Profil → poprzednia zakładka, każda inna zakładka → Start.
-    // Na Starcie wstecz zamyka aplikację — nawet jeśli w tle zapamiętany jest podekran „Więcej”
-    // (wcześniej taki stan połykał jedno naciśnięcie bez widocznego efektu).
-    BackHandler(enabled = isLoggedIn && currentDestination != WseiDestination.START) {
-        when {
-            currentDestination == WseiDestination.MORE && moreSubView != MoreSubView.HUB ->
-                moreSubView = MoreSubView.HUB
-            currentDestination == WseiDestination.PROFILE ->
-                currentDestination = profileReturnDestination
-            else -> {
-                moreSubView = MoreSubView.HUB
-                currentDestination = WseiDestination.START
-            }
-        }
-    }
+    // Wstecz z podglądem (Predictive Back): podekran „Więcej” → hub (w MoreScreen),
+    // Profil → poprzednia zakładka, każda inna zakładka → Start; na Starcie animacja systemowa.
+    val shellBackState = rememberWseiPredictiveBackState()
 
     // Ekran powitalny pokazujemy raz, przed pierwszym logowaniem.
     val context = LocalContext.current
@@ -288,6 +277,50 @@ fun WseiAppShell(
                                     onSelectDestination = { selectTab(it) }
                                 )
                             }
+                            val shellBackEnabled = currentDestination != WseiDestination.START &&
+                                !(currentDestination == WseiDestination.MORE && moreSubView != MoreSubView.HUB)
+                            val backTargetDestination = if (currentDestination == WseiDestination.PROFILE) {
+                                profileReturnDestination
+                            } else {
+                                WseiDestination.START
+                            }
+
+                            @Composable
+                            fun RenderTab(destination: WseiDestination, subView: MoreSubView) {
+                                tabStateHolder.SaveableStateProvider(destination.name) {
+                                    DestinationContent(
+                                        destination = destination,
+                                        uiState = scheduleUiState,
+                                        moreSubView = subView,
+                                        onNavigate = { currentDestination = it },
+                                        onOpenMore = { openMore(it) },
+                                        onNavigateMoreSubView = { moreSubView = it },
+                                        onCloseProfile = { currentDestination = profileReturnDestination },
+                                        onLogout = onLogout,
+                                        onChangePassword = onChangePassword,
+                                        onSelectDay = onSelectDay,
+                                        onSelectDate = onSelectDate,
+                                        onToggleCalendarExpanded = onToggleCalendarExpanded,
+                                        onPreviousCalendarPeriod = onPreviousCalendarPeriod,
+                                        onNextCalendarPeriod = onNextCalendarPeriod,
+                                        onSelectScheduleFilter = onSelectScheduleFilter,
+                                        onToggleHeroExpanded = onToggleHeroExpanded,
+                                        onSyncLiveNotification = onSyncLiveNotification,
+                                        onRefresh = onRefreshSchedule,
+                                        onInitiateOnlinePayment = onInitiateOnlinePayment,
+                                        onMarkAnnouncementRead = onMarkAnnouncementRead,
+                                        onDownloadAttachment = onDownloadAttachment,
+                                        onSelectThemeMode = onSelectThemeMode,
+                                        onSelectColorPalette = onSelectColorPalette,
+                                        onLoadDeviceCalendars = onLoadDeviceCalendars,
+                                        onSyncToCalendar = onSyncToCalendar,
+                                        onDismissCalendarSyncStatus = onDismissCalendarSyncStatus,
+                                        onToggleLiveNotification = onToggleLiveNotification,
+                                        onToggleHideSensitiveData = onToggleHideSensitiveData
+                                    )
+                                }
+                            }
+
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -307,45 +340,44 @@ fun WseiAppShell(
                                     // leżą z boku — treść nie może pod nie wchodzić.
                                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                             ) {
-                                AnimatedContent(
-                                    targetState = currentDestination,
-                                    transitionSpec = {
-                                        destinationTransform(initialState, targetState)
+                                WseiPredictiveBackContainer(
+                                    enabled = shellBackEnabled,
+                                    state = shellBackState,
+                                    onBack = {
+                                        if (currentDestination == WseiDestination.PROFILE) {
+                                            currentDestination = profileReturnDestination
+                                        } else {
+                                            moreSubView = MoreSubView.HUB
+                                            currentDestination = WseiDestination.START
+                                        }
                                     },
-                                    modifier = Modifier.fillMaxSize(),
-                                    label = "destinationTransition"
-                                ) { destination ->
-                                    tabStateHolder.SaveableStateProvider(destination.name) {
-                                        DestinationContent(
-                                            destination = destination,
-                                            uiState = scheduleUiState,
-                                            moreSubView = moreSubView,
-                                            onNavigate = { currentDestination = it },
-                                            onOpenMore = { openMore(it) },
-                                            onNavigateMoreSubView = { moreSubView = it },
-                                            onCloseProfile = { currentDestination = profileReturnDestination },
-                                            onLogout = onLogout,
-                                            onChangePassword = onChangePassword,
-                                            onSelectDay = onSelectDay,
-                                            onSelectDate = onSelectDate,
-                                            onToggleCalendarExpanded = onToggleCalendarExpanded,
-                                            onPreviousCalendarPeriod = onPreviousCalendarPeriod,
-                                            onNextCalendarPeriod = onNextCalendarPeriod,
-                                            onSelectScheduleFilter = onSelectScheduleFilter,
-                                            onToggleHeroExpanded = onToggleHeroExpanded,
-                                            onSyncLiveNotification = onSyncLiveNotification,
-                                            onRefresh = onRefreshSchedule,
-                                            onInitiateOnlinePayment = onInitiateOnlinePayment,
-                                            onMarkAnnouncementRead = onMarkAnnouncementRead,
-                                            onDownloadAttachment = onDownloadAttachment,
-                                            onSelectThemeMode = onSelectThemeMode,
-                                            onSelectColorPalette = onSelectColorPalette,
-                                            onLoadDeviceCalendars = onLoadDeviceCalendars,
-                                            onSyncToCalendar = onSyncToCalendar,
-                                            onDismissCalendarSyncStatus = onDismissCalendarSyncStatus,
-                                            onToggleLiveNotification = onToggleLiveNotification,
-                                            onToggleHideSensitiveData = onToggleHideSensitiveData
-                                        )
+                                    peekContent = {
+                                        val peekSubView = if (backTargetDestination == WseiDestination.MORE) {
+                                            moreSubView
+                                        } else {
+                                            MoreSubView.HUB
+                                        }
+                                        RenderTab(backTargetDestination, peekSubView)
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    AnimatedContent(
+                                        targetState = currentDestination,
+                                        transitionSpec = {
+                                            if (shellBackState.consumeCommittedSwipe()) {
+                                                ContentTransform(
+                                                    targetContentEnter = EnterTransition.None,
+                                                    initialContentExit = ExitTransition.None,
+                                                    sizeTransform = null
+                                                )
+                                            } else {
+                                                destinationTransform(initialState, targetState)
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                        label = "destinationTransition"
+                                    ) { destination ->
+                                        RenderTab(destination, moreSubView)
                                     }
                                 }
 
@@ -366,13 +398,20 @@ fun WseiAppShell(
                                         message = scheduleUiState.statusBannerMessage,
                                         onDismiss = onDismissStatusBanner
                                     )
+                                    val navVisible = !useRail &&
+                                        (currentDestination != WseiDestination.PROFILE || shellBackState.isPeeking)
+                                    val navSelectedDestination = if (currentDestination == WseiDestination.PROFILE) {
+                                        profileReturnDestination
+                                    } else {
+                                        currentDestination
+                                    }
                                     AnimatedVisibility(
-                                        visible = !useRail && currentDestination != WseiDestination.PROFILE,
+                                        visible = navVisible,
                                         enter = slideInVertically(WseiMotion.spatial()) { it * 2 } + fadeIn(WseiMotion.effects()),
                                         exit = slideOutVertically(WseiMotion.size()) { it * 2 } + fadeOut(WseiMotion.fastEffects())
                                     ) {
                                         WseiFloatingNavigationBar(
-                                            currentDestination = currentDestination,
+                                            currentDestination = navSelectedDestination,
                                             unreadAnnouncementsCount = scheduleUiState.unreadAnnouncementsCount,
                                             onSelectDestination = { selectTab(it) }
                                         )

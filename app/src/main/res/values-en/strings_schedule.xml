@@ -103,4 +103,5 @@
     <string name="home_focus_list_upcoming_date">Upcoming classes • %1$s</string>
     <string name="home_focus_last_today">This is your last class today</string>
     <string name="announcements_attachment_unnamed">Announcement attachment</string>
+    <string name="schedule_day_off_subtitle">No classes scheduled for this day</string>
 </resources>

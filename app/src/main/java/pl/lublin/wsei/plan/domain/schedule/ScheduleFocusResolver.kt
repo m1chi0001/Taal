@@ -98,6 +98,41 @@ object ScheduleFocusResolver {
         )
     }
 
+    /**
+     * Nearest upcoming day with classes starting from `now` in [zone]:
+     * - today (`daysFromToday = 0`) while a class is currently ongoing or still to start today,
+     * - otherwise the first class day strictly after today (same day [resolve] picks).
+     *
+     * Used by the day-off card in Plan zajęć so selecting any free date — even one *after* the
+     * nearest upcoming zjazd — always offers jumping to the nearest upcoming classes from today.
+     */
+    fun nearestClassDayFromNow(
+        events: List<ClassEvent>,
+        nowEpochMillis: Long,
+        zone: ZoneId = WARSAW
+    ): NextClassDay? {
+        if (events.isEmpty()) return null
+        val today = todayOf(nowEpochMillis, zone)
+        val byDate = groupByDate(events, zone)
+        val todayEvents = byDate[today].orEmpty()
+        val activeOrNextToday = todayEvents.firstOrNull {
+            it.isOngoing(nowEpochMillis) || it.isUpcoming(nowEpochMillis)
+        }
+        if (activeOrNextToday != null) {
+            val first = todayEvents.first()
+            val startsZjazd = (1..MAX_ZJAZD_GAP_DAYS).none { gap -> byDate.containsKey(today.minusDays(gap)) }
+            return NextClassDay(
+                dateIso = today.toString(),
+                daysFromToday = 0,
+                firstStartMillis = first.timeSlot.startEpochMillis,
+                firstStartLabel = first.timeSlot.startFormatted,
+                blockCount = todayEvents.size,
+                startsZjazd = startsZjazd
+            )
+        }
+        return nextClassDayAfter(events, today.toString(), nowEpochMillis, zone)
+    }
+
     private fun todayOf(nowEpochMillis: Long, zone: ZoneId): LocalDate =
         Instant.ofEpochMilli(nowEpochMillis).atZone(zone).toLocalDate()
 

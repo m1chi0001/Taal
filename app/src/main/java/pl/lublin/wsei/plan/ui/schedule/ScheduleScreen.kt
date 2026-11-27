@@ -151,6 +151,7 @@ import pl.lublin.wsei.plan.ui.components.WseiPill
 import pl.lublin.wsei.plan.ui.components.WseiScreenFrame
 import pl.lublin.wsei.plan.ui.components.classRowStateOf
 import pl.lublin.wsei.plan.ui.components.displayGroupCode
+import pl.lublin.wsei.plan.ui.components.shouldHighlightAsNextClass
 import pl.lublin.wsei.plan.ui.components.wseiPressScale
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.theme.ActiveHeroCardAsymmetricShape
@@ -168,6 +169,7 @@ import pl.lublin.wsei.plan.ui.theme.wseiGroupItemShape
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.pluralStringResource
@@ -532,6 +534,7 @@ private fun LazyListScope.dayTimeline(
             }
             ScheduleFocusNotice(
                 focus = focus,
+                todayIso = todayIso,
                 todayHadClasses = todayHadClasses,
                 modifier = itemModifier.animateItem(
                     fadeInSpec = WseiMotion.effects(),
@@ -547,9 +550,10 @@ private fun LazyListScope.dayTimeline(
     if (rows.isEmpty()) {
         item(key = "empty_day", contentType = "empty_day") {
             val viewedIso = (selectedDay?.date ?: uiState.selectedDate).toString()
-            // The countdown only depends on today's date, so the per-minute ticker does not recompute it.
-            val nextDay = remember(uiState.allEvents, viewedIso, todayIso) {
-                ScheduleFocusResolver.nextClassDayAfter(uiState.allEvents, viewedIso, uiState.nowEpochMillis)
+            // Always point to the nearest upcoming class day from TODAY (not after viewedIso), so
+            // picking a free day after the upcoming zjazd still offers jumping to that nearest zjazd.
+            val nextDay = remember(uiState.allEvents, todayIso, uiState.scheduleFocus.dateIso) {
+                ScheduleFocusResolver.nearestClassDayFromNow(uiState.allEvents, uiState.nowEpochMillis)
             }
             DayOffCard(
                 model = DayOffModel(viewedIso, nextDay),
@@ -565,7 +569,10 @@ private fun LazyListScope.dayTimeline(
     } else {
         val now = uiState.nowEpochMillis
         val activeId = uiState.activeClass?.id
-        val nextId = uiState.nextClassPreview?.nextEvent?.id
+        val nextId = uiState.nextClassPreview?.nextEvent
+            ?.takeIf { shouldHighlightAsNextClass(it, now, todayIso) }
+            ?.id
+            ?: rows.firstOrNull { shouldHighlightAsNextClass(it.event, now, todayIso) }?.event?.id
         itemsIndexed(
             items = rows,
             key = { _, row -> row.key },
@@ -1461,18 +1468,20 @@ private fun NextClassPreviewCard(preview: NextClassPreview) {
 }
 
 /**
- * Short notice above the day list when the focus moved away from today: what happened today
- * ("Dzisiaj bez zajęć" / "Dzisiejsze zajęcia zakończone") and which kind of day is shown below
- * (tomorrow, a later zjazd day, the next zjazd). The date is not repeated — the day header right
- * below names it — so the notice stays a single quiet line instead of a second banner.
+ * Material 3 Expressive callout card above the day list when the focus moved away from today:
+ * explains what happened today ("Dzisiaj bez zajęć" / "Dzisiejsze zajęcia zakończone"), which
+ * kind of day is shown right below (tomorrow, a later zjazd day, the next zjazd), and shows an
+ * optional relative countdown pill ("Za 7 dni" / "Jutro") without repeating the full date.
  */
 @Composable
 private fun ScheduleFocusNotice(
     focus: ScheduleFocus,
+    todayIso: String,
     todayHadClasses: Boolean,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
+    val locale = appLocale()
     val title = stringResource(
         if (todayHadClasses) R.string.schedule_focus_today_done else R.string.schedule_focus_today_free
     )
@@ -1482,36 +1491,79 @@ private fun ScheduleFocusNotice(
             ScheduleFocusKind.LATER_THIS_ZJAZD -> R.string.schedule_focus_showing_later
             else -> R.string.schedule_focus_showing_next_zjazd
         }
-    )
-    // Start-aligned within the (possibly centred) item width, like the day header below it.
-    Box(modifier = modifier.fillMaxWidth()) {
-        Surface(
-            shape = CircleShape,
-            color = colors.surfaceContainerHigh,
-            contentColor = colors.onSurface,
-            modifier = Modifier.semantics(mergeDescendants = true) {}
+    ).capitalizeFirst(locale)
+    val daysUntil = remember(todayIso, focus.dateIso) {
+        val targetIso = focus.dateIso ?: return@remember null
+        runCatching {
+            ChronoUnit.DAYS.between(
+                java.time.LocalDate.parse(todayIso),
+                java.time.LocalDate.parse(targetIso)
+            ).toInt()
+        }.getOrNull()
+    }
+    val countdownLabel = daysUntil?.takeIf { it >= 1 }?.let { relativeDaysLabel(it)?.capitalizeFirst(locale) }
+    val noticeShape = remember {
+        RoundedCornerShape(
+            topStart = 28.dp,
+            topEnd = 28.dp,
+            bottomStart = 12.dp,
+            bottomEnd = 28.dp
+        )
+    }
+
+    Surface(
+        shape = noticeShape,
+        color = colors.secondaryContainer,
+        contentColor = colors.onSecondaryContainer,
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {}
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = WseiSpacing.l, vertical = WseiSpacing.m),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.m)
         ) {
-            Row(
-                modifier = Modifier.padding(
-                    start = WseiSpacing.m,
-                    end = WseiSpacing.l,
-                    top = WseiSpacing.s,
-                    bottom = WseiSpacing.s
-                ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(WseiSpacing.s)
+            WseiIconBadge(
+                icon = if (todayHadClasses) WseiIcons.CheckCircle else WseiIcons.AutoAwesome,
+                shape = if (todayHadClasses) {
+                    MaterialShapes.Cookie9Sided.toShape()
+                } else {
+                    MaterialShapes.Sunny.toShape()
+                },
+                containerColor = colors.onSecondaryContainer,
+                contentColor = colors.secondaryContainer,
+                size = 44.dp,
+                iconSize = 21.dp
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Icon(
-                    imageVector = WseiIcons.CheckCircle,
-                    contentDescription = null,
-                    tint = colors.secondary,
-                    modifier = Modifier.size(18.dp)
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = stringResource(R.string.schedule_day_date_count, title, detail),
-                    style = MaterialTheme.typography.labelLarge,
+                    text = detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = mutedContentColor(colors.onSecondaryContainer, colors.secondaryContainer),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (countdownLabel != null) {
+                val pillBg = tonalLayer(colors.secondaryContainer, colors.onSecondaryContainer, 0.14f)
+                WseiPill(
+                    text = countdownLabel,
+                    containerColor = pillBg,
+                    contentColor = colors.onSecondaryContainer.withContrastAgainst(pillBg),
+                    emphasized = true
                 )
             }
         }
@@ -1577,18 +1629,19 @@ private fun DaySectionHeaderContent(selectedDay: AcademicDay, topPadding: Dp) {
 }
 
 // -----------------------------------------------------------------------------------------
-// Day off — with a hint about the nearest class day
+// Day off — with a hint about the nearest class day from today
 // -----------------------------------------------------------------------------------------
 
-/** What the day-off card shows: the viewed day and the next class day after it (if any). */
+/** What the day-off card shows: the viewed day and the nearest upcoming class day from today (if any). */
 @Immutable
 private data class DayOffModel(val dateIso: String, val next: NextClassDay?)
 
 /**
- * "Wolne od zajęć" for a day without classes. When a class day follows the viewed one, the card
- * names it ("Następny zjazd: Piątek, 4 grudnia (za 11 dni)"), shows its first start and block
- * count and offers a tonal jump to it. Content is keyed by the viewed date, so moving between
- * free days cross-fades and the card resizes with the size spring instead of jumping.
+ * Material 3 Expressive "Wolne od zajęć" card for a day without classes. When an upcoming class
+ * day exists from today, an inset card highlights its status ("Następny zjazd" / "Dalej w tym
+ * zjeździe" / "Dzisiaj"), relative countdown pill, full day title, first start + block count, and
+ * a full-width expressive jump button. Content is keyed by the viewed date so moving between free
+ * days cross-fades and resizes with [WseiMotion.size].
  */
 @Composable
 private fun DayOffCard(
@@ -1598,7 +1651,9 @@ private fun DayOffCard(
 ) {
     WseiCard(
         modifier = modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        shape = ActiveHeroCardAsymmetricShape,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        contentPadding = PaddingValues(WseiSpacing.xl)
     ) {
         AnimatedContent(
             targetState = model,
@@ -1619,36 +1674,43 @@ private fun DayOffCard(
 @Composable
 private fun DayOffContent(next: NextClassDay?, onGoTo: (String) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = if (next == null) Alignment.CenterVertically else Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)
+        verticalArrangement = Arrangement.spacedBy(WseiSpacing.l)
     ) {
-        WseiIconBadge(
-            icon = WseiIcons.CalendarMonth,
-            shape = M3XCookieShape,
-            containerColor = colors.tertiaryContainer,
-            contentColor = colors.onTertiaryContainer,
-            size = 56.dp,
-            iconSize = 26.dp
-        )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)
         ) {
-            Text(
-                text = stringResource(R.string.schedule_day_off_title),
-                style = MaterialTheme.typography.titleLarge
+            WseiIconBadge(
+                icon = WseiIcons.AutoAwesome,
+                shape = MaterialShapes.Sunny.toShape(),
+                containerColor = colors.secondaryContainer,
+                contentColor = colors.onSecondaryContainer,
+                size = 52.dp,
+                iconSize = 24.dp
             )
-            if (next == null) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
                 Text(
-                    text = stringResource(R.string.schedule_day_off_message),
+                    text = stringResource(R.string.schedule_day_off_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = stringResource(
+                        if (next == null) R.string.schedule_day_off_message else R.string.schedule_day_off_subtitle
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.onSurfaceVariant
                 )
-            } else {
-                NextClassDayDetails(next = next, onGoTo = onGoTo)
             }
+        }
+        if (next != null) {
+            NextClassDayDetails(next = next, onGoTo = onGoTo)
         }
     }
 }
@@ -1656,58 +1718,96 @@ private fun DayOffContent(next: NextClassDay?, onGoTo: (String) -> Unit) {
 @Composable
 private fun NextClassDayDetails(next: NextClassDay, onGoTo: (String) -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val locale = appLocale()
     val dayTitle = rememberDayTitle(next.dateIso)
-    val countdown = relativeDaysLabel(next.daysFromToday)
-    val dateWithCountdown = if (countdown != null) {
-        stringResource(R.string.schedule_day_off_date_countdown, dayTitle, countdown)
-    } else {
-        dayTitle
+    val statusLabel = when {
+        next.daysFromToday == 0 -> stringResource(R.string.schedule_relative_today).capitalizeFirst(locale)
+        next.startsZjazd -> stringResource(R.string.home_focus_status_next_zjazd)
+        else -> stringResource(R.string.home_focus_status_later)
     }
+    val countdownLabel = next.daysFromToday
+        .takeIf { it >= 1 }
+        ?.let { relativeDaysLabel(it)?.capitalizeFirst(locale) }
     val shortDateFormatter = rememberLocalizedDateFormatter(GoToDateSkeleton)
     val shortDate = remember(next.dateIso, shortDateFormatter) {
         runCatching { java.time.LocalDate.parse(next.dateIso).format(shortDateFormatter) }.getOrDefault(next.dateIso)
     }
-    Column(
-        modifier = Modifier.semantics(mergeDescendants = true) {},
-        verticalArrangement = Arrangement.spacedBy(WseiSpacing.xxs)
+
+    Surface(
+        shape = WseiInsetShape,
+        color = colors.surfaceContainerHigh,
+        contentColor = colors.onSurface,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Text(
-            text = stringResource(
-                if (next.startsZjazd) R.string.schedule_focus_next_zjazd else R.string.schedule_focus_next_later,
-                dateWithCountdown
-            ),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = colors.secondary
-        )
-        Text(
-            text = stringResource(
-                R.string.schedule_day_off_next_details,
-                next.firstStartLabel,
-                pluralStringResource(R.plurals.schedule_day_blocks, next.blockCount, next.blockCount)
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.onSurfaceVariant
-        )
-    }
-    FilledTonalButton(
-        onClick = { onGoTo(next.dateIso) },
-        // Expressive shape morph on press, like the rest of Plan zajęć's buttons.
-        shapes = ButtonDefaults.shapes(),
-        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-        modifier = Modifier.padding(top = WseiSpacing.s)
-    ) {
-        Icon(
-            imageVector = WseiIcons.ArrowForward,
-            contentDescription = null,
-            modifier = Modifier.size(ButtonDefaults.IconSize)
-        )
-        Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
-        Text(
-            text = stringResource(R.string.schedule_day_off_go_to, shortDate),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(WseiSpacing.l),
+            verticalArrangement = Arrangement.spacedBy(WseiSpacing.m)
+        ) {
+            Column(
+                modifier = Modifier.semantics(mergeDescendants = true) {},
+                verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
+            ) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(WseiSpacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(WseiSpacing.xs)
+                ) {
+                    WseiPill(
+                        text = statusLabel,
+                        containerColor = colors.secondaryContainer,
+                        contentColor = colors.onSecondaryContainer,
+                        emphasized = true
+                    )
+                    if (countdownLabel != null) {
+                        WseiPill(
+                            text = countdownLabel,
+                            containerColor = colors.tertiaryContainer,
+                            contentColor = colors.onTertiaryContainer
+                        )
+                    }
+                }
+                Text(
+                    text = dayTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(
+                        R.string.schedule_day_off_next_details,
+                        next.firstStartLabel,
+                        pluralStringResource(R.plurals.schedule_day_blocks, next.blockCount, next.blockCount)
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant
+                )
+            }
+            FilledTonalButton(
+                onClick = { onGoTo(next.dateIso) },
+                // Expressive shape morph on press, full-width inside the inset card.
+                shapes = ButtonDefaults.shapes(),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = colors.primaryContainer,
+                    contentColor = colors.onPrimaryContainer
+                ),
+                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+            ) {
+                Icon(
+                    imageVector = WseiIcons.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize)
+                )
+                Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+                Text(
+                    text = stringResource(R.string.schedule_day_off_go_to, shortDate),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 

@@ -11,6 +11,8 @@ import android.os.Build
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -116,6 +118,8 @@ import pl.lublin.wsei.plan.ui.components.WseiSwitch
 import pl.lublin.wsei.plan.ui.components.wseiPressScale
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.navigation.MoreSubView
+import pl.lublin.wsei.plan.ui.navigation.WseiPredictiveBackContainer
+import pl.lublin.wsei.plan.ui.navigation.rememberWseiPredictiveBackState
 import pl.lublin.wsei.plan.ui.schedule.AppThemeMode
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
 import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
@@ -177,6 +181,7 @@ fun MoreScreen(
     val windowLayout = LocalWseiWindowLayout.current
     val updateStatus by updateViewModel.updateStatus.collectAsStateWithLifecycle()
     val updateAvailable = updateStatus.isUpdateAvailable
+    val predictiveBackState = rememberWseiPredictiveBackState()
     val subPage: @Composable (MoreSubView, embedded: Boolean) -> Unit = { subView, embedded ->
         val onBack: (() -> Unit)? = if (embedded) null else ({ onNavigateSubView(MoreSubView.HUB) })
         when (subView) {
@@ -225,31 +230,55 @@ fun MoreScreen(
                 )
             },
             second = {
-                AnimatedContent(
-                    targetState = currentSubView,
-                    transitionSpec = {
-                        (fadeIn(WseiMotion.effects()) +
-                            slideInHorizontally(WseiMotion.spatial()) { width -> width / 12 }) togetherWith
-                            fadeOut(WseiMotion.fastEffects()) using null
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    label = "moreDetailTransition"
-                ) { subView -> subPage(subView, true) }
+                WseiPredictiveBackContainer(
+                    enabled = currentSubView != MoreSubView.HUB,
+                    state = predictiveBackState,
+                    onBack = { onNavigateSubView(MoreSubView.HUB) },
+                    peekContent = { subPage(MoreSubView.HUB, true) },
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    AnimatedContent(
+                        targetState = currentSubView,
+                        transitionSpec = {
+                            if (predictiveBackState.consumeCommittedSwipe()) {
+                                EnterTransition.None togetherWith ExitTransition.None using null
+                            } else {
+                                (fadeIn(WseiMotion.effects()) +
+                                    slideInHorizontally(WseiMotion.spatial()) { width -> width / 12 }) togetherWith
+                                    fadeOut(WseiMotion.fastEffects()) using null
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        label = "moreDetailTransition"
+                    ) { subView -> subPage(subView, true) }
+                }
             }
         )
     } else {
-        AnimatedContent(
-            targetState = currentSubView,
-            transitionSpec = {
-                // Forward when leaving the hub, backward when returning to it.
-                val forward = targetState != MoreSubView.HUB
-                (fadeIn(WseiMotion.effects()) +
-                    slideInHorizontally(WseiMotion.spatial()) { width -> if (forward) width / 8 else -width / 8 }) togetherWith
-                    fadeOut(WseiMotion.fastEffects()) using null
-            },
-            modifier = Modifier.fillMaxSize(),
-            label = "moreSubViewTransition"
-        ) { subView -> subPage(subView, false) }
+        WseiPredictiveBackContainer(
+            enabled = currentSubView != MoreSubView.HUB,
+            state = predictiveBackState,
+            onBack = { onNavigateSubView(MoreSubView.HUB) },
+            peekContent = { subPage(MoreSubView.HUB, false) },
+            modifier = Modifier.fillMaxSize()
+        ) {
+            AnimatedContent(
+                targetState = currentSubView,
+                transitionSpec = {
+                    if (predictiveBackState.consumeCommittedSwipe()) {
+                        EnterTransition.None togetherWith ExitTransition.None using null
+                    } else {
+                        // Forward when leaving the hub, backward when returning to it.
+                        val forward = targetState != MoreSubView.HUB
+                        (fadeIn(WseiMotion.effects()) +
+                            slideInHorizontally(WseiMotion.spatial()) { width -> if (forward) width / 8 else -width / 8 }) togetherWith
+                            fadeOut(WseiMotion.fastEffects()) using null
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+                label = "moreSubViewTransition"
+            ) { subView -> subPage(subView, false) }
+        }
     }
 }
 
