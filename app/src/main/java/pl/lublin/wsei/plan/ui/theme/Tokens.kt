@@ -116,6 +116,9 @@ object WseiMotion {
     /** Size changes: between `StiffnessMedium` and `StiffnessMediumLow`, never bouncy. */
     const val SizeStiffness: Float = 1000f
 
+    /** Full-screen navigation & Predictive Back: critically damped so edges never overshoot. */
+    const val NavigationStiffness: Float = 420f
+
     /** Colour/alpha: "medium-high" stiffness (Compose has no such constant; 2× `StiffnessMedium`). */
     const val EffectsStiffness: Float = 3000f
 
@@ -127,6 +130,9 @@ object WseiMotion {
 
     fun <T> size(): FiniteAnimationSpec<T> =
         spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = SizeStiffness)
+
+    fun <T> navigation(): FiniteAnimationSpec<T> =
+        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = NavigationStiffness)
 
     fun <T> effects(): FiniteAnimationSpec<T> =
         spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = EffectsStiffness)

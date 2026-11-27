@@ -11,6 +11,7 @@ import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.separatingVerticalHingeBounds
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +74,14 @@ data class WseiWindowLayout(
 
 val LocalWseiWindowLayout = staticCompositionLocalOf { WseiWindowLayout.Compact }
 
+/**
+ * Provided per `NavHost` destination: `true` on top-level tabs where the floating bottom bar is
+ * shown on compact screens, `false` on sub-screens (`Ogłoszenia`, `Ustawienia`, `O aplikacji`,
+ * `Profil`) where the floating bar hides. Scoping per destination keeps padding constant during
+ * push/pop animations.
+ */
+val LocalWseiFloatingBarVisible = compositionLocalOf { true }
+
 /** Maximum width of single-column, text-heavy content on large screens. */
 val WseiReadableContentMaxWidth: Dp = 840.dp
 
@@ -101,13 +110,15 @@ fun rememberWseiWindowLayout(): WseiWindowLayout {
 }
 
 /**
- * Bottom space a scrolling list must leave free: the floating navigation bar on phones,
- * only the system navigation bar (+ breathing room) when the rail is used.
+ * Bottom space a scrolling list must leave free: the floating navigation bar on top-level phone
+ * tabs, or only the system navigation bar (+ breathing room) when the side rail is used or when
+ * on a sub-screen where the floating bar is hidden.
  */
 @Composable
 fun wseiBottomClearance(): Dp {
     val layout = LocalWseiWindowLayout.current
-    return if (layout.useNavigationRail) {
+    val floatingBarVisible = LocalWseiFloatingBarVisible.current
+    return if (layout.useNavigationRail || !floatingBarVisible) {
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + WseiSpacing.xxl
     } else {
         WseiSpacing.bottomBarClearance

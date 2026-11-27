@@ -1,6 +1,5 @@
 package pl.lublin.wsei.plan.ui.components
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,7 +10,6 @@ import pl.lublin.wsei.plan.domain.model.Room
 import pl.lublin.wsei.plan.domain.model.Subject
 import pl.lublin.wsei.plan.domain.model.TimeSlot
 import pl.lublin.wsei.plan.domain.schedule.ScheduleFocusResolver
-import pl.lublin.wsei.plan.ui.navigation.predictiveBackEasing
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -67,20 +65,5 @@ class NextClassHighlightTest {
         assertFalse(shouldHighlightAsNextClass(dec4First, millis("2026-12-04", "15:20"), todayIso = "2026-12-04"))
         assertFalse(shouldHighlightAsNextClass(dec4First, millis("2026-12-04", "16:00"), todayIso = "2026-12-04"))
         assertFalse(shouldHighlightAsNextClass(dec4First, millis("2026-12-04", "17:00"), todayIso = "2026-12-04"))
-    }
-
-    @Test
-    fun `predictiveBackEasing is bounded and monotonically increasing`() {
-        assertEquals(0f, predictiveBackEasing(0f), 1e-5f)
-        assertEquals(1f, predictiveBackEasing(1f), 1e-5f)
-        assertEquals(0f, predictiveBackEasing(-0.5f), 1e-5f)
-        assertEquals(1f, predictiveBackEasing(1.5f), 1e-5f)
-
-        var prev = 0f
-        for (step in 1..20) {
-            val current = predictiveBackEasing(step / 20f)
-            assertTrue("Expected monotonic increase at step $step", current > prev)
-            prev = current
-        }
     }
 }

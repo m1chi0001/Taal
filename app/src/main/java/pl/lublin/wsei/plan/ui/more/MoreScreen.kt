@@ -8,17 +8,17 @@ package pl.lublin.wsei.plan.ui.more
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -54,6 +54,7 @@ import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedListItem
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonSize
@@ -70,6 +71,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Color
@@ -118,8 +120,6 @@ import pl.lublin.wsei.plan.ui.components.WseiSwitch
 import pl.lublin.wsei.plan.ui.components.wseiPressScale
 import pl.lublin.wsei.plan.ui.icons.WseiIcons
 import pl.lublin.wsei.plan.ui.navigation.MoreSubView
-import pl.lublin.wsei.plan.ui.navigation.WseiPredictiveBackContainer
-import pl.lublin.wsei.plan.ui.navigation.rememberWseiPredictiveBackState
 import pl.lublin.wsei.plan.ui.schedule.AppThemeMode
 import pl.lublin.wsei.plan.ui.schedule.ScheduleUiState
 import pl.lublin.wsei.plan.ui.theme.M3XSquircleShape
@@ -158,10 +158,10 @@ internal fun WseiExternalLinkMark() {
 }
 
 /**
- * "More" tab: the hub plus the Announcements, Settings and About sub-pages.
- *
- * - phone: the hub and sub-pages replace each other ([currentSubView] comes from the shell),
- * - medium window: the hub as a tile grid,
+ * "More" tab:
+ * - phone & medium window: renders [MoreHub]; the Announcements, Settings and About sub-pages
+ *   live as dedicated `NavHost` routes ([MoreAnnouncementsRoute], [MoreSettingsRoute],
+ *   [MoreAboutRoute]) so `NavHost` drives Predictive Back cleanly while the outer floating bar hides,
  * - wide window / unfolded foldable: the hub on the left, the selected sub-page on the right.
  */
 @Composable
@@ -181,40 +181,11 @@ fun MoreScreen(
     val windowLayout = LocalWseiWindowLayout.current
     val updateStatus by updateViewModel.updateStatus.collectAsStateWithLifecycle()
     val updateAvailable = updateStatus.isUpdateAvailable
-    val predictiveBackState = rememberWseiPredictiveBackState()
-    val subPage: @Composable (MoreSubView, embedded: Boolean) -> Unit = { subView, embedded ->
-        val onBack: (() -> Unit)? = if (embedded) null else ({ onNavigateSubView(MoreSubView.HUB) })
-        when (subView) {
-            MoreSubView.HUB -> if (embedded) {
-                MoreDetailPlaceholder(
-                    unreadCount = uiState.unreadAnnouncementsCount,
-                    onOpenAnnouncements = { onNavigateSubView(MoreSubView.ANNOUNCEMENTS) }
-                )
-            } else {
-                MoreHub(uiState = uiState, onOpen = onNavigateSubView, updateAvailable = updateAvailable)
-            }
-            MoreSubView.ANNOUNCEMENTS -> AnnouncementsScreen(
-                uiState = uiState,
-                onBack = onBack,
-                embedded = embedded,
-                onMarkRead = onMarkAnnouncementRead,
-                onDownloadAttachment = onDownloadAttachment,
-                onRefresh = onRefresh
-            )
-            MoreSubView.SETTINGS -> SettingsScreen(
-                uiState = uiState,
-                onBack = onBack,
-                embedded = embedded,
-                onSelectThemeMode = onSelectThemeMode,
-                onSelectColorPalette = onSelectColorPalette,
-                onToggleLiveNotification = onToggleLiveNotification,
-                onToggleHideSensitiveData = onToggleHideSensitiveData
-            )
-            MoreSubView.ABOUT -> AboutScreen(onBack = onBack, embedded = embedded)
-        }
-    }
 
     if (windowLayout.supportsTwoPane) {
+        BackHandler(enabled = currentSubView != MoreSubView.HUB) {
+            onNavigateSubView(MoreSubView.HUB)
+        }
         WseiTwoPane(
             modifier = Modifier.fillMaxSize(),
             firstPaneFraction = 0.4f,
@@ -230,56 +201,115 @@ fun MoreScreen(
                 )
             },
             second = {
-                WseiPredictiveBackContainer(
-                    enabled = currentSubView != MoreSubView.HUB,
-                    state = predictiveBackState,
-                    onBack = { onNavigateSubView(MoreSubView.HUB) },
-                    peekContent = { subPage(MoreSubView.HUB, true) },
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    AnimatedContent(
-                        targetState = currentSubView,
-                        transitionSpec = {
-                            if (predictiveBackState.consumeCommittedSwipe()) {
-                                EnterTransition.None togetherWith ExitTransition.None using null
-                            } else {
-                                (fadeIn(WseiMotion.effects()) +
-                                    slideInHorizontally(WseiMotion.spatial()) { width -> width / 12 }) togetherWith
-                                    fadeOut(WseiMotion.fastEffects()) using null
-                            }
-                        },
+                AnimatedContent(
+                    targetState = currentSubView,
+                    transitionSpec = {
+                        val forward = targetState != MoreSubView.HUB
+                        slideInHorizontally(WseiMotion.navigation()) { width ->
+                            if (forward) width else -width / 4
+                        } togetherWith slideOutHorizontally(WseiMotion.navigation()) { width ->
+                            if (forward) -width / 4 else width
+                        } using null
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clipToBounds(),
+                    label = "moreDetailTransition"
+                ) { subView ->
+                    Surface(
                         modifier = Modifier.fillMaxSize(),
-                        label = "moreDetailTransition"
-                    ) { subView -> subPage(subView, true) }
+                        color = MaterialTheme.colorScheme.background,
+                        contentColor = MaterialTheme.colorScheme.onBackground
+                    ) {
+                        when (subView) {
+                            MoreSubView.HUB -> MoreDetailPlaceholder(
+                                unreadCount = uiState.unreadAnnouncementsCount,
+                                onOpenAnnouncements = { onNavigateSubView(MoreSubView.ANNOUNCEMENTS) }
+                            )
+                            MoreSubView.ANNOUNCEMENTS -> AnnouncementsScreen(
+                                uiState = uiState,
+                                onBack = null,
+                                embedded = true,
+                                onMarkRead = onMarkAnnouncementRead,
+                                onDownloadAttachment = onDownloadAttachment,
+                                onRefresh = onRefresh
+                            )
+                            MoreSubView.SETTINGS -> SettingsScreen(
+                                uiState = uiState,
+                                onBack = null,
+                                embedded = true,
+                                onSelectThemeMode = onSelectThemeMode,
+                                onSelectColorPalette = onSelectColorPalette,
+                                onToggleLiveNotification = onToggleLiveNotification,
+                                onToggleHideSensitiveData = onToggleHideSensitiveData
+                            )
+                            MoreSubView.ABOUT -> AboutScreen(
+                                onBack = null,
+                                embedded = true,
+                                viewModel = updateViewModel
+                            )
+                        }
+                    }
                 }
             }
         )
     } else {
-        WseiPredictiveBackContainer(
-            enabled = currentSubView != MoreSubView.HUB,
-            state = predictiveBackState,
-            onBack = { onNavigateSubView(MoreSubView.HUB) },
-            peekContent = { subPage(MoreSubView.HUB, false) },
-            modifier = Modifier.fillMaxSize()
-        ) {
-            AnimatedContent(
-                targetState = currentSubView,
-                transitionSpec = {
-                    if (predictiveBackState.consumeCommittedSwipe()) {
-                        EnterTransition.None togetherWith ExitTransition.None using null
-                    } else {
-                        // Forward when leaving the hub, backward when returning to it.
-                        val forward = targetState != MoreSubView.HUB
-                        (fadeIn(WseiMotion.effects()) +
-                            slideInHorizontally(WseiMotion.spatial()) { width -> if (forward) width / 8 else -width / 8 }) togetherWith
-                            fadeOut(WseiMotion.fastEffects()) using null
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-                label = "moreSubViewTransition"
-            ) { subView -> subPage(subView, false) }
-        }
+        MoreHub(
+            uiState = uiState,
+            onOpen = onNavigateSubView,
+            updateAvailable = updateAvailable
+        )
     }
+}
+
+@Composable
+fun MoreAnnouncementsRoute(
+    uiState: ScheduleUiState,
+    onBack: () -> Unit,
+    onMarkAnnouncementRead: (DeanAnnouncement) -> Unit,
+    onDownloadAttachment: (AnnouncementAttachment) -> Unit,
+    onRefresh: () -> Unit
+) {
+    AnnouncementsScreen(
+        uiState = uiState,
+        onBack = onBack,
+        embedded = false,
+        onMarkRead = onMarkAnnouncementRead,
+        onDownloadAttachment = onDownloadAttachment,
+        onRefresh = onRefresh
+    )
+}
+
+@Composable
+fun MoreSettingsRoute(
+    uiState: ScheduleUiState,
+    onBack: () -> Unit,
+    onSelectThemeMode: (AppThemeMode) -> Unit,
+    onSelectColorPalette: (AppColorPalette) -> Unit,
+    onToggleLiveNotification: (Boolean) -> Unit,
+    onToggleHideSensitiveData: (Boolean) -> Unit
+) {
+    SettingsScreen(
+        uiState = uiState,
+        onBack = onBack,
+        embedded = false,
+        onSelectThemeMode = onSelectThemeMode,
+        onSelectColorPalette = onSelectColorPalette,
+        onToggleLiveNotification = onToggleLiveNotification,
+        onToggleHideSensitiveData = onToggleHideSensitiveData
+    )
+}
+
+@Composable
+fun MoreAboutRoute(
+    onBack: () -> Unit,
+    updateViewModel: UpdateViewModel
+) {
+    AboutScreen(
+        onBack = onBack,
+        embedded = false,
+        viewModel = updateViewModel
+    )
 }
 
 /**

@@ -1,189 +1,201 @@
 package pl.lublin.wsei.plan.ui.navigation
 
-import androidx.activity.BackEventCompat
-import androidx.activity.compose.PredictiveBackHandler
-import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
+import pl.lublin.wsei.plan.ui.adaptive.LocalWseiFloatingBarVisible
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 
 /**
- * Shared state for Material 3 Expressive Predictive Back transitions.
+ * Typed route names for the single app-level `NavHost` in [WseiAppShell].
  *
- * Reads of [progress] and [commitAlpha] happen inside [Modifier.graphicsLayer] lambdas so touch
- * frames during an edge swipe never trigger Compose recomposition or relayout.
+ * Top-level routes show the floating navigation bar on compact windows; detail sub-routes hide it
+ * outside `NavHost` so the bar never scales with or appears inside detail screens during
+ * Predictive Back gestures.
  */
-@Stable
-class WseiPredictiveBackState {
-    internal val progressAnim = Animatable(0f)
-    internal val commitAlphaAnim = Animatable(1f)
+internal object WseiRoute {
+    const val START = "start"
+    const val SCHEDULE = "schedule"
+    const val SUBJECTS = "subjects"
+    const val FINANCES = "finances"
+    const val MORE = "more"
 
-    internal var isDragging by mutableStateOf(false)
-    internal var swipeEdge by mutableIntStateOf(BackEventCompat.EDGE_LEFT)
-    private var justCommittedFromSwipe = false
+    const val ANNOUNCEMENTS = "more/announcements"
+    const val SETTINGS = "more/settings"
+    const val ABOUT = "more/about"
+    const val PROFILE = "profile"
 
-    val progress: Float get() = progressAnim.value
-    val commitAlpha: Float get() = commitAlphaAnim.value
-
-    val isPeeking: Boolean by derivedStateOf {
-        isDragging || progressAnim.value > 0.002f
-    }
-
-    /**
-     * Returns `true` once right after a finger-driven predictive back swipe commits, allowing
-     * `AnimatedContent` to hand off immediately without replaying its full slide/scale transition.
-     */
-    fun consumeCommittedSwipe(): Boolean {
-        val committed = justCommittedFromSwipe
-        justCommittedFromSwipe = false
-        return committed
-    }
-
-    internal fun markCommittedSwipe() {
-        justCommittedFromSwipe = true
-    }
+    val TopLevelOrdered: List<String> = listOf(START, SCHEDULE, SUBJECTS, FINANCES, MORE)
+    val TopLevelSet: Set<String> = TopLevelOrdered.toSet()
+    val MoreSubRoutes: Set<String> = setOf(ANNOUNCEMENTS, SETTINGS, ABOUT)
 }
 
-@Composable
-fun rememberWseiPredictiveBackState(): WseiPredictiveBackState =
-    remember { WseiPredictiveBackState() }
+/** True only on the five primary tabs (`Start`, `Plan`, `Przedmioty`, `Finanse`, `Więcej` hub). */
+internal fun isTopLevelRoute(route: String?): Boolean = route != null && route in WseiRoute.TopLevelSet
+
+/** Maps any active `NavHost` route (including `more/...` sub-routes) to its highlighted tab/rail item. */
+internal fun railDestinationForRoute(route: String?): WseiDestination = when (route) {
+    WseiRoute.START, null -> WseiDestination.START
+    WseiRoute.SCHEDULE -> WseiDestination.SCHEDULE
+    WseiRoute.SUBJECTS -> WseiDestination.SUBJECTS
+    WseiRoute.FINANCES -> WseiDestination.FINANCES
+    WseiRoute.MORE, in WseiRoute.MoreSubRoutes -> WseiDestination.MORE
+    WseiRoute.PROFILE -> WseiDestination.PROFILE
+    else -> WseiDestination.START
+}
+
+internal fun destinationToRoute(destination: WseiDestination): String = when (destination) {
+    WseiDestination.START -> WseiRoute.START
+    WseiDestination.SCHEDULE -> WseiRoute.SCHEDULE
+    WseiDestination.SUBJECTS -> WseiRoute.SUBJECTS
+    WseiDestination.FINANCES -> WseiRoute.FINANCES
+    WseiDestination.MORE -> WseiRoute.MORE
+    WseiDestination.PROFILE -> WseiRoute.PROFILE
+}
+
+internal fun moreSubViewToRoute(subView: MoreSubView): String = when (subView) {
+    MoreSubView.HUB -> WseiRoute.MORE
+    MoreSubView.ANNOUNCEMENTS -> WseiRoute.ANNOUNCEMENTS
+    MoreSubView.SETTINGS -> WseiRoute.SETTINGS
+    MoreSubView.ABOUT -> WseiRoute.ABOUT
+}
+
+internal fun routeToMoreSubView(route: String?): MoreSubView = when (route) {
+    WseiRoute.ANNOUNCEMENTS -> MoreSubView.ANNOUNCEMENTS
+    WseiRoute.SETTINGS -> MoreSubView.SETTINGS
+    WseiRoute.ABOUT -> MoreSubView.ABOUT
+    else -> MoreSubView.HUB
+}
 
 /**
- * Material 3 Expressive Predictive Back container:
- * - shrinks the active foreground screen (`1.0 → 0.90`), rounds its corners (`0 → 28.dp`) and
- *   translates it away from the active swipe edge,
- * - reveals [peekContent] underneath with subtle scale (`0.95 → 1.0`) and parallax,
- * - springs back with [WseiMotion.spatial] if the user cancels the gesture, or glides cleanly into
- *   [peekContent] on release.
+ * Direction of travel when moving between two top-level tabs (`true` = moving toward the end of
+ * the bar, `false` = moving back toward `Start`). Entering a sub-screen (`Profile` or `more/...`)
+ * is always treated as a forward hierarchical push (`true`).
+ */
+internal fun isForwardRouteTransition(initialRoute: String?, targetRoute: String?): Boolean {
+    if (targetRoute == null || !isTopLevelRoute(targetRoute)) return true
+    if (initialRoute == null || !isTopLevelRoute(initialRoute)) return false
+    val initialIndex = WseiRoute.TopLevelOrdered.indexOf(initialRoute)
+    val targetIndex = WseiRoute.TopLevelOrdered.indexOf(targetRoute)
+    return targetIndex >= initialIndex
+}
+
+/**
+ * Opaque full-screen container for every `NavHost` destination:
+ * - guarantees a 100% opaque `MaterialTheme.colorScheme.background` surface so previous screens
+ *   on the back stack never bleed/ghost through during Predictive Back or tab transitions,
+ * - synchronises subtle corner rounding (`0.dp -> 24.dp`) and elevation (`0.dp -> 16.dp`) with
+ *   `NavHost`'s `SeekableTransitionState` while a screen is being popped off the top,
+ * - scopes [LocalWseiFloatingBarVisible] per destination so bottom list padding stays constant
+ *   throughout push/pop animations.
  */
 @Composable
-fun WseiPredictiveBackContainer(
-    enabled: Boolean,
-    state: WseiPredictiveBackState,
-    onBack: () -> Unit,
-    peekContent: @Composable () -> Unit,
+internal fun WseiDestinationSurface(
+    scope: AnimatedContentScope,
+    floatingBarVisible: Boolean,
     modifier: Modifier = Modifier,
-    foregroundBackgroundColor: Color = MaterialTheme.colorScheme.background,
     content: @Composable () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-    var recoveryJob by remember { mutableStateOf<Job?>(null) }
-
-    PredictiveBackHandler(enabled = enabled) { progressFlow: Flow<BackEventCompat> ->
-        recoveryJob?.cancel()
-        var maxRawProgress = 0f
-        state.isDragging = true
-        state.commitAlphaAnim.snapTo(1f)
-        try {
-            progressFlow.collect { backEvent ->
-                state.swipeEdge = backEvent.swipeEdge
-                val raw = backEvent.progress.coerceIn(0f, 1f)
-                if (raw > maxRawProgress) maxRawProgress = raw
-                state.progressAnim.snapTo(predictiveBackEasing(raw))
-            }
-            state.isDragging = false
-            if (maxRawProgress >= MIN_SWIPE_PROGRESS_FOR_GESTURE_COMMIT) {
-                coroutineScope {
-                    launch { state.progressAnim.animateTo(1f, WseiMotion.fastSpatial()) }
-                    launch { state.commitAlphaAnim.animateTo(0f, WseiMotion.fastEffects()) }
-                }
-                state.markCommittedSwipe()
-            }
-            state.progressAnim.snapTo(0f)
-            state.commitAlphaAnim.snapTo(1f)
-            onBack()
-        } catch (e: CancellationException) {
-            state.isDragging = false
-            recoveryJob = scope.launch {
-                coroutineScope {
-                    launch { state.progressAnim.animateTo(0f, WseiMotion.spatial()) }
-                    launch { state.commitAlphaAnim.animateTo(1f, WseiMotion.fastEffects()) }
-                }
-            }
-            throw e
+    val cornerRadius by scope.transition.animateDp(
+        transitionSpec = { WseiMotion.navigation() },
+        label = "destinationCorner"
+    ) { state ->
+        when (state) {
+            EnterExitState.PreEnter -> 0.dp
+            EnterExitState.Visible -> 0.dp
+            EnterExitState.PostExit -> 24.dp
+        }
+    }
+    val elevation by scope.transition.animateDp(
+        transitionSpec = { WseiMotion.navigation() },
+        label = "destinationElevation"
+    ) { state ->
+        when (state) {
+            EnterExitState.PreEnter -> 10.dp
+            EnterExitState.Visible -> 0.dp
+            EnterExitState.PostExit -> 16.dp
         }
     }
 
-    val peeking = state.isPeeking
-    val scrimColor = MaterialTheme.colorScheme.scrim
-
-    Box(modifier = modifier) {
-        if (peeking) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        val p = state.progress
-                        val dir = if (state.swipeEdge == BackEventCompat.EDGE_RIGHT) -1f else 1f
-                        val bgScale = 0.95f + 0.05f * p
-                        scaleX = bgScale
-                        scaleY = bgScale
-                        translationX = -dir * 20.dp.toPx() * (1f - p)
-                    }
-            ) {
-                peekContent()
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        alpha = 0.24f * (1f - state.progress) * state.commitAlpha
-                    }
-                    .background(scrimColor)
-            )
-        }
-
-        Box(
-            modifier = Modifier
+    CompositionLocalProvider(LocalWseiFloatingBarVisible provides floatingBarVisible) {
+        Surface(
+            modifier = modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    val p = state.progress
-                    if (p > 0.001f) {
-                        val dir = if (state.swipeEdge == BackEventCompat.EDGE_RIGHT) -1f else 1f
-                        val fgScale = 1f - 0.10f * p
-                        scaleX = fgScale
-                        scaleY = fgScale
-                        translationX = dir * 28.dp.toPx() * p
-                        alpha = (1f - 0.08f * p) * state.commitAlpha
-                        shape = RoundedCornerShape((28f * p).dp)
-                        clip = true
-                        shadowElevation = 16.dp.toPx() * p
+                    val cornerPx = cornerRadius.toPx()
+                    val elevationPx = elevation.toPx()
+                    if (cornerPx > 1f || elevationPx > 0.5f) {
+                        shape = if (cornerPx > 1f) RoundedCornerShape(cornerRadius) else RectangleShape
+                        clip = cornerPx > 1f
+                        shadowElevation = elevationPx
                     }
                 }
-                .then(
-                    if (peeking) Modifier.background(foregroundBackgroundColor) else Modifier
-                )
-        ) {
-            content()
-        }
+                .clipToBounds(),
+            color = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+            content = content
+        )
     }
 }
 
-/** Cubic-out curve matching Material 3 predictive back deceleration. */
-internal fun predictiveBackEasing(progress: Float): Float {
-    val inv = 1f - progress.coerceIn(0f, 1f)
-    return 1f - inv * inv * inv
+/**
+ * Opaque spatial enter transition for `NavHost`: slides in at 100% opacity (no `fadeIn` cross-fade
+ * that would let text on the outgoing screen ghost through).
+ */
+internal fun wseiNavEnterTransition(initialRoute: String?, targetRoute: String?): EnterTransition {
+    val forward = isForwardRouteTransition(initialRoute, targetRoute)
+    return slideInHorizontally(WseiMotion.navigation()) { fullWidth ->
+        if (forward) fullWidth else -fullWidth
+    }
 }
 
-private const val MIN_SWIPE_PROGRESS_FOR_GESTURE_COMMIT = 0.05f
+/**
+ * Opaque spatial exit transition for `NavHost`: recedes with subtle parallax (and gentle scale
+ * when pushing a detail sub-screen) at 100% opacity.
+ */
+internal fun wseiNavExitTransition(initialRoute: String?, targetRoute: String?): ExitTransition {
+    val forward = isForwardRouteTransition(initialRoute, targetRoute)
+    val slide = slideOutHorizontally(WseiMotion.navigation()) { fullWidth ->
+        if (forward) -fullWidth / 4 else fullWidth / 4
+    }
+    return if (!isTopLevelRoute(targetRoute)) {
+        slide + scaleOut(WseiMotion.navigation(), targetScale = 0.95f)
+    } else {
+        slide
+    }
+}
+
+/**
+ * Opaque `popEnterTransition` driven by `NavHost`'s `SeekableTransitionState` during Predictive
+ * Back: the underlying destination returns from `-25%` parallax and `95%` scale at 100% opacity.
+ */
+internal fun wseiNavPopEnterTransition(): EnterTransition =
+    slideInHorizontally(WseiMotion.navigation()) { fullWidth -> -fullWidth / 4 } +
+        scaleIn(WseiMotion.navigation(), initialScale = 0.95f)
+
+/**
+ * Opaque `popExitTransition` driven by `NavHost`'s `SeekableTransitionState` during Predictive
+ * Back: the foreground screen shrinks to `90%` and slides completely off the end edge at 100%
+ * opacity — never turning semi-transparent over the destination beneath it.
+ */
+internal fun wseiNavPopExitTransition(): ExitTransition =
+    slideOutHorizontally(WseiMotion.navigation()) { fullWidth -> fullWidth } +
+        scaleOut(WseiMotion.navigation(), targetScale = 0.90f)
