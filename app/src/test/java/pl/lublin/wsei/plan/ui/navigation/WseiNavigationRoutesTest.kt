@@ -1,12 +1,21 @@
 package pl.lublin.wsei.plan.ui.navigation
 
+import androidx.navigation.compose.ComposeNavigator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import pl.lublin.wsei.plan.domain.update.VersionComparator
 
 class WseiNavigationRoutesTest {
+
+    @Test
+    fun `safeComposeBackStackFlow returns null instead of crashing when ComposeNavigator is not yet attached`() {
+        val unattachedNavigator = ComposeNavigator()
+        assertNull(safeComposeBackStackFlow(unattachedNavigator))
+        assertNull(safeComposeBackStackFlow(null))
+    }
 
     @Test
     fun `isTopLevelRoute is true only for primary tabs and false for detail sub-screens`() {
@@ -77,10 +86,10 @@ class WseiNavigationRoutesTest {
     }
 
     @Test
-    fun `version 0_8_3 compares as newer than 0_8_2_1 and 0_8_2`() {
-        assertTrue(VersionComparator.compare("0.8.2.1", "0.8.2") > 0)
-        assertTrue(VersionComparator.compare("0.8.3", "0.8.2.1") > 0)
-        assertTrue(VersionComparator.compare("v0.8.3", "v0.8.2.1") > 0)
-        assertEquals(0, VersionComparator.compare("0.8.3", "0.8.3"))
+    fun `hotfix version 0_8_3_1 compares as newer than 0_8_3`() {
+        assertTrue(VersionComparator.compare("0.8.3.1", "0.8.3") > 0)
+        assertTrue(VersionComparator.compare("v0.8.3.1", "v0.8.3") > 0)
+        assertTrue(VersionComparator.compare("0.8.4", "0.8.3.1") > 0)
+        assertEquals(0, VersionComparator.compare("0.8.3.1", "0.8.3.1"))
     }
 }

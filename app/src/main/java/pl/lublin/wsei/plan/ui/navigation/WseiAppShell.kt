@@ -323,8 +323,9 @@ private fun WseiAuthenticatedAppContent(
         if (windowLayout.supportsTwoPane && currentRoute in WseiRoute.MoreSubRoutes) {
             moreTwoPaneSubView = routeToMoreSubView(currentRoute)
             if (!navController.popBackStack(WseiRoute.MORE, inclusive = false)) {
+                val startId = runCatching { navController.graph.findStartDestination().id }.getOrNull() ?: return@LaunchedEffect
                 navController.navigate(WseiRoute.MORE) {
-                    popUpTo(navController.graph.findStartDestination().id) {
+                    popUpTo(startId) {
                         saveState = true
                     }
                     launchSingleTop = true
@@ -337,8 +338,10 @@ private fun WseiAuthenticatedAppContent(
         ) {
             val subRoute = moreSubViewToRoute(moreTwoPaneSubView)
             moreTwoPaneSubView = MoreSubView.HUB
-            navController.navigate(subRoute) {
-                launchSingleTop = true
+            if (runCatching { navController.graph }.isSuccess) {
+                navController.navigate(subRoute) {
+                    launchSingleTop = true
+                }
             }
         }
     }
@@ -349,13 +352,15 @@ private fun WseiAuthenticatedAppContent(
         onAboutVisibilityChanged(showingAbout)
     }
 
-    val openMoreSubView: (MoreSubView) -> Unit = { subView ->
+    val openMoreSubView: (MoreSubView) -> Unit = openMore@{ subView ->
+        if (runCatching { navController.graph }.isFailure) return@openMore
         val liveRoute = navController.liveActiveDestination()?.route
         if (currentSupportsTwoPane) {
             moreTwoPaneSubView = subView
             if (liveRoute != WseiRoute.MORE) {
+                val startId = runCatching { navController.graph.findStartDestination().id }.getOrNull() ?: return@openMore
                 navController.navigate(WseiRoute.MORE) {
-                    popUpTo(navController.graph.findStartDestination().id) {
+                    popUpTo(startId) {
                         saveState = true
                     }
                     launchSingleTop = true
@@ -379,7 +384,9 @@ private fun WseiAuthenticatedAppContent(
     }
 
     val popDetailBackStack: () -> Unit = {
-        navController.popBackStack()
+        if (runCatching { navController.graph }.isSuccess) {
+            navController.popBackStack()
+        }
     }
 
     val resetMoreTwoPane: () -> Unit = {
@@ -399,7 +406,9 @@ private fun WseiAuthenticatedAppContent(
             photoBase64 = session?.personPictureBase64,
             fullName = session?.fullName ?: studentFallbackName,
             onOpen = {
-                if (navController.liveActiveDestination()?.route != WseiRoute.PROFILE) {
+                if (runCatching { navController.graph }.isSuccess &&
+                    navController.liveActiveDestination()?.route != WseiRoute.PROFILE
+                ) {
                     navController.navigate(WseiRoute.PROFILE) {
                         launchSingleTop = true
                     }

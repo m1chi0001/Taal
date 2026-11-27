@@ -34,6 +34,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.ComposeNavigator
 import androidx.navigation.compose.currentBackStackEntryAsState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiFloatingBarVisible
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 
@@ -120,20 +121,36 @@ internal fun NavDestination?.isTabSelected(tab: WseiDestination): Boolean {
 }
 
 /**
+ * Safely returns [ComposeNavigator.backStack] only after `NavHost` has attached its
+ * `NavigatorState`; returns `null` on the initial pre-`NavHost` frame (for example inside
+ * `Scaffold.bottomBar`, which subcomposes before `Scaffold` body content) instead of throwing
+ * `IllegalStateException("You cannot access the Navigator's back stack until the Navigator is attached")`.
+ */
+internal fun safeComposeBackStackFlow(
+    composeNavigator: ComposeNavigator?
+): StateFlow<List<NavBackStackEntry>>? =
+    composeNavigator?.let { nav -> runCatching { nav.backStack }.getOrNull() }
+
+/**
  * Authoritative active [NavBackStackEntry] observed directly from [NavHostController]:
- * - reads [ComposeNavigator.backStack] (the exact synchronous `StateFlow` rendered by `NavHost`)
- *   so rapid back-to-back Predictive Back gestures (`Settings -> More -> Start`) update the
- *   navigation bar pill immediately without waiting on `_transitionsInProgress`,
+ * - safely falls back to [currentBackStackEntryAsState] on frame 1 before `NavHost` attaches the
+ *   navigation graph, then subscribes to [ComposeNavigator.backStack] as soon as attached so rapid
+ *   back-to-back Predictive Back gestures (`Settings -> More -> Start`) update the navigation bar
+ *   pill immediately without waiting on `_transitionsInProgress`,
  * - reconciles [ComposeNavigator.onTransitionComplete] if an interrupted transition left
  *   [NavHostController.currentBackStackEntry] behind [ComposeNavigator.backStack].
  */
 @Composable
 internal fun NavHostController.rememberActiveBackStackEntry(): NavBackStackEntry? {
+    val currentEntry by currentBackStackEntryAsState()
     val composeNavigator = remember(this) {
         runCatching { navigatorProvider.getNavigator(ComposeNavigator::class.java) }.getOrNull()
     }
-    val composeBackStack = composeNavigator?.backStack?.collectAsState()?.value
-    val currentEntry by currentBackStackEntryAsState()
+    val hasAttachedEntry = currentEntry != null
+    val backStackFlow = remember(composeNavigator, hasAttachedEntry) {
+        safeComposeBackStackFlow(composeNavigator)
+    }
+    val composeBackStack = backStackFlow?.collectAsState()?.value
     val composeTop = composeBackStack?.lastOrNull()
 
     LaunchedEffect(composeNavigator, composeTop?.id, currentEntry?.id) {
@@ -142,13 +159,13 @@ internal fun NavHostController.rememberActiveBackStackEntry(): NavBackStackEntry
             currentEntry != null &&
             composeTop.id != currentEntry?.id
         ) {
-            // Allow normal pop/push animations to complete naturally first; only reconcile if
-            // rapid consecutive Predictive Back swipes left an entry stuck in transitionsInProgress.
             delay(450L)
             val stale = currentBackStackEntry
             if (stale != null && stale.id != composeTop.id) {
-                composeNavigator.onTransitionComplete(stale)
-                composeNavigator.onTransitionComplete(composeTop)
+                runCatching {
+                    composeNavigator.onTransitionComplete(stale)
+                    composeNavigator.onTransitionComplete(composeTop)
+                }
             }
         }
     }
@@ -158,9 +175,10 @@ internal fun NavHostController.rememberActiveBackStackEntry(): NavBackStackEntry
 
 /** Live active [NavDestination] read directly from [NavHostController] at click time (never cached). */
 internal fun NavHostController.liveActiveDestination(): NavDestination? {
-    val composeTop = runCatching {
-        navigatorProvider.getNavigator(ComposeNavigator::class.java).backStack.value.lastOrNull()
+    val composeNavigator = runCatching {
+        navigatorProvider.getNavigator(ComposeNavigator::class.java)
     }.getOrNull()
+    val composeTop = safeComposeBackStackFlow(composeNavigator)?.value?.lastOrNull()
     return composeTop?.destination ?: currentBackStackEntry?.destination ?: currentDestination
 }
 
@@ -173,6 +191,7 @@ internal fun NavHostController.navigateToTopLevelTab(
     destination: WseiDestination,
     onResetMoreTwoPane: () -> Unit = {}
 ) {
+    val startDestinationId = runCatching { graph.findStartDestination().id }.getOrNull() ?: return
     val liveDest = liveActiveDestination()
     val liveRoute = liveDest?.route
     if (destination == WseiDestination.MORE) {
@@ -180,7 +199,7 @@ internal fun NavHostController.navigateToTopLevelTab(
         if (liveRoute in WseiRoute.MoreSubRoutes) {
             if (!popBackStack(WseiRoute.MORE, inclusive = false)) {
                 navigate(WseiRoute.MORE) {
-                    popUpTo(graph.findStartDestination().id) {
+                    popUpTo(startDestinationId) {
                         saveState = true
                     }
                     launchSingleTop = true
@@ -193,7 +212,7 @@ internal fun NavHostController.navigateToTopLevelTab(
     if (liveDest.isTabSelected(destination)) return
     val targetRoute = destinationToRoute(destination)
     navigate(targetRoute) {
-        popUpTo(graph.findStartDestination().id) {
+        popUpTo(startDestinationId) {
             saveState = true
         }
         launchSingleTop = true
