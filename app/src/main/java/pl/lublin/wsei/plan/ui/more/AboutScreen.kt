@@ -44,9 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -59,8 +57,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pl.lublin.wsei.plan.BuildConfig
 import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.data.update.UpdateManager
-import pl.lublin.wsei.plan.data.update.UpdatePhase
-import pl.lublin.wsei.plan.data.update.UpdateViewModel
 import pl.lublin.wsei.plan.ui.components.WseiCard
 import pl.lublin.wsei.plan.ui.components.WseiChevron
 import pl.lublin.wsei.plan.ui.components.WseiIconBadge
@@ -78,6 +74,8 @@ import pl.lublin.wsei.plan.ui.theme.tonalLayer
 import pl.lublin.wsei.plan.ui.theme.withContrastAgainst
 import pl.lublin.wsei.plan.ui.update.MarkdownText
 import pl.lublin.wsei.plan.ui.update.UpdateChangelogSheet
+import pl.lublin.wsei.plan.ui.update.UpdatePhase
+import pl.lublin.wsei.plan.ui.update.UpdateViewModel
 
 private const val AUTHOR_LOGIN = "m1chi0001"
 private const val LINK_REPOSITORY = "https://github.com/${UpdateManager.REPO}"
@@ -166,8 +164,6 @@ private fun AboutHeader(modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(WseiSpacing.l)
         ) {
-            // Adaptive launcher icons (mipmap) cannot be loaded as painters; the vector foreground
-            // is drawn as a monochrome mark that follows the selected palette.
             Box(
                 modifier = Modifier
                     .size(76.dp)
@@ -176,13 +172,10 @@ private fun AboutHeader(modifier: Modifier = Modifier) {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_launcher_foreground),
+                    imageVector = WseiIcons.TaalVolcano,
                     contentDescription = null,
                     tint = colors.primaryContainer,
-                    // The foreground keeps its artwork inside the adaptive-icon safe zone (~60%).
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .scale(1.4f)
+                    modifier = Modifier.size(42.dp)
                 )
             }
             Column(

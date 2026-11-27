@@ -47,7 +47,7 @@ class CalendarSyncException(message: String, cause: Throwable? = null) : Excepti
  */
 @Singleton
 class AndroidCalendarSyncManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val strings: LocalizedStrings
 ) : CalendarSyncManager {
 

@@ -1,4 +1,4 @@
-package pl.lublin.wsei.plan.data.update
+package pl.lublin.wsei.plan.ui.update
 
 import android.content.Intent
 import androidx.lifecycle.ViewModel
@@ -11,14 +11,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.File
-import javax.inject.Inject
 import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.data.local.LocalizedStrings
+import pl.lublin.wsei.plan.data.update.ReleaseInfo
+import pl.lublin.wsei.plan.data.update.UpdateException
+import pl.lublin.wsei.plan.data.update.UpdateManager
 import pl.lublin.wsei.plan.domain.update.AppRelease
 import pl.lublin.wsei.plan.domain.update.AppUpdateRepository
 import pl.lublin.wsei.plan.domain.update.AppUpdateStatus
 import pl.lublin.wsei.plan.domain.update.VersionComparator
+import java.io.File
+import javax.inject.Inject
 
 enum class UpdatePhase { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING, READY, ERROR }
 
@@ -31,14 +34,13 @@ data class UpdateState(
 )
 
 /**
- * Update UI state shared by the in-app prompt, "O aplikacji" and the changelog.
+ * Update UI state shared by the in-app prompt, "O aplikacji" and the changelog sheet.
  *
- * Two sources work together:
- * - [AppUpdateRepository] ([updateStatus]) knows the latest release, the full changelog and the
- *   dismissed version (also refreshed in the background),
- * - [UpdateManager] ([state]) downloads the APK and builds the installer intent.
+ * Two collaborators work together:
+ * - [AppUpdateRepository] ([updateStatus]) fetches, parses and caches GitHub releases,
+ * - [UpdateManager] ([state]) downloads the verified APK and builds the package installer intent.
  *
- * Scoped to the activity, so the prompt and the About page share one download.
+ * Scoped to the activity so the prompt and the About screen share a single download state.
  */
 @HiltViewModel
 class UpdateViewModel @Inject constructor(
@@ -95,10 +97,7 @@ class UpdateViewModel @Inject constructor(
         refreshRepository(force = false)
     }
 
-    /** Kept for compatibility with callers expecting one-shot check. */
-    fun autoCheckOnce() = autoCheckOnForeground()
-
-    /** Loads the changelog when the sheet opens and nothing is known yet. */
+    /** Loads the changelog when the sheet opens and nothing is cached yet. */
     fun loadChangelogIfMissing() {
         val status = repository.status.value
         if (status.releases.isEmpty() && !status.isChecking) refreshRepository(force = true)
@@ -121,7 +120,7 @@ class UpdateViewModel @Inject constructor(
                 repository.dismiss(normalized)
             } catch (e: CancellationException) {
                 throw e
-            } catch (ignored: Exception) {
+            } catch (_: Exception) {
                 // A failed write only means the prompt shows again next time.
             }
         }
@@ -134,23 +133,47 @@ class UpdateViewModel @Inject constructor(
                 repository.refresh(force)
             } catch (e: CancellationException) {
                 throw e
-            } catch (ignored: Exception) {
+            } catch (_: Exception) {
                 // The repository reports its own errors through status.errorMessage.
             }
         }
     }
 
-    /** Manual check ("Sprawdź aktualizacje"): forces a repository refresh and the APK lookup. */
+    /** Manual check ("Sprawdź aktualizacje"): performs a single forced repository refresh. */
     fun checkForUpdate() {
         if (_state.value.phase == UpdatePhase.CHECKING || _state.value.phase == UpdatePhase.DOWNLOADING) return
         refreshJob?.cancel()
-        refreshRepository(force = true)
         _state.value = UpdateState(phase = UpdatePhase.CHECKING)
         job = viewModelScope.launch {
-            _state.value = when (val result = manager.checkForUpdate()) {
-                is UpdateCheckResult.UpToDate -> UpdateState(phase = UpdatePhase.UP_TO_DATE)
-                is UpdateCheckResult.Available -> UpdateState(phase = UpdatePhase.AVAILABLE, release = result.release)
-                is UpdateCheckResult.Failure -> UpdateState(phase = UpdatePhase.ERROR, message = result.message)
+            try {
+                repository.refresh(force = true)
+                val status = repository.status.value
+                val latest = status.latest
+                _state.value = when {
+                    status.errorMessage != null ->
+                        UpdateState(phase = UpdatePhase.ERROR, message = status.errorMessage)
+                    !status.isUpdateAvailable || latest == null ->
+                        UpdateState(phase = UpdatePhase.UP_TO_DATE)
+                    latest.version.isBlank() ->
+                        UpdateState(
+                            phase = UpdatePhase.ERROR,
+                            message = strings.get(R.string.update_error_no_version)
+                        )
+                    latest.apkUrl.isNullOrBlank() ->
+                        UpdateState(
+                            phase = UpdatePhase.ERROR,
+                            message = strings.get(R.string.update_error_no_apk, latest.tagName)
+                        )
+                    else ->
+                        UpdateState(phase = UpdatePhase.AVAILABLE, release = latest.toReleaseInfo())
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _state.value = UpdateState(
+                    phase = UpdatePhase.ERROR,
+                    message = strings.get(R.string.update_error_unreadable)
+                )
             }
         }
     }
@@ -184,7 +207,7 @@ class UpdateViewModel @Inject constructor(
                 throw e
             } catch (e: UpdateException) {
                 _state.update { it.copy(phase = UpdatePhase.ERROR, message = e.message) }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Anything unexpected (e.g. a storage or security error) must not crash the app.
                 _state.update {
                     it.copy(phase = UpdatePhase.ERROR, message = strings.get(R.string.update_error_download_generic))
@@ -199,7 +222,7 @@ class UpdateViewModel @Inject constructor(
         _state.update { it.copy(phase = UpdatePhase.AVAILABLE, progress = 0f) }
     }
 
-    /** Intent do uruchomienia przez UI: zgoda na nieznane źródła albo instalator pakietów. */
+    /** Intent for the UI to launch: unknown-sources permission screen or package installer. */
     fun installIntent(): Intent? {
         val apk = _state.value.apk ?: return null
         return if (manager.canInstallPackages()) manager.installIntent(apk) else manager.unknownSourcesSettingsIntent()

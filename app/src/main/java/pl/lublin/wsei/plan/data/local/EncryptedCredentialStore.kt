@@ -35,7 +35,7 @@ data class EncryptedAuthPayload(
  */
 @Singleton
 class EncryptedCredentialStore @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val json: Json
 ) {
     companion object {

@@ -2,7 +2,6 @@ package pl.lublin.wsei.plan.data.update
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -11,18 +10,17 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
+import pl.lublin.wsei.plan.R
+import pl.lublin.wsei.plan.data.local.LocalizedStrings
+import pl.lublin.wsei.plan.domain.update.VersionComparator
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
-import pl.lublin.wsei.plan.R
-import pl.lublin.wsei.plan.data.local.LocalizedStrings
-import pl.lublin.wsei.plan.domain.update.VersionComparator
 
-/** Wydanie z GitHuba, które da się zainstalować (ma załączony plik APK). */
+/** GitHub release metadata needed to download and verify an installable APK asset. */
 data class ReleaseInfo(
     val tag: String,
     val version: String,
@@ -33,25 +31,18 @@ data class ReleaseInfo(
     val pageUrl: String
 )
 
-sealed interface UpdateCheckResult {
-    data class UpToDate(val currentVersion: String) : UpdateCheckResult
-    data class Available(val release: ReleaseInfo) : UpdateCheckResult
-    data class Failure(val message: String) : UpdateCheckResult
-}
-
-/** Błąd pobierania/weryfikacji aktualizacji z komunikatem gotowym do pokazania użytkownikowi. */
+/** APK download or verification failure with a localized user-facing message. */
 class UpdateException(message: String) : Exception(message)
 
 /**
- * Aktualizacje „z poziomu aplikacji”: sprawdza najnowsze wydanie w GitHubie
- * ([REPO]), pobiera załączony plik APK i uruchamia systemowy instalator.
+ * Downloads, verifies and launches installation of signed release APKs from [REPO].
  *
- * Używa zwykłego `HttpURLConnection`, a nie klienta Ktor od Wirtualnego Dziekanatu —
- * ten ma ciasteczka sesji i interceptor re-autoryzacji, które nie powinny dotykać GitHuba.
+ * Uses a plain [HttpURLConnection] rather than the Wirtualny Dziekanat Ktor client so dean's-office
+ * session cookies and auto-reauth interceptors are never exposed to third-party hosts.
  */
 @Singleton
 class UpdateManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val strings: LocalizedStrings
 ) {
 
@@ -60,72 +51,12 @@ class UpdateManager @Inject constructor(
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull().orEmpty().ifBlank { "0" }
 
-    suspend fun checkForUpdate(): UpdateCheckResult = withContext(Dispatchers.IO) {
-        try {
-            val connection = open(LATEST_RELEASE_API, "application/vnd.github+json")
-            try {
-                when (val code = connection.responseCode) {
-                    HttpURLConnection.HTTP_OK -> {
-                        val body = connection.inputStream.bufferedReader().use { it.readText() }
-                        parseRelease(body)
-                    }
-                    HttpURLConnection.HTTP_NOT_FOUND ->
-                        UpdateCheckResult.Failure(strings.get(R.string.update_error_no_release))
-                    HttpURLConnection.HTTP_FORBIDDEN, 429 ->
-                        UpdateCheckResult.Failure(strings.get(R.string.update_error_rate_limited))
-                    else -> UpdateCheckResult.Failure(strings.get(R.string.update_error_http, code))
-                }
-            } finally {
-                connection.disconnect()
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: IOException) {
-            UpdateCheckResult.Failure(strings.get(R.string.update_error_no_connection))
-        } catch (e: Exception) {
-            UpdateCheckResult.Failure(strings.get(R.string.update_error_unreadable))
-        }
-    }
-
-    private fun parseRelease(body: String): UpdateCheckResult {
-        val json = JSONObject(body)
-        val tag = json.optString("tag_name")
-        if (tag.isBlank()) return UpdateCheckResult.Failure(strings.get(R.string.update_error_no_version))
-        val remote = VersionComparator.normalize(tag)
-        if (!isNewer(remote, currentVersion)) return UpdateCheckResult.UpToDate(currentVersion)
-
-        val assets = json.optJSONArray("assets")
-        var chosen: JSONObject? = null
-        if (assets != null) {
-            for (i in 0 until assets.length()) {
-                val asset = assets.getJSONObject(i)
-                if (!asset.optString("name").endsWith(".apk", ignoreCase = true)) continue
-                // Preferuj plik release, nie debug.
-                if (chosen == null || (asset.optString("name").contains("release", true) &&
-                        !chosen.optString("name").contains("release", true))
-                ) chosen = asset
-            }
-        }
-        val apk = chosen ?: return UpdateCheckResult.Failure(
-            strings.get(R.string.update_error_no_apk, tag)
-        )
-        return UpdateCheckResult.Available(
-            ReleaseInfo(
-                tag = tag,
-                version = remote,
-                notes = json.optString("body").trim(),
-                apkUrl = apk.optString("browser_download_url"),
-                apkName = apk.optString("name"),
-                apkSize = apk.optLong("size", -1L),
-                pageUrl = json.optString("html_url", RELEASES_PAGE)
-            )
-        )
-    }
-
-    /** Pobiera APK do `cacheDir/updates`, raportując postęp 0..1, i sprawdza, że to paczka tej aplikacji. */
+    /** Downloads the APK to `cacheDir/updates`, reporting progress in `0..1`, and verifies its package ID. */
     suspend fun downloadApk(release: ReleaseInfo, onProgress: (Float) -> Unit): File =
         withContext(Dispatchers.IO) {
-            if (!release.apkUrl.startsWith("https://")) throw UpdateException(strings.get(R.string.update_error_bad_url))
+            if (!release.apkUrl.startsWith("https://")) {
+                throw UpdateException(strings.get(R.string.update_error_bad_url))
+            }
             val dir = File(context.cacheDir, "updates").apply { mkdirs() }
             dir.listFiles()?.forEach { it.delete() }
             val target = File(dir, "Taal-${release.version}.apk")
@@ -134,7 +65,9 @@ class UpdateManager @Inject constructor(
                 val connection = open(release.apkUrl, "application/octet-stream")
                 try {
                     if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                        throw UpdateException(strings.get(R.string.update_error_download_http, connection.responseCode))
+                        throw UpdateException(
+                            strings.get(R.string.update_error_download_http, connection.responseCode)
+                        )
                     }
                     val total = connection.contentLengthLong.takeIf { it > 0 } ?: release.apkSize
                     var done = 0L
@@ -156,22 +89,26 @@ class UpdateManager @Inject constructor(
                 } finally {
                     connection.disconnect()
                 }
-                if (!partial.renameTo(target)) throw UpdateException(strings.get(R.string.update_error_save_failed))
+                if (!partial.renameTo(target)) {
+                    throw UpdateException(strings.get(R.string.update_error_save_failed))
+                }
                 verifyApk(target)
                 target
             } catch (e: CancellationException) {
                 partial.delete()
                 throw e
             } catch (e: UpdateException) {
-                partial.delete(); target.delete()
+                partial.delete()
+                target.delete()
                 throw e
-            } catch (e: IOException) {
-                partial.delete(); target.delete()
+            } catch (_: IOException) {
+                partial.delete()
+                target.delete()
                 throw UpdateException(strings.get(R.string.update_error_interrupted))
             }
         }
 
-    /** Odrzuca pliki, które nie są paczką Taala. Zgodność podpisu dodatkowo pilnuje sam system przy instalacji. */
+    /** Rejects archives whose packageName differs from this app; Android also enforces signature match at install. */
     private fun verifyApk(file: File) {
         val info = context.packageManager.getPackageArchiveInfo(file.path, 0)
             ?: throw UpdateException(strings.get(R.string.update_error_invalid_apk))
@@ -180,7 +117,7 @@ class UpdateManager @Inject constructor(
         }
     }
 
-    /** Od Androida 8 instalowanie z własnej aplikacji wymaga zgody „Instaluj nieznane aplikacje”. */
+    /** Since Android 8.0, self-updating requires the per-app "Install unknown apps" permission. */
     fun canInstallPackages(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.O || context.packageManager.canRequestPackageInstalls()
 
@@ -202,19 +139,15 @@ class UpdateManager @Inject constructor(
             instanceFollowRedirects = true
             setRequestProperty("Accept", accept)
             setRequestProperty("User-Agent", "Taal-Android/$currentVersion")
-            if (url.startsWith(GITHUB_API)) setRequestProperty("X-GitHub-Api-Version", GITHUB_API_VERSION)
         }
 
     companion object {
         const val REPO = "m1chi0001/Taal"
         const val RELEASES_PAGE = "https://github.com/$REPO/releases"
-        private const val GITHUB_API = "https://api.github.com/"
-        private const val GITHUB_API_VERSION = "2022-11-28"
-        private const val LATEST_RELEASE_API = "${GITHUB_API}repos/$REPO/releases/latest"
 
         /**
-         * `isNewer("0.5.1", "0.5")` → true. Delegates to [VersionComparator] (shared with
-         * [GitHubUpdateRepository]); a remote version without any number is never newer.
+         * `isNewer("0.5.1", "0.5")` → true. Delegates to [VersionComparator]; a remote tag without
+         * any digit is never considered newer.
          */
         fun isNewer(remote: String, local: String): Boolean =
             remote.any { it.isDigit() } && VersionComparator.compare(remote, local) > 0

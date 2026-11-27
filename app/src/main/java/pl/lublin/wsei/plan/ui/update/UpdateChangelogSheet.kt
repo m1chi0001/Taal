@@ -50,7 +50,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.data.update.UpdateManager
-import pl.lublin.wsei.plan.data.update.UpdateViewModel
 import pl.lublin.wsei.plan.domain.update.AppRelease
 import pl.lublin.wsei.plan.domain.update.AppUpdateStatus
 import pl.lublin.wsei.plan.domain.update.VersionComparator

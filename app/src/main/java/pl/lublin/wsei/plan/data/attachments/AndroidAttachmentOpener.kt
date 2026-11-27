@@ -38,7 +38,7 @@ import kotlin.coroutines.cancellation.CancellationException
  */
 @Singleton
 class AndroidAttachmentOpener @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val scheduleRepository: ScheduleRepository,
     private val strings: LocalizedStrings,
     private val responses: AttachmentResponseHandler

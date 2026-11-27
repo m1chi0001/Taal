@@ -51,7 +51,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import javax.net.ssl.SSLException
-import pl.lublin.wsei.plan.ui.schedule.SampleWseiScheduleFactory
+import pl.lublin.wsei.plan.data.local.DebugDemoDataFactory
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Singleton
@@ -217,7 +217,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         snapshotStore.clearAll()
         syncScheduler.cancelAll()
 
-        val debugSession = SampleWseiScheduleFactory.createDebugStudentSession()
+        val debugSession = DebugDemoDataFactory.createDebugStudentSession()
         encryptedCredentialStore.saveEncryptedCredentials(
             login = debugSession.login,
             password = DEBUG_PASSWORD,
@@ -226,7 +226,7 @@ class ScheduleRepositoryImpl @Inject constructor(
         )
         _currentSession.value = debugSession
 
-        val demoEvents = SampleWseiScheduleFactory.createDemoAcademicCalendarEvents(
+        val demoEvents = DebugDemoDataFactory.createDemoAcademicCalendarEvents(
             nowMillis = System.currentTimeMillis()
         )
         scheduleDao.upsertEvents(demoEvents.map { it.toEntity(ownerStudId = debugSession.studId) })
@@ -363,7 +363,7 @@ class ScheduleRepositoryImpl @Inject constructor(
             ?: throw notLoggedIn()
 
         if (session.isDebugAccount) {
-            val demoEvents = SampleWseiScheduleFactory.createDemoAcademicCalendarEvents(
+            val demoEvents = DebugDemoDataFactory.createDemoAcademicCalendarEvents(
                 nowMillis = System.currentTimeMillis(),
                 scheduleType = scheduleType
             )
@@ -495,7 +495,7 @@ class ScheduleRepositoryImpl @Inject constructor(
     override suspend fun fetchStudentGroups(): Result<List<StudentSemesterGroups>> {
         val session = _currentSession.value ?: return Result.success(emptyList())
         if (session.isDebugAccount) {
-            return Result.success(SampleWseiScheduleFactory.createDemoStudentGroups())
+            return Result.success(DebugDemoDataFactory.createDemoStudentGroups())
         }
         return networkWithSnapshot(SnapshotKey.Groups) { arpApiDataSource.fetchStudentGroups(it) }
     }
@@ -503,7 +503,7 @@ class ScheduleRepositoryImpl @Inject constructor(
     override suspend fun fetchStudyPlans(): Result<List<StudyPlanOverview>> {
         val session = _currentSession.value ?: return Result.success(emptyList())
         if (session.isDebugAccount) {
-            return Result.success(SampleWseiScheduleFactory.createDemoStudyPlans())
+            return Result.success(DebugDemoDataFactory.createDemoStudyPlans())
         }
         return networkWithSnapshot(SnapshotKey.StudyPlans) { arpApiDataSource.fetchStudyPlans(it) }
     }
@@ -511,7 +511,7 @@ class ScheduleRepositoryImpl @Inject constructor(
     override suspend fun fetchGrades(): Result<List<GradeItem>> {
         val session = _currentSession.value ?: return Result.success(emptyList())
         if (session.isDebugAccount) {
-            return Result.success(SampleWseiScheduleFactory.createDemoGrades())
+            return Result.success(DebugDemoDataFactory.createDemoGrades())
         }
         return networkWithSnapshot(SnapshotKey.Grades) { arpApiDataSource.fetchGrades(it) }
     }
@@ -519,7 +519,7 @@ class ScheduleRepositoryImpl @Inject constructor(
     override suspend fun fetchScholarships(): Result<List<ScholarshipApplication>> {
         val session = _currentSession.value ?: return Result.success(emptyList())
         if (session.isDebugAccount) {
-            return Result.success(SampleWseiScheduleFactory.createDemoScholarships())
+            return Result.success(DebugDemoDataFactory.createDemoScholarships())
         }
         return networkWithSnapshot(SnapshotKey.Scholarships) { arpApiDataSource.fetchScholarships(it) }
     }
@@ -527,7 +527,7 @@ class ScheduleRepositoryImpl @Inject constructor(
     override suspend fun fetchFinancials(): Result<List<FinancialObligation>> {
         val session = _currentSession.value ?: return Result.success(emptyList())
         if (session.isDebugAccount) {
-            return Result.success(SampleWseiScheduleFactory.createDemoFinancials())
+            return Result.success(DebugDemoDataFactory.createDemoFinancials())
         }
         return networkWithSnapshot(SnapshotKey.Finances) { arpApiDataSource.fetchFinancials(it) }
     }
@@ -546,7 +546,7 @@ class ScheduleRepositoryImpl @Inject constructor(
     override suspend fun fetchAnnouncements(): Result<List<DeanAnnouncement>> {
         val session = _currentSession.value ?: return Result.success(emptyList())
         if (session.isDebugAccount) {
-            return Result.success(SampleWseiScheduleFactory.createDemoAnnouncements())
+            return Result.success(DebugDemoDataFactory.createDemoAnnouncements())
         }
         return networkWithSnapshot(SnapshotKey.Announcements) { arpApiDataSource.fetchAnnouncements(it) }
     }

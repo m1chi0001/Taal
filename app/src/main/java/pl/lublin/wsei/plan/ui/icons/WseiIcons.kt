@@ -1632,35 +1632,60 @@ object WseiIcons {
     }
 
     /**
-     * Minimalist Taal Volcano icon: Caldera cone with inner Vulcan Point peak,
-     * subtle plume arc above the crater, and crater-lake horizon line at the base.
+     * WSEI × Taal Volcano brand emblem: asymmetric Uniwersytet WSEI mountain peak shaped as the
+     * outer Taal Caldera crater rim, nested WSEI chevron ridge, two-faceted 3D Vulcan Point cone,
+     * drifting volcanic steam wisp, and Taal Crater Lake horizon bar.
      */
     val TaalVolcano: ImageVector by lazy {
         materialIcon("TaalVolcano") {
             path(fill = SolidColor(Color.Black)) {
-                // Plume arc above caldera (fitted inside circular container)
-                moveTo(12f, 4.8f)
-                curveTo(10.6f, 4.8f, 9.6f, 5.6f, 9.6f, 6.7f)
-                curveTo(9.6f, 7.3f, 10.1f, 7.7f, 10.6f, 7.7f)
-                curveTo(11.1f, 7.7f, 11.5f, 7.3f, 12.0f, 7.3f)
-                curveTo(12.5f, 7.3f, 12.9f, 7.7f, 13.4f, 7.7f)
-                curveTo(13.9f, 7.7f, 14.4f, 7.3f, 14.4f, 6.7f)
-                curveTo(14.4f, 5.6f, 13.4f, 4.8f, 12.0f, 4.8f)
+                // Outer asymmetric WSEI caldera arch with summit crater dip
+                moveTo(3.2f, 18.27f)
+                lineTo(10.56f, 5.91f)
+                horizontalLineTo(11.01f)
+                lineTo(12.0f, 6.86f)
+                lineTo(12.99f, 5.91f)
+                horizontalLineTo(13.44f)
+                lineTo(20.8f, 18.27f)
+                horizontalLineTo(17.19f)
+                lineTo(10.92f, 7.74f)
+                lineTo(4.64f, 18.27f)
                 close()
-                // Main volcano caldera cone + inner Vulcan Point island peak
-                moveTo(8.8f, 9.2f)
-                lineTo(4.8f, 16.5f)
-                horizontalLineTo(19.2f)
-                lineTo(15.2f, 9.2f)
-                lineTo(13.2f, 10.9f)
-                lineTo(12.0f, 9.4f)
-                lineTo(10.8f, 10.9f)
+                // Nested WSEI inner chevron ridge
+                moveTo(5.98f, 18.27f)
+                lineTo(10.92f, 9.97f)
+                lineTo(15.86f, 18.27f)
+                horizontalLineTo(14.89f)
+                lineTo(10.92f, 11.59f)
+                lineTo(6.94f, 18.27f)
                 close()
-                // Crater lake horizon line at base
-                moveTo(5.0f, 17.8f)
-                horizontalLineTo(19.0f)
-                verticalLineTo(19.2f)
-                horizontalLineTo(5.0f)
+                // 3D Vulcan Point cone — shaded left facet
+                moveTo(10.92f, 12.95f)
+                lineTo(7.75f, 18.27f)
+                lineTo(10.92f, 17.14f)
+                close()
+                // Taal Crater Lake rounded horizon bar
+                moveTo(4.2f, 19.45f)
+                horizontalLineTo(19.8f)
+                curveTo(20.19f, 19.45f, 20.5f, 19.76f, 20.5f, 20.13f)
+                curveTo(20.5f, 20.5f, 20.19f, 20.8f, 19.8f, 20.8f)
+                horizontalLineTo(4.2f)
+                curveTo(3.81f, 20.8f, 3.5f, 20.5f, 3.5f, 20.13f)
+                curveTo(3.5f, 19.76f, 3.81f, 19.45f, 4.2f, 19.45f)
+                close()
+            }
+            path(fill = SolidColor(Color.Black), fillAlpha = 0.68f) {
+                // Drifting volcanic steam wisp above caldera crater
+                moveTo(10.29f, 4.55f)
+                curveTo(10.56f, 3.47f, 11.64f, 3.2f, 12.63f, 3.65f)
+                curveTo(13.44f, 4.01f, 14.26f, 3.83f, 14.98f, 3.2f)
+                curveTo(14.71f, 4.28f, 13.71f, 4.82f, 12.54f, 4.46f)
+                curveTo(11.73f, 4.19f, 11.01f, 4.37f, 10.29f, 4.55f)
+                close()
+                // 3D Vulcan Point cone — sunlit right facet
+                moveTo(10.92f, 12.95f)
+                lineTo(10.92f, 17.14f)
+                lineTo(14.09f, 18.27f)
                 close()
             }
         }

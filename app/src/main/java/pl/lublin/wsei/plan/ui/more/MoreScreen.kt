@@ -98,7 +98,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.graphics.shapes.Morph
 import pl.lublin.wsei.plan.BuildConfig
 import pl.lublin.wsei.plan.R
-import pl.lublin.wsei.plan.data.update.UpdateViewModel
+import pl.lublin.wsei.plan.ui.update.UpdateViewModel
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.AppColorPalette
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
@@ -1159,7 +1159,7 @@ private fun PaletteSwatchChip(
 // --- App language -------------------------------------------------------------------------
 
 /** Per-app language options; [tag] null means "follow the system language". */
-private enum class AppLanguage(val tag: String?, @StringRes val labelRes: Int, val code: String?) {
+private enum class AppLanguage(val tag: String?, @param:StringRes val labelRes: Int, val code: String?) {
     SYSTEM(null, R.string.settings_language_system, null),
     POLISH("pl", R.string.settings_language_polish, "PL"),
     ENGLISH("en", R.string.settings_language_english, "EN"),

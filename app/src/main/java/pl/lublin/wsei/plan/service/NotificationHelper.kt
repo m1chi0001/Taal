@@ -84,7 +84,7 @@ sealed class DayTimelineSegment(
  */
 @Singleton
 class NotificationHelper @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val strings: LocalizedStrings
 ) {
     companion object {

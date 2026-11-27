@@ -60,10 +60,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.window.core.layout.WindowSizeClass
 import kotlinx.datetime.LocalDate
 import pl.lublin.wsei.plan.R
-import pl.lublin.wsei.plan.data.update.UpdateViewModel
+import pl.lublin.wsei.plan.ui.update.UpdateViewModel
 import pl.lublin.wsei.plan.domain.model.AnnouncementAttachment
 import pl.lublin.wsei.plan.domain.model.AppColorPalette
-import pl.lublin.wsei.plan.domain.model.ClassEvent
 import pl.lublin.wsei.plan.domain.model.DeanAnnouncement
 import pl.lublin.wsei.plan.domain.model.FinancialObligation
 import pl.lublin.wsei.plan.domain.model.ScheduleFilterType
@@ -141,7 +140,6 @@ fun WseiAppShell(
     onNextCalendarPeriod: () -> Unit,
     onSelectScheduleFilter: (ScheduleFilterType) -> Unit,
     onToggleHeroExpanded: () -> Unit,
-    onSyncLiveNotification: (ClassEvent) -> Unit,
     onRefreshSchedule: () -> Unit,
     onInitiateOnlinePayment: (FinancialObligation, (String) -> Unit) -> Unit,
     onMarkAnnouncementRead: (DeanAnnouncement) -> Unit,
@@ -232,7 +230,6 @@ fun WseiAppShell(
                         onNextCalendarPeriod = onNextCalendarPeriod,
                         onSelectScheduleFilter = onSelectScheduleFilter,
                         onToggleHeroExpanded = onToggleHeroExpanded,
-                        onSyncLiveNotification = onSyncLiveNotification,
                         onRefreshSchedule = onRefreshSchedule,
                         onInitiateOnlinePayment = onInitiateOnlinePayment,
                         onMarkAnnouncementRead = onMarkAnnouncementRead,
@@ -291,7 +288,6 @@ private fun WseiAuthenticatedAppContent(
     onNextCalendarPeriod: () -> Unit,
     onSelectScheduleFilter: (ScheduleFilterType) -> Unit,
     onToggleHeroExpanded: () -> Unit,
-    onSyncLiveNotification: (ClassEvent) -> Unit,
     onRefreshSchedule: () -> Unit,
     onInitiateOnlinePayment: (FinancialObligation, (String) -> Unit) -> Unit,
     onMarkAnnouncementRead: (DeanAnnouncement) -> Unit,
@@ -515,7 +511,6 @@ private fun WseiAuthenticatedAppContent(
                                 onNextCalendarPeriod = onNextCalendarPeriod,
                                 onSelectScheduleFilter = onSelectScheduleFilter,
                                 onToggleHeroExpanded = onToggleHeroExpanded,
-                                onSyncLiveNotification = onSyncLiveNotification,
                                 onRefreshSchedule = onRefreshSchedule,
                                 onLoadDeviceCalendars = onLoadDeviceCalendars,
                                 onSyncToCalendar = onSyncToCalendar,

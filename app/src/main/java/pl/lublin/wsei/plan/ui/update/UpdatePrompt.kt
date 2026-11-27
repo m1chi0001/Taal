@@ -49,10 +49,6 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pl.lublin.wsei.plan.R
-import pl.lublin.wsei.plan.data.update.UpdatePhase
-import pl.lublin.wsei.plan.data.update.UpdateState
-import pl.lublin.wsei.plan.data.update.UpdateViewModel
-import pl.lublin.wsei.plan.data.update.isFor
 import pl.lublin.wsei.plan.domain.update.AppRelease
 import pl.lublin.wsei.plan.domain.update.VersionComparator
 import pl.lublin.wsei.plan.ui.components.WseiIconBadge

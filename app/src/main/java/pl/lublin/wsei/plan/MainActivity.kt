@@ -95,14 +95,6 @@ class MainActivity : AppCompatActivity() {
                     onNextCalendarPeriod = scheduleViewModel::navigateNextCalendarPeriod,
                     onSelectScheduleFilter = scheduleViewModel::selectScheduleFilter,
                     onToggleHeroExpanded = scheduleViewModel::toggleHeroExpanded,
-                    onSyncLiveNotification = { activeClass ->
-                        if (uiState.isLiveNotificationEnabled && notificationsGranted) {
-                            LiveClassNotificationService.startForClass(
-                                context = this@MainActivity,
-                                eventId = activeClass.id
-                            )
-                        }
-                    },
                     onRefreshSchedule = scheduleViewModel::refreshSchedule,
                     onInitiateOnlinePayment = scheduleViewModel::initiateOnlinePayment,
                     onMarkAnnouncementRead = scheduleViewModel::markAnnouncementRead,

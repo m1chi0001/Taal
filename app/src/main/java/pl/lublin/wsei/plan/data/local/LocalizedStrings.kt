@@ -18,7 +18,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class LocalizedStrings @Inject constructor(
-    @ApplicationContext private val appContext: Context
+    @param:ApplicationContext private val appContext: Context
 ) {
     /** Last localized context, reused while the app language and base configuration stay the same. */
     @Volatile

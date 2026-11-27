@@ -14,7 +14,7 @@ import pl.lublin.wsei.plan.domain.update.AppUpdateRepository
 import javax.inject.Inject
 
 @HiltAndroidApp
-class WseiPlanApp : Application(), Configuration.Provider {
+class TaalApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
@@ -39,11 +39,11 @@ class WseiPlanApp : Application(), Configuration.Provider {
             // Never block app start on WorkManager (e.g. a corrupted WorkManager database).
             Log.w(TAG, "Could not schedule the update check", e)
         }
-        // Throttled (6 h) launch check; the UI may call refresh(false) too — the repository serializes calls.
+        // Launch update check; the UI may call refresh(false) too — the repository serializes and debounces calls.
         appScope.launch { updateRepository.refresh(force = false) }
     }
 
     private companion object {
-        const val TAG = "WseiPlanApp"
+        const val TAG = "TaalApplication"
     }
 }

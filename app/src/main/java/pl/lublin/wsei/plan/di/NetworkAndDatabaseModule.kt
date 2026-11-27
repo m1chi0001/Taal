@@ -2,7 +2,6 @@ package pl.lublin.wsei.plan.di
 
 import android.content.Context
 import androidx.room.Room
-import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -20,25 +19,12 @@ import pl.lublin.wsei.plan.data.local.ScheduleDatabase
 import pl.lublin.wsei.plan.data.remote.api.ArpAutoReauthInterceptor
 import pl.lublin.wsei.plan.data.remote.api.ArpSessionCookieJar
 import pl.lublin.wsei.plan.data.remote.api.ArpTokenRefresher
-import pl.lublin.wsei.plan.data.repository.ScheduleRepositoryImpl
-import pl.lublin.wsei.plan.domain.repository.ScheduleRepository
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class RepositoryBindModule {
-
-    @Binds
-    @Singleton
-    abstract fun bindScheduleRepository(
-        impl: ScheduleRepositoryImpl
-    ): ScheduleRepository
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-object AppNetworkAndDatabaseModule {
+object NetworkAndDatabaseModule {
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     @Provides
@@ -53,8 +39,7 @@ object AppNetworkAndDatabaseModule {
 
     /**
      * REST client for the APR API. Redirects are NOT followed: a 302 to the login page is a session
-     * expiry signal, handled by [ArpAutoReauthInterceptor] (previously the comment said so, but the
-     * interceptor never looked at 3xx and the refresh provider was hard-wired to `false`).
+     * expiry signal handled by [ArpAutoReauthInterceptor].
      */
     @Provides
     @Singleton
@@ -87,13 +72,11 @@ object AppNetworkAndDatabaseModule {
     @Singleton
     fun provideScheduleDatabase(
         @ApplicationContext context: Context
-    ): ScheduleDatabase {
-        return Room.databaseBuilder(
-            context,
-            ScheduleDatabase::class.java,
-            "wsei_schedule.db"
-        ).fallbackToDestructiveMigration(dropAllTables = true).build()
-    }
+    ): ScheduleDatabase = Room.databaseBuilder(
+        context,
+        ScheduleDatabase::class.java,
+        "wsei_schedule.db"
+    ).fallbackToDestructiveMigration(dropAllTables = true).build()
 
     @Provides
     fun provideScheduleDao(database: ScheduleDatabase): ScheduleDao = database.scheduleDao()

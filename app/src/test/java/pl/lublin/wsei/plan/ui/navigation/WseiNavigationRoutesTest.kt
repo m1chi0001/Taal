@@ -86,10 +86,12 @@ class WseiNavigationRoutesTest {
     }
 
     @Test
-    fun `hotfix version 0_8_3_1 compares as newer than 0_8_3`() {
+    fun `milestone 1_0_0 and hotfix 0_8_3_1 compare in expected release order`() {
+        assertTrue(VersionComparator.compare("1.0.0", "0.8.3.1") > 0)
+        assertTrue(VersionComparator.compare("v1.0.0", "v0.8.3.1") > 0)
         assertTrue(VersionComparator.compare("0.8.3.1", "0.8.3") > 0)
         assertTrue(VersionComparator.compare("v0.8.3.1", "v0.8.3") > 0)
         assertTrue(VersionComparator.compare("0.8.4", "0.8.3.1") > 0)
-        assertEquals(0, VersionComparator.compare("0.8.3.1", "0.8.3.1"))
+        assertEquals(0, VersionComparator.compare("1.0.0", "v1.0.0"))
     }
 }

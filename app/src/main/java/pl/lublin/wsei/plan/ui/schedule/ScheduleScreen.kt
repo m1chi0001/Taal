@@ -203,13 +203,11 @@ fun ScheduleScreen(
     onNextCalendarPeriod: () -> Unit,
     onSelectScheduleFilter: (ScheduleFilterType) -> Unit,
     onToggleHeroExpanded: () -> Unit,
-    onSyncLiveNotification: (ClassEvent) -> Unit,
     onRefreshSchedule: () -> Unit,
     modifier: Modifier = Modifier,
     onLoadDeviceCalendars: () -> Unit = {},
     onSyncToCalendar: (calendarId: Long) -> Unit = {},
-    onDismissCalendarSyncStatus: () -> Unit = {},
-    @Suppress("UNUSED_PARAMETER") onLogout: () -> Unit = {}
+    onDismissCalendarSyncStatus: () -> Unit = {}
 ) {
     val windowLayout = LocalWseiWindowLayout.current
     val todayIso = remember(uiState.nowEpochMillis) { warsawTodayIso(uiState.nowEpochMillis) }
@@ -300,7 +298,6 @@ fun ScheduleScreen(
                 onNextCalendarPeriod = onNextCalendarPeriod,
                 onSelectScheduleFilter = onSelectScheduleFilter,
                 onToggleHeroExpanded = onToggleHeroExpanded,
-                onSyncLiveNotification = onSyncLiveNotification,
                 isCalendarSyncBusy = isCalendarSyncBusy,
                 onRequestCalendarSync = requestCalendarSync,
                 modifier = controlsModifier
@@ -400,7 +397,6 @@ private fun ScheduleControls(
     onNextCalendarPeriod: () -> Unit,
     onSelectScheduleFilter: (ScheduleFilterType) -> Unit,
     onToggleHeroExpanded: () -> Unit,
-    onSyncLiveNotification: (ClassEvent) -> Unit,
     isCalendarSyncBusy: Boolean,
     onRequestCalendarSync: () -> Unit,
     modifier: Modifier = Modifier
@@ -455,8 +451,7 @@ private fun ScheduleControls(
                     nowEpochMillis = uiState.nowEpochMillis,
                     isExpanded = uiState.isHeroExpanded,
                     onToggleExpand = onToggleHeroExpanded,
-                    lecturerLabel = uiState.maskLecturer(shown.lecturer.localizedNameOrPlaceholder()),
-                    onTriggerLiveNotification = { onSyncLiveNotification(shown) }
+                    lecturerLabel = uiState.maskLecturer(shown.lecturer.localizedNameOrPlaceholder())
                 )
             }
         }
@@ -1068,8 +1063,7 @@ fun ActiveClassHeroCard(
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     modifier: Modifier = Modifier,
-    lecturerLabel: String = activeClass.lecturer.localizedNameOrPlaceholder(),
-    @Suppress("UNUSED_PARAMETER") onTriggerLiveNotification: () -> Unit = {}
+    lecturerLabel: String = activeClass.lecturer.localizedNameOrPlaceholder()
 ) {
     val colors = MaterialTheme.colorScheme
     val remainingMin = activeClass.remainingMinutes(nowEpochMillis)

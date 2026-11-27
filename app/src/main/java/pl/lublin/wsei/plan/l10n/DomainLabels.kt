@@ -62,7 +62,6 @@ val DayOfWeek.fullNameRes: Int
         DayOfWeek.FRIDAY -> R.string.day_friday
         DayOfWeek.SATURDAY -> R.string.day_saturday
         DayOfWeek.SUNDAY -> R.string.day_sunday
-        else -> R.string.day_monday
     }
 
 /** Abbreviated day name for the week strip, e.g. "Pon" / "Mon" / "Пн". */
@@ -76,7 +75,6 @@ val DayOfWeek.shortNameRes: Int
         DayOfWeek.FRIDAY -> R.string.day_friday_short
         DayOfWeek.SATURDAY -> R.string.day_saturday_short
         DayOfWeek.SUNDAY -> R.string.day_sunday_short
-        else -> R.string.day_monday_short
     }
 
 /** Room line without the address: "Sala 205K", "Streaming (zajęcia zdalne)", "E-learning". */

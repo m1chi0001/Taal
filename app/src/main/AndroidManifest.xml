@@ -35,7 +35,7 @@
     </queries>
 
     <application
-        android:name=".WseiPlanApp"
+        android:name=".TaalApplication"
         android:allowBackup="true"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
@@ -99,7 +99,7 @@
                 android:name="autoStoreLocales"
                 android:value="true" />
         </service>
-        <!-- WorkManager is initialised on demand with HiltWorkerFactory (WseiPlanApp : Configuration.Provider) -->
+        <!-- WorkManager is initialised on demand with HiltWorkerFactory (TaalApplication : Configuration.Provider) -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"

@@ -28,7 +28,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class ClassAlarmScheduler @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val preferencesStore: AppPreferencesStore
 ) {
     private val alarmManager: AlarmManager =
