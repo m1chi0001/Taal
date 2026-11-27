@@ -4,7 +4,9 @@ import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
@@ -15,12 +17,23 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.ComposeNavigator
+import androidx.navigation.compose.currentBackStackEntryAsState
+import kotlinx.coroutines.delay
 import pl.lublin.wsei.plan.ui.adaptive.LocalWseiFloatingBarVisible
 import pl.lublin.wsei.plan.ui.theme.WseiMotion
 
@@ -85,6 +98,109 @@ internal fun routeToMoreSubView(route: String?): MoreSubView = when (route) {
     else -> MoreSubView.HUB
 }
 
+/** Pure route-set check used by [isTabSelected] (also unit-testable without a `NavDestination`). */
+internal fun doesRouteHierarchySelectTab(routesInHierarchy: Sequence<String?>, tab: WseiDestination): Boolean {
+    val targetRoute = destinationToRoute(tab)
+    return routesInHierarchy.any { route ->
+        if (tab == WseiDestination.MORE) {
+            route == WseiRoute.MORE || route in WseiRoute.MoreSubRoutes
+        } else {
+            route == targetRoute
+        }
+    }
+}
+
+/**
+ * Checks whether [tab] is selected according to the active `NavDestination.hierarchy`.
+ * When [this] is `null` (initial composition before graph attachment), `START` is selected.
+ */
+internal fun NavDestination?.isTabSelected(tab: WseiDestination): Boolean {
+    if (this == null) return tab == WseiDestination.START
+    return doesRouteHierarchySelectTab(hierarchy.map { it.route }, tab)
+}
+
+/**
+ * Authoritative active [NavBackStackEntry] observed directly from [NavHostController]:
+ * - reads [ComposeNavigator.backStack] (the exact synchronous `StateFlow` rendered by `NavHost`)
+ *   so rapid back-to-back Predictive Back gestures (`Settings -> More -> Start`) update the
+ *   navigation bar pill immediately without waiting on `_transitionsInProgress`,
+ * - reconciles [ComposeNavigator.onTransitionComplete] if an interrupted transition left
+ *   [NavHostController.currentBackStackEntry] behind [ComposeNavigator.backStack].
+ */
+@Composable
+internal fun NavHostController.rememberActiveBackStackEntry(): NavBackStackEntry? {
+    val composeNavigator = remember(this) {
+        runCatching { navigatorProvider.getNavigator(ComposeNavigator::class.java) }.getOrNull()
+    }
+    val composeBackStack = composeNavigator?.backStack?.collectAsState()?.value
+    val currentEntry by currentBackStackEntryAsState()
+    val composeTop = composeBackStack?.lastOrNull()
+
+    LaunchedEffect(composeNavigator, composeTop?.id, currentEntry?.id) {
+        if (composeNavigator != null &&
+            composeTop != null &&
+            currentEntry != null &&
+            composeTop.id != currentEntry?.id
+        ) {
+            // Allow normal pop/push animations to complete naturally first; only reconcile if
+            // rapid consecutive Predictive Back swipes left an entry stuck in transitionsInProgress.
+            delay(450L)
+            val stale = currentBackStackEntry
+            if (stale != null && stale.id != composeTop.id) {
+                composeNavigator.onTransitionComplete(stale)
+                composeNavigator.onTransitionComplete(composeTop)
+            }
+        }
+    }
+
+    return composeTop ?: currentEntry
+}
+
+/** Live active [NavDestination] read directly from [NavHostController] at click time (never cached). */
+internal fun NavHostController.liveActiveDestination(): NavDestination? {
+    val composeTop = runCatching {
+        navigatorProvider.getNavigator(ComposeNavigator::class.java).backStack.value.lastOrNull()
+    }.getOrNull()
+    return composeTop?.destination ?: currentBackStackEntry?.destination ?: currentDestination
+}
+
+/**
+ * Stateless top-level tab navigation executed directly against [NavHostController] on tap.
+ * Reads live back-stack state at click time so no captured string or stale closure can ever block
+ * tab selection.
+ */
+internal fun NavHostController.navigateToTopLevelTab(
+    destination: WseiDestination,
+    onResetMoreTwoPane: () -> Unit = {}
+) {
+    val liveDest = liveActiveDestination()
+    val liveRoute = liveDest?.route
+    if (destination == WseiDestination.MORE) {
+        onResetMoreTwoPane()
+        if (liveRoute in WseiRoute.MoreSubRoutes) {
+            if (!popBackStack(WseiRoute.MORE, inclusive = false)) {
+                navigate(WseiRoute.MORE) {
+                    popUpTo(graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+            return
+        }
+    }
+    if (liveDest.isTabSelected(destination)) return
+    val targetRoute = destinationToRoute(destination)
+    navigate(targetRoute) {
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
 /**
  * Direction of travel when moving between two top-level tabs (`true` = moving toward the end of
  * the bar, `false` = moving back toward `Start`). Entering a sub-screen (`Profile` or `more/...`)
@@ -114,8 +230,15 @@ internal fun WseiDestinationSurface(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val dpSpring = remember {
+        spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = WseiMotion.NavigationStiffness,
+            visibilityThreshold = 0.5.dp
+        )
+    }
     val cornerRadius by scope.transition.animateDp(
-        transitionSpec = { WseiMotion.navigation() },
+        transitionSpec = { dpSpring },
         label = "destinationCorner"
     ) { state ->
         when (state) {
@@ -125,7 +248,7 @@ internal fun WseiDestinationSurface(
         }
     }
     val elevation by scope.transition.animateDp(
-        transitionSpec = { WseiMotion.navigation() },
+        transitionSpec = { dpSpring },
         label = "destinationElevation"
     ) { state ->
         when (state) {

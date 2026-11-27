@@ -53,6 +53,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import pl.lublin.wsei.plan.R
 import pl.lublin.wsei.plan.ui.components.StudentAvatar
 import pl.lublin.wsei.plan.ui.components.WseiProfileShortcut
@@ -72,15 +73,21 @@ internal val WseiNavigationTabs: List<WseiDestination> = listOf(
 /**
  * Floating navigation bar in the M3 Expressive style (floating toolbar): the active tab expands
  * into a pill with icon and label, the others are icons only. Width, colour and press animate
- * on springs. The selected indicator is a small accent: `primary` with `onPrimary`.
+ * on springs.
+ *
+ * Selection state is derived directly from [navController] (`rememberActiveBackStackEntry` +
+ * `NavDestination.hierarchy`) so Predictive Back gestures never desynchronise or lock the bar.
  */
 @Composable
 internal fun WseiFloatingNavigationBar(
-    currentDestination: WseiDestination,
+    navController: NavHostController,
     unreadAnnouncementsCount: Int,
-    onSelectDestination: (WseiDestination) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onResetMoreTwoPane: () -> Unit = {}
 ) {
+    val activeEntry = navController.rememberActiveBackStackEntry()
+    val currentDestination = activeEntry?.destination
+
     Surface(
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -94,11 +101,17 @@ internal fun WseiFloatingNavigationBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             WseiNavigationTabs.forEach { destination ->
+                val isSelected = currentDestination.isTabSelected(destination)
                 NavigationPillItem(
                     destination = destination,
-                    selected = destination == currentDestination,
+                    selected = isSelected,
                     showBadge = destination == WseiDestination.MORE && unreadAnnouncementsCount > 0,
-                    onClick = { onSelectDestination(destination) }
+                    onClick = {
+                        navController.navigateToTopLevelTab(
+                            destination = destination,
+                            onResetMoreTwoPane = onResetMoreTwoPane
+                        )
+                    }
                 )
             }
         }
@@ -184,20 +197,21 @@ private fun NavigationPillItem(
  * Side navigation for tablets, unfolded foldables and landscape phones (M3 Expressive
  * `WideNavigationRail`) on a subtle `surfaceContainerLow` rail surface.
  *
- * @param expanded `true` on wide windows: the rail expands into a list with icon and full name;
- *   the change (e.g. after unfolding) animates on the theme spring.
- * @param profileShortcut when given, the avatar in the rail header opens Profile (screen top bars
- *   then do not repeat the shortcut). Omitted on short windows to fit five tabs.
+ * Selection state is derived directly from [navController] (`rememberActiveBackStackEntry` +
+ * `NavDestination.hierarchy`).
  */
 @Composable
 internal fun WseiNavigationRail(
-    currentDestination: WseiDestination,
+    navController: NavHostController,
     unreadAnnouncementsCount: Int,
     expanded: Boolean,
     profileShortcut: WseiProfileShortcut?,
-    onSelectDestination: (WseiDestination) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onResetMoreTwoPane: () -> Unit = {}
 ) {
+    val activeEntry = navController.rememberActiveBackStackEntry()
+    val currentDestination = activeEntry?.destination
+
     val railState = rememberWideNavigationRailState(
         initialValue = if (expanded) WideNavigationRailValue.Expanded else WideNavigationRailValue.Collapsed
     )
@@ -218,7 +232,7 @@ internal fun WseiNavigationRail(
         {
             RailProfileHeader(
                 shortcut = profileShortcut,
-                selected = currentDestination == WseiDestination.PROFILE,
+                selected = currentDestination.isTabSelected(WseiDestination.PROFILE),
                 expanded = railExpanded
             )
         }
@@ -236,10 +250,16 @@ internal fun WseiNavigationRail(
         contentPadding = PaddingValues(top = if (header != null) WseiSpacing.l else 0.dp)
     ) {
         WseiNavigationTabs.forEach { destination ->
+            val isSelected = currentDestination.isTabSelected(destination)
             val showBadge = destination == WseiDestination.MORE && unreadAnnouncementsCount > 0
             WideNavigationRailItem(
-                selected = destination == currentDestination,
-                onClick = { onSelectDestination(destination) },
+                selected = isSelected,
+                onClick = {
+                    navController.navigateToTopLevelTab(
+                        destination = destination,
+                        onResetMoreTwoPane = onResetMoreTwoPane
+                    )
+                },
                 icon = {
                     if (showBadge) {
                         BadgedBox(badge = { Badge() }) {

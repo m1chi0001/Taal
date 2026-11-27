@@ -24,6 +24,23 @@ class WseiNavigationRoutesTest {
     }
 
     @Test
+    fun `doesRouteHierarchySelectTab selects exactly one tab and switches immediately from More to Start`() {
+        // Start -> Więcej -> Ustawienia -> Więcej -> Start
+        val onMoreHierarchy = sequenceOf(WseiRoute.MORE, null)
+        assertTrue(doesRouteHierarchySelectTab(onMoreHierarchy, WseiDestination.MORE))
+        assertFalse(doesRouteHierarchySelectTab(onMoreHierarchy, WseiDestination.START))
+
+        val onSettingsHierarchy = sequenceOf(WseiRoute.SETTINGS, null)
+        assertTrue(doesRouteHierarchySelectTab(onSettingsHierarchy, WseiDestination.MORE))
+        assertFalse(doesRouteHierarchySelectTab(onSettingsHierarchy, WseiDestination.START))
+
+        val backOnStartHierarchy = sequenceOf(WseiRoute.START, null)
+        assertTrue(doesRouteHierarchySelectTab(backOnStartHierarchy, WseiDestination.START))
+        assertFalse(doesRouteHierarchySelectTab(backOnStartHierarchy, WseiDestination.MORE))
+        assertFalse(doesRouteHierarchySelectTab(backOnStartHierarchy, WseiDestination.SUBJECTS))
+    }
+
+    @Test
     fun `railDestinationForRoute keeps More selected while inside More sub-routes`() {
         assertEquals(WseiDestination.START, railDestinationForRoute(WseiRoute.START))
         assertEquals(WseiDestination.SCHEDULE, railDestinationForRoute(WseiRoute.SCHEDULE))
@@ -60,10 +77,10 @@ class WseiNavigationRoutesTest {
     }
 
     @Test
-    fun `four-segment hotfix version 0_8_2_1 compares correctly against 0_8_2 and 0_8_3`() {
+    fun `version 0_8_3 compares as newer than 0_8_2_1 and 0_8_2`() {
         assertTrue(VersionComparator.compare("0.8.2.1", "0.8.2") > 0)
-        assertTrue(VersionComparator.compare("v0.8.2.1", "v0.8.2") > 0)
         assertTrue(VersionComparator.compare("0.8.3", "0.8.2.1") > 0)
-        assertEquals(0, VersionComparator.compare("0.8.2.1", "0.8.2.1"))
+        assertTrue(VersionComparator.compare("v0.8.3", "v0.8.2.1") > 0)
+        assertEquals(0, VersionComparator.compare("0.8.3", "0.8.3"))
     }
 }

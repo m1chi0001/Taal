@@ -117,7 +117,7 @@ object WseiMotion {
     const val SizeStiffness: Float = 1000f
 
     /** Full-screen navigation & Predictive Back: critically damped so edges never overshoot. */
-    const val NavigationStiffness: Float = 420f
+    const val NavigationStiffness: Float = 550f
 
     /** Colour/alpha: "medium-high" stiffness (Compose has no such constant; 2× `StiffnessMedium`). */
     const val EffectsStiffness: Float = 3000f

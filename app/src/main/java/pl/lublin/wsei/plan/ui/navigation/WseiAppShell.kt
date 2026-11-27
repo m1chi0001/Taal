@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,9 +53,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.window.core.layout.WindowSizeClass
 import kotlinx.datetime.LocalDate
@@ -271,7 +272,9 @@ fun WseiAppShell(
 /**
  * Authenticated shell: a single outer [Scaffold] owns the floating bottom bar (`bottomBar`) while
  * [NavHost] inside it manages all top-level tabs and detail sub-screens (`Ogłoszenia`,
- * `Ustawienia`, `O aplikacji`, `Profil`) with native `SeekableTransitionState` Predictive Back.
+ * `Ustawienia`, `O aplikacji`, `Profil`). Both [WseiFloatingNavigationBar] and
+ * [WseiNavigationRail] read [NavHostController] directly as their single source of truth — never
+ * cached selection state or local function references that capture a stale route string.
  */
 @Composable
 private fun WseiAuthenticatedAppContent(
@@ -303,12 +306,13 @@ private fun WseiAuthenticatedAppContent(
     onToggleHideSensitiveData: (Boolean) -> Unit
 ) {
     val windowLayout = LocalWseiWindowLayout.current
+    val currentSupportsTwoPane by rememberUpdatedState(windowLayout.supportsTwoPane)
     val useRail = windowLayout.useNavigationRail
     val railShowsProfile = useRail && isTallWindow
 
     val navController = rememberNavController()
-    val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStackEntry?.destination?.route ?: WseiRoute.START
+    val activeBackStackEntry = navController.rememberActiveBackStackEntry()
+    val currentRoute = activeBackStackEntry?.destination?.route ?: WseiRoute.START
     val isTopLevelDestination = isTopLevelRoute(currentRoute)
 
     // Selected right-hand detail pane when MoreScreen runs in two-pane mode (tablets / foldables).
@@ -345,45 +349,11 @@ private fun WseiAuthenticatedAppContent(
         onAboutVisibilityChanged(showingAbout)
     }
 
-    fun selectTab(destination: WseiDestination) {
-        val targetRoute = destinationToRoute(destination)
-        if (destination == WseiDestination.MORE) {
-            moreTwoPaneSubView = MoreSubView.HUB
-            if (currentRoute in WseiRoute.MoreSubRoutes) {
-                if (!navController.popBackStack(WseiRoute.MORE, inclusive = false)) {
-                    navController.navigate(WseiRoute.MORE) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
-                        }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                }
-                return
-            }
-        }
-        if (currentRoute == targetRoute) return
-        navController.navigate(targetRoute) {
-            popUpTo(navController.graph.findStartDestination().id) {
-                saveState = true
-            }
-            launchSingleTop = true
-            restoreState = true
-        }
-    }
-
-    fun openProfile() {
-        if (currentRoute != WseiRoute.PROFILE) {
-            navController.navigate(WseiRoute.PROFILE) {
-                launchSingleTop = true
-            }
-        }
-    }
-
-    fun openMoreSubView(subView: MoreSubView) {
-        if (windowLayout.supportsTwoPane) {
+    val openMoreSubView: (MoreSubView) -> Unit = { subView ->
+        val liveRoute = navController.liveActiveDestination()?.route
+        if (currentSupportsTwoPane) {
             moreTwoPaneSubView = subView
-            if (currentRoute != WseiRoute.MORE) {
+            if (liveRoute != WseiRoute.MORE) {
                 navController.navigate(WseiRoute.MORE) {
                     popUpTo(navController.graph.findStartDestination().id) {
                         saveState = true
@@ -393,10 +363,14 @@ private fun WseiAuthenticatedAppContent(
                 }
             }
         } else if (subView == MoreSubView.HUB) {
-            selectTab(WseiDestination.MORE)
+            navController.navigateToTopLevelTab(
+                destination = WseiDestination.MORE,
+                onResetMoreTwoPane = { moreTwoPaneSubView = MoreSubView.HUB }
+            )
         } else {
             val targetRoute = moreSubViewToRoute(subView)
-            if (currentRoute != targetRoute) {
+            if (liveRoute != targetRoute) {
+                // Keep MoreScreen on the back stack (no popUpTo(MORE) { inclusive = true }).
                 navController.navigate(targetRoute) {
                     launchSingleTop = true
                 }
@@ -404,10 +378,12 @@ private fun WseiAuthenticatedAppContent(
         }
     }
 
-    fun navigateUpFromDetail() {
-        if (!navController.navigateUp()) {
-            navController.popBackStack(WseiRoute.START, inclusive = false)
-        }
+    val popDetailBackStack: () -> Unit = {
+        navController.popBackStack()
+    }
+
+    val resetMoreTwoPane: () -> Unit = {
+        moreTwoPaneSubView = MoreSubView.HUB
     }
 
     val session = scheduleUiState.currentSession
@@ -416,27 +392,32 @@ private fun WseiAuthenticatedAppContent(
         session?.personPictureBase64,
         session?.fullName,
         railShowsProfile,
-        studentFallbackName
+        studentFallbackName,
+        navController
     ) {
         WseiProfileShortcut(
             photoBase64 = session?.personPictureBase64,
             fullName = session?.fullName ?: studentFallbackName,
-            onOpen = { openProfile() },
+            onOpen = {
+                if (navController.liveActiveDestination()?.route != WseiRoute.PROFILE) {
+                    navController.navigate(WseiRoute.PROFILE) {
+                        launchSingleTop = true
+                    }
+                }
+            },
             showInTopBar = !railShowsProfile
         )
     }
-
-    val activeNavDestination = railDestinationForRoute(currentRoute)
 
     CompositionLocalProvider(LocalWseiProfileShortcut provides profileShortcut) {
         Row(modifier = Modifier.fillMaxSize()) {
             if (useRail) {
                 WseiNavigationRail(
-                    currentDestination = activeNavDestination,
+                    navController = navController,
                     unreadAnnouncementsCount = scheduleUiState.unreadAnnouncementsCount,
                     expanded = windowLayout.widthClass == WseiWidthClass.EXPANDED,
                     profileShortcut = if (railShowsProfile) profileShortcut else null,
-                    onSelectDestination = ::selectTab
+                    onResetMoreTwoPane = resetMoreTwoPane
                 )
             }
 
@@ -458,13 +439,13 @@ private fun WseiAuthenticatedAppContent(
                 contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
                 bottomBar = {
                     WseiShellBottomBar(
+                        navController = navController,
                         statusMessage = scheduleUiState.statusBannerMessage,
                         onDismissStatusMessage = onDismissStatusBanner,
                         showFloatingNavBar = !useRail && isTopLevelDestination,
                         useRail = useRail,
-                        selectedDestination = activeNavDestination,
                         unreadAnnouncementsCount = scheduleUiState.unreadAnnouncementsCount,
-                        onSelectDestination = ::selectTab
+                        onResetMoreTwoPane = resetMoreTwoPane
                     )
                 }
             ) { innerPadding ->
@@ -498,10 +479,18 @@ private fun WseiAuthenticatedAppContent(
                         WseiDestinationSurface(scope = this, floatingBarVisible = !useRail) {
                             HomeScreen(
                                 uiState = scheduleUiState,
-                                onOpenSchedule = { selectTab(WseiDestination.SCHEDULE) },
-                                onOpenSubjects = { selectTab(WseiDestination.SUBJECTS) },
-                                onOpenFinances = { selectTab(WseiDestination.FINANCES) },
-                                onOpenAnnouncements = { openMoreSubView(MoreSubView.ANNOUNCEMENTS) },
+                                onOpenSchedule = {
+                                    navController.navigateToTopLevelTab(WseiDestination.SCHEDULE)
+                                },
+                                onOpenSubjects = {
+                                    navController.navigateToTopLevelTab(WseiDestination.SUBJECTS)
+                                },
+                                onOpenFinances = {
+                                    navController.navigateToTopLevelTab(WseiDestination.FINANCES)
+                                },
+                                onOpenAnnouncements = {
+                                    openMoreSubView(MoreSubView.ANNOUNCEMENTS)
+                                },
                                 onRefresh = onRefreshSchedule
                             )
                         }
@@ -547,7 +536,7 @@ private fun WseiAuthenticatedAppContent(
                             MoreScreen(
                                 uiState = scheduleUiState,
                                 currentSubView = moreTwoPaneSubView,
-                                onNavigateSubView = ::openMoreSubView,
+                                onNavigateSubView = openMoreSubView,
                                 onMarkAnnouncementRead = onMarkAnnouncementRead,
                                 onDownloadAttachment = onDownloadAttachment,
                                 onSelectThemeMode = onSelectThemeMode,
@@ -563,7 +552,7 @@ private fun WseiAuthenticatedAppContent(
                         WseiDestinationSurface(scope = this, floatingBarVisible = false) {
                             MoreAnnouncementsRoute(
                                 uiState = scheduleUiState,
-                                onBack = ::navigateUpFromDetail,
+                                onBack = popDetailBackStack,
                                 onMarkAnnouncementRead = onMarkAnnouncementRead,
                                 onDownloadAttachment = onDownloadAttachment,
                                 onRefresh = onRefreshSchedule
@@ -574,7 +563,7 @@ private fun WseiAuthenticatedAppContent(
                         WseiDestinationSurface(scope = this, floatingBarVisible = false) {
                             MoreSettingsRoute(
                                 uiState = scheduleUiState,
-                                onBack = ::navigateUpFromDetail,
+                                onBack = popDetailBackStack,
                                 onSelectThemeMode = onSelectThemeMode,
                                 onSelectColorPalette = onSelectColorPalette,
                                 onToggleLiveNotification = onToggleLiveNotification,
@@ -585,7 +574,7 @@ private fun WseiAuthenticatedAppContent(
                     composable(WseiRoute.ABOUT) {
                         WseiDestinationSurface(scope = this, floatingBarVisible = false) {
                             MoreAboutRoute(
-                                onBack = ::navigateUpFromDetail,
+                                onBack = popDetailBackStack,
                                 updateViewModel = updateViewModel
                             )
                         }
@@ -594,7 +583,7 @@ private fun WseiAuthenticatedAppContent(
                         WseiDestinationSurface(scope = this, floatingBarVisible = false) {
                             ProfileScreen(
                                 uiState = scheduleUiState,
-                                onBack = ::navigateUpFromDetail,
+                                onBack = popDetailBackStack,
                                 onChangePassword = onChangePassword,
                                 onLogout = onLogout,
                                 onRefresh = onRefreshSchedule
@@ -609,20 +598,20 @@ private fun WseiAuthenticatedAppContent(
 
 /**
  * Single shell-level bottom overlay rendered in `Scaffold.bottomBar` outside [NavHost]:
- * - keeps [WseiFloatingNavigationBar] completely stationary during tab transitions and Predictive
- *   Back gestures between tabs,
+ * - passes [navController] directly to [WseiFloatingNavigationBar] so selection state is never
+ *   buffered through intermediate props or stale closures,
  * - slides the floating bar smoothly out of view on detail sub-screens (`Ogłoszenia`, `Ustawienia`,
  *   `O aplikacji`, `Profil`) and back in when returning to a top-level tab.
  */
 @Composable
 private fun WseiShellBottomBar(
+    navController: NavHostController,
     statusMessage: String?,
     onDismissStatusMessage: () -> Unit,
     showFloatingNavBar: Boolean,
     useRail: Boolean,
-    selectedDestination: WseiDestination,
     unreadAnnouncementsCount: Int,
-    onSelectDestination: (WseiDestination) -> Unit
+    onResetMoreTwoPane: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -649,9 +638,9 @@ private fun WseiShellBottomBar(
             exit = slideOutVertically(WseiMotion.size()) { it } + fadeOut(WseiMotion.fastEffects())
         ) {
             WseiFloatingNavigationBar(
-                currentDestination = selectedDestination,
+                navController = navController,
                 unreadAnnouncementsCount = unreadAnnouncementsCount,
-                onSelectDestination = onSelectDestination,
+                onResetMoreTwoPane = onResetMoreTwoPane,
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(
